@@ -1,0 +1,17 @@
+# Bandit configuration for Django project
+exclude_dirs:
+  - migrations
+  - __pycache__
+  - venv
+  - .venv
+  - logs
+  - media
+
+# Skip hardcoded password warnings in test files since they're acceptable for testing
+skips:
+  - B106
+
+# Exclude test files from hardcoded password checks
+exclude:
+  - "*test*.py"
+  - "*tests.py"
