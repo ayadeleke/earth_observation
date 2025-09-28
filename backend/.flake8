@@ -1,0 +1,32 @@
+[flake8]
+max-line-length = 100
+ignore = 
+    # Line too long (handled by max-line-length)
+    E501,
+    # Line break before binary operator (black compatibility)
+    W503,
+    # Line break after binary operator (black compatibility)
+    W504
+exclude = 
+    # Django migrations
+    */migrations/*,
+    # Virtual environments
+    .venv,
+    venv,
+    env,
+    # Cache directories
+    __pycache__,
+    .git,
+    # Build directories
+    build,
+    dist,
+    *.egg-info,
+    # Support scripts (lower priority)
+    support/
+per-file-ignores =
+    # Django settings files can have unused imports
+    settings.py:F401,F403
+    # Test files can have some flexibility
+    test_*.py:F401
+    # Django apps init files
+    __init__.py:F401
