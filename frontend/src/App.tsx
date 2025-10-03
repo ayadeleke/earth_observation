@@ -11,7 +11,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import './styles/main.css';
 import './index.css';
-import { DashboardPage } from './pages/DashboardPage';
+import DashboardPage from './pages/DashboardPage';
 import { ResultsPage } from './pages/ResultsPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 
@@ -65,7 +65,7 @@ const AppContent: React.FC = () => {
         <Route path="/analysis" element={<AnalysisPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/project" element={<ProjectsPage />} />
+        <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/results" element={<ResultsPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/advanced-image-analysis" element={<ImageSelector />} />

@@ -35,7 +35,7 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
     { path: '/analysis', label: 'Analysis', icon: BarChart3 },
     { path: '/demo', label: 'Demo', icon: Globe },
     { path: '/dashboard', label: 'Dashboard', icon: LayoutIcon },
-    { path: '/project', label: 'Projects', icon: FolderOpen },
+    { path: '/projects', label: 'Projects', icon: FolderOpen },
     { path: '/results', label: 'Results', icon: FileText },
   ];
 
@@ -152,12 +152,6 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
                   className="px-4 py-2 text-sm font-medium text-blue-100 hover:text-white transition-colors"
                 >
                   Sign In
-                </Link>
-                <Link
-                  to="/register"
-                  className="px-4 py-2 text-sm font-medium bg-white text-blue-900 rounded-lg hover:bg-blue-50 transition-colors"
-                >
-                  Get Started
                 </Link>
               </div>
             )}

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, User, Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const RegisterPage: React.FC = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -70,13 +71,54 @@ const RegisterPage: React.FC = () => {
 
     setLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // Prepare data for backend API
+      const registrationData = {
+        email: formData.email,
+        username: formData.email, // Use email as username
+        password: formData.password,
+        password_confirm: formData.confirmPassword,
+        earth_engine_project_id: '' // Optional field, can be left empty
+      };
+
+      const response = await fetch('http://localhost:8000/register/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(registrationData)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('Registration successful! You can now log in.');
+        // Redirect to login page
+        navigate('/login');
+      } else {
+        // Handle API errors
+        if (data.email) {
+          setErrors(prev => ({ ...prev, email: data.email[0] }));
+        }
+        if (data.username) {
+          setErrors(prev => ({ ...prev, email: data.username[0] }));
+        }
+        if (data.password) {
+          setErrors(prev => ({ ...prev, password: data.password[0] }));
+        }
+        if (data.password_confirm) {
+          setErrors(prev => ({ ...prev, confirmPassword: data.password_confirm[0] }));
+        }
+        if (data.non_field_errors) {
+          alert('Registration failed: ' + data.non_field_errors[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      alert('Registration failed. Please try again.');
+    } finally {
       setLoading(false);
-      // TODO: Handle successful registration
-      console.log('Registration data:', formData);
-      alert('Registration successful! Please check your email for verification.');
-    }, 2000);
+    }
   };
 
   return (
@@ -115,7 +157,7 @@ const RegisterPage: React.FC = () => {
             {/* Name Fields */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-200 mb-2">
+                <label className="block text-sm font-medium text-white mb-2">
                   First Name
                 </label>
                 <input
@@ -123,15 +165,15 @@ const RegisterPage: React.FC = () => {
                   name="firstName"
                   value={formData.firstName}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 bg-white bg-opacity-20 border rounded-lg text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                    errors.firstName ? 'border-red-500' : 'border-gray-600'
+                  className={`w-full px-4 py-3 bg-gray-800 bg-opacity-90 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-gray-700 ${
+                    errors.firstName ? 'border-red-500' : 'border-gray-500'
                   }`}
                   placeholder="John"
                 />
                 {errors.firstName && <p className="text-red-400 text-sm mt-1">{errors.firstName}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-200 mb-2">
+                <label className="block text-sm font-medium text-white mb-2">
                   Last Name
                 </label>
                 <input
@@ -139,8 +181,8 @@ const RegisterPage: React.FC = () => {
                   name="lastName"
                   value={formData.lastName}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 bg-white bg-opacity-20 border rounded-lg text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                    errors.lastName ? 'border-red-500' : 'border-gray-600'
+                  className={`w-full px-4 py-3 bg-gray-800 bg-opacity-90 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-gray-700 ${
+                    errors.lastName ? 'border-red-500' : 'border-gray-500'
                   }`}
                   placeholder="Doe"
                 />
@@ -150,18 +192,18 @@ const RegisterPage: React.FC = () => {
 
             {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-gray-200 mb-2">
+              <label className="block text-sm font-medium text-white mb-2">
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+                <Mail className="absolute left-3 top-3.5 w-5 h-5 text-gray-300" />
                 <input
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className={`w-full pl-12 pr-4 py-3 bg-white bg-opacity-20 border rounded-lg text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                    errors.email ? 'border-red-500' : 'border-gray-600'
+                  className={`w-full pl-12 pr-4 py-3 bg-gray-800 bg-opacity-90 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-gray-700 ${
+                    errors.email ? 'border-red-500' : 'border-gray-500'
                   }`}
                   placeholder="john.doe@example.com"
                 />
@@ -171,25 +213,25 @@ const RegisterPage: React.FC = () => {
 
             {/* Password */}
             <div>
-              <label className="block text-sm font-medium text-gray-200 mb-2">
+              <label className="block text-sm font-medium text-white mb-2">
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+                <Lock className="absolute left-3 top-3.5 w-5 h-5 text-gray-300" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
-                  className={`w-full pl-12 pr-12 py-3 bg-white bg-opacity-20 border rounded-lg text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                    errors.password ? 'border-red-500' : 'border-gray-600'
+                  className={`w-full pl-12 pr-12 py-3 bg-gray-800 bg-opacity-90 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-gray-700 ${
+                    errors.password ? 'border-red-500' : 'border-gray-500'
                   }`}
                   placeholder="Enter password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3.5 text-gray-400 hover:text-white"
+                  className="absolute right-3 top-3.5 text-gray-300 hover:text-white"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -199,25 +241,25 @@ const RegisterPage: React.FC = () => {
 
             {/* Confirm Password */}
             <div>
-              <label className="block text-sm font-medium text-gray-200 mb-2">
+              <label className="block text-sm font-medium text-white mb-2">
                 Confirm Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+                <Lock className="absolute left-3 top-3.5 w-5 h-5 text-gray-300" />
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className={`w-full pl-12 pr-12 py-3 bg-white bg-opacity-20 border rounded-lg text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                    errors.confirmPassword ? 'border-red-500' : 'border-gray-600'
+                  className={`w-full pl-12 pr-12 py-3 bg-gray-800 bg-opacity-90 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-gray-700 ${
+                    errors.confirmPassword ? 'border-red-500' : 'border-gray-500'
                   }`}
                   placeholder="Confirm password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-3.5 text-gray-400 hover:text-white"
+                  className="absolute right-3 top-3.5 text-gray-300 hover:text-white"
                 >
                   {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -227,7 +269,7 @@ const RegisterPage: React.FC = () => {
 
             {/* Organization */}
             <div>
-              <label className="block text-sm font-medium text-gray-200 mb-2">
+              <label className="block text-sm font-medium text-white mb-2">
                 Organization
               </label>
               <input
@@ -235,8 +277,8 @@ const RegisterPage: React.FC = () => {
                 name="organization"
                 value={formData.organization}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 bg-white bg-opacity-20 border rounded-lg text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                  errors.organization ? 'border-red-500' : 'border-gray-600'
+                className={`w-full px-4 py-3 bg-gray-800 bg-opacity-90 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-gray-700 ${
+                  errors.organization ? 'border-red-500' : 'border-gray-500'
                 }`}
                 placeholder="University, Company, or Institution"
               />
@@ -245,18 +287,18 @@ const RegisterPage: React.FC = () => {
 
             {/* Research Area */}
             <div>
-              <label className="block text-sm font-medium text-gray-200 mb-2">
+              <label className="block text-sm font-medium text-white mb-2">
                 Primary Research Area
               </label>
               <select
                 name="researchArea"
                 value={formData.researchArea}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 bg-white bg-opacity-20 border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                  errors.researchArea ? 'border-red-500' : 'border-gray-600'
+                className={`w-full px-4 py-3 bg-gray-800 bg-opacity-90 border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-gray-700 ${
+                  errors.researchArea ? 'border-red-500' : 'border-gray-500'
                 }`}
               >
-                <option value="" className="bg-gray-800">Select research area</option>
+                <option value="" className="bg-gray-800 text-white">Select research area</option>
                 {researchAreas.map((area) => (
                   <option key={area} value={area} className="bg-gray-800">
                     {area}
