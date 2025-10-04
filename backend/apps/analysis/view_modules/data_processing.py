@@ -25,7 +25,7 @@ def validate_analysis_request(data):
     try:
         required_fields = ['aoi_data', 'analysis_type', 'start_date', 'end_date']
         missing_fields = [field for field in required_fields if field not in data or not data[field]]
-        
+
         if missing_fields:
             return False, f"Missing required fields: {', '.join(missing_fields)}"
 
@@ -33,14 +33,14 @@ def validate_analysis_request(data):
         try:
             start_date = datetime.strptime(data['start_date'], '%Y-%m-%d')
             end_date = datetime.strptime(data['end_date'], '%Y-%m-%d')
-            
+
             if start_date >= end_date:
                 return False, "Start date must be before end date"
-                
+
             # Support Landsat missions from 1984 onwards (Landsat 5 era)
             if start_date.year < 1984:
                 return False, "Start date cannot be before 1984 (Landsat 5 launch)"
-                
+
         except ValueError as e:
             return False, f"Invalid date format: {str(e)}"
 
@@ -55,10 +55,10 @@ def validate_analysis_request(data):
                 aoi_json = json.loads(data['aoi_data'])
             else:
                 aoi_json = data['aoi_data']
-                
+
             if 'features' not in aoi_json or not aoi_json['features']:
                 return False, "AOI data must contain at least one feature"
-                
+
         except (json.JSONDecodeError, TypeError) as e:
             return False, f"Invalid AOI data format: {str(e)}"
 
@@ -78,23 +78,23 @@ def export_to_csv(data, filename_prefix, analysis_type):
 
         # Create pandas DataFrame
         df = pd.DataFrame(data)
-        
+
         # Generate filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"{filename_prefix}_{timestamp}.csv"
-        
+
         # Ensure media directory exists
         csv_dir = os.path.join(settings.MEDIA_ROOT, 'csv')
         os.makedirs(csv_dir, exist_ok=True)
-        
+
         # Full file path
         file_path = os.path.join(csv_dir, filename)
-        
+
         # Export to CSV
         df.to_csv(file_path, index=False)
-        
+
         logger.info(f"Data exported to {filename}")
-        
+
         # Return relative path for URL generation
         return os.path.join('csv', filename)
 
@@ -112,10 +112,10 @@ def create_plot(data, analysis_type, filename_prefix):
 
         # Create pandas DataFrame
         df = pd.DataFrame(data)
-        
+
         # Set up the plot
         plt.figure(figsize=(12, 8))
-        
+
         if analysis_type.lower() == 'ndvi':
             create_ndvi_plot(df)
         elif analysis_type.lower() == 'lst':
@@ -124,25 +124,25 @@ def create_plot(data, analysis_type, filename_prefix):
             create_sar_plot(df)
         else:
             create_generic_plot(df, analysis_type)
-        
+
         # Generate filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"{filename_prefix}_plot_{timestamp}.png"
-        
+
         # Ensure plots directory exists
         plots_dir = os.path.join(settings.MEDIA_ROOT, 'plots')
         os.makedirs(plots_dir, exist_ok=True)
-        
+
         # Full file path
         file_path = os.path.join(plots_dir, filename)
-        
+
         # Save plot
         plt.tight_layout()
         plt.savefig(file_path, dpi=300, bbox_inches='tight')
         plt.close()
-        
+
         logger.info(f"Plot saved to {filename}")
-        
+
         # Return relative path for URL generation
         return os.path.join('plots', filename)
 
@@ -160,10 +160,10 @@ def create_ndvi_plot(df):
             # Remove rows with invalid dates
             df = df[df['date'] != 'Unknown']
             df = df.dropna(subset=['date'])
-            
+
             if df.empty:
                 raise ValueError("No valid dates found in NDVI data")
-                
+
             # Convert date strings to datetime with error handling
             df['date'] = pd.to_datetime(df['date'], errors='coerce')
             # Remove any rows that failed to parse
@@ -172,7 +172,7 @@ def create_ndvi_plot(df):
 
         # Create subplots
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-        
+
         # Time series plot
         if 'date' in df.columns and 'ndvi' in df.columns:
             axes[0, 0].plot(df['date'], df['ndvi'], marker='o', linewidth=2, markersize=6)
@@ -180,7 +180,7 @@ def create_ndvi_plot(df):
             axes[0, 0].set_xlabel('Date')
             axes[0, 0].set_ylabel('NDVI')
             axes[0, 0].grid(True, alpha=0.3)
-            
+
         # NDVI distribution
         if 'ndvi' in df.columns:
             axes[0, 1].hist(df['ndvi'], bins=20, alpha=0.7, color='green', edgecolor='black')
@@ -188,16 +188,16 @@ def create_ndvi_plot(df):
             axes[0, 1].set_xlabel('NDVI')
             axes[0, 1].set_ylabel('Frequency')
             axes[0, 1].grid(True, alpha=0.3)
-        
+
         # Spatial distribution
         if 'lat' in df.columns and 'lon' in df.columns and 'ndvi' in df.columns:
-            scatter = axes[1, 0].scatter(df['lon'], df['lat'], c=df['ndvi'], 
+            scatter = axes[1, 0].scatter(df['lon'], df['lat'], c=df['ndvi'],
                                        cmap='RdYlGn', s=100, alpha=0.7)
             axes[1, 0].set_title('NDVI Spatial Distribution', fontsize=14, fontweight='bold')
             axes[1, 0].set_xlabel('Longitude')
             axes[1, 0].set_ylabel('Latitude')
             plt.colorbar(scatter, ax=axes[1, 0], label='NDVI')
-        
+
         # Cloud cover vs NDVI
         if 'cloud_cover' in df.columns and 'ndvi' in df.columns:
             axes[1, 1].scatter(df['cloud_cover'], df['ndvi'], alpha=0.7, s=60)
@@ -207,7 +207,7 @@ def create_ndvi_plot(df):
             axes[1, 1].grid(True, alpha=0.3)
 
         plt.suptitle('NDVI Analysis Results', fontsize=16, fontweight='bold')
-        
+
     except Exception as e:
         logger.error(f"NDVI plot creation error: {str(e)}")
         raise
@@ -221,10 +221,10 @@ def create_lst_plot(df):
             # Remove rows with invalid dates
             df = df[df['date'] != 'Unknown']
             df = df.dropna(subset=['date'])
-            
+
             if df.empty:
                 raise ValueError("No valid dates found in LST data")
-                
+
             # Convert date strings to datetime with error handling
             df['date'] = pd.to_datetime(df['date'], errors='coerce')
             # Remove any rows that failed to parse
@@ -233,7 +233,7 @@ def create_lst_plot(df):
 
         # Create subplots
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-        
+
         # Time series plot
         if 'date' in df.columns and 'lst' in df.columns:
             axes[0, 0].plot(df['date'], df['lst'], marker='o', linewidth=2, markersize=6, color='red')
@@ -241,7 +241,7 @@ def create_lst_plot(df):
             axes[0, 0].set_xlabel('Date')
             axes[0, 0].set_ylabel('LST (°C)')
             axes[0, 0].grid(True, alpha=0.3)
-            
+
         # LST distribution
         if 'lst' in df.columns:
             axes[0, 1].hist(df['lst'], bins=20, alpha=0.7, color='orange', edgecolor='black')
@@ -249,16 +249,16 @@ def create_lst_plot(df):
             axes[0, 1].set_xlabel('LST (°C)')
             axes[0, 1].set_ylabel('Frequency')
             axes[0, 1].grid(True, alpha=0.3)
-        
+
         # Spatial distribution
         if 'lat' in df.columns and 'lon' in df.columns and 'lst' in df.columns:
-            scatter = axes[1, 0].scatter(df['lon'], df['lat'], c=df['lst'], 
+            scatter = axes[1, 0].scatter(df['lon'], df['lat'], c=df['lst'],
                                        cmap='coolwarm', s=100, alpha=0.7)
             axes[1, 0].set_title('LST Spatial Distribution', fontsize=14, fontweight='bold')
             axes[1, 0].set_xlabel('Longitude')
             axes[1, 0].set_ylabel('Latitude')
             plt.colorbar(scatter, ax=axes[1, 0], label='LST (°C)')
-        
+
         # Box plot
         if 'lst' in df.columns:
             axes[1, 1].boxplot(df['lst'], labels=['LST'])
@@ -267,7 +267,7 @@ def create_lst_plot(df):
             axes[1, 1].grid(True, alpha=0.3)
 
         plt.suptitle('Land Surface Temperature Analysis Results', fontsize=16, fontweight='bold')
-        
+
     except Exception as e:
         logger.error(f"LST plot creation error: {str(e)}")
         raise
@@ -280,18 +280,18 @@ def create_sar_plot(df):
         if 'date' in df.columns:
             # Remove rows with 'Unknown' dates
             df = df[df['date'] != 'Unknown'].copy()
-            
+
             if len(df) == 0:
                 logger.warning("No valid dates found in SAR data for plotting")
                 return
-                
+
             # Convert to datetime with error handling
             try:
                 df['date'] = pd.to_datetime(df['date'], errors='coerce')
                 # Remove any rows where date conversion failed (NaT values)
                 df = df.dropna(subset=['date'])
                 df = df.sort_values('date')
-                
+
                 if len(df) == 0:
                     logger.warning("No valid dates after datetime conversion for SAR plotting")
                     return
@@ -301,7 +301,7 @@ def create_sar_plot(df):
 
         # Create subplots
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-        
+
         # VV vs VH backscatter
         if 'vv_backscatter' in df.columns and 'vh_backscatter' in df.columns:
             axes[0, 0].scatter(df['vv_backscatter'], df['vh_backscatter'], alpha=0.7, s=60)
@@ -309,7 +309,7 @@ def create_sar_plot(df):
             axes[0, 0].set_xlabel('VV Backscatter (dB)')
             axes[0, 0].set_ylabel('VH Backscatter (dB)')
             axes[0, 0].grid(True, alpha=0.3)
-            
+
         # Backscatter time series
         if 'date' in df.columns:
             if 'vv_backscatter' in df.columns:
@@ -321,16 +321,16 @@ def create_sar_plot(df):
             axes[0, 1].set_ylabel('Backscatter (dB)')
             axes[0, 1].legend()
             axes[0, 1].grid(True, alpha=0.3)
-        
+
         # Spatial distribution of VV
         if 'lat' in df.columns and 'lon' in df.columns and 'vv_backscatter' in df.columns:
-            scatter = axes[1, 0].scatter(df['lon'], df['lat'], c=df['vv_backscatter'], 
+            scatter = axes[1, 0].scatter(df['lon'], df['lat'], c=df['vv_backscatter'],
                                        cmap='viridis', s=100, alpha=0.7)
             axes[1, 0].set_title('VV Backscatter Spatial Distribution', fontsize=14, fontweight='bold')
             axes[1, 0].set_xlabel('Longitude')
             axes[1, 0].set_ylabel('Latitude')
             plt.colorbar(scatter, ax=axes[1, 0], label='VV (dB)')
-        
+
         # VV/VH ratio
         if 'vv_vh_ratio' in df.columns:
             axes[1, 1].hist(df['vv_vh_ratio'], bins=20, alpha=0.7, color='purple', edgecolor='black')
@@ -340,7 +340,7 @@ def create_sar_plot(df):
             axes[1, 1].grid(True, alpha=0.3)
 
         plt.suptitle('SAR Analysis Results', fontsize=16, fontweight='bold')
-        
+
     except Exception as e:
         logger.error(f"SAR plot creation error: {str(e)}")
         raise
@@ -353,13 +353,13 @@ def create_generic_plot(df, analysis_type):
         if 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'])
             df = df.sort_values('date')
-            
+
             numeric_columns = df.select_dtypes(include=[np.number]).columns
-            
+
             plt.figure(figsize=(12, 8))
             for col in numeric_columns:
                 plt.plot(df['date'], df[col], marker='o', label=col, linewidth=2)
-            
+
             plt.title(f'{analysis_type.upper()} Analysis Results', fontsize=16, fontweight='bold')
             plt.xlabel('Date')
             plt.ylabel('Value')
@@ -374,7 +374,7 @@ def create_generic_plot(df, analysis_type):
                 plt.xlabel(numeric_columns[0])
                 plt.ylabel('Frequency')
                 plt.grid(True, alpha=0.3)
-        
+
     except Exception as e:
         logger.error(f"Generic plot creation error: {str(e)}")
         raise
@@ -387,7 +387,7 @@ def calculate_statistics(data, value_column):
             return {}
 
         values = [item[value_column] for item in data if value_column in item and item[value_column] is not None]
-        
+
         if not values:
             return {}
 
@@ -418,13 +418,13 @@ def format_response_data(success, analysis_type, data, statistics=None, message=
             "data": data or [],
             "timestamp": datetime.now().isoformat(),
         }
-        
+
         if statistics:
             response["statistics"] = statistics
-            
+
         if message:
             response["message"] = message
-            
+
         return response
 
     except Exception as e:

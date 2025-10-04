@@ -18,17 +18,17 @@ def wkt_to_ee_geometry(wkt_string):
         # Ensure Earth Engine is initialized
         if not initialize_earth_engine():
             raise ValueError("Earth Engine initialization failed")
-            
+
         if wkt_string.startswith("POLYGON"):
             # Extract coordinates from WKT POLYGON((x y, x y, ...))
             coords_str = wkt_string.replace("POLYGON((", "").replace("))", "")
             coord_pairs = coords_str.split(", ")
             coordinates = []
-            
+
             for pair in coord_pairs:
                 lon, lat = pair.split(" ")
                 coordinates.append([float(lon), float(lat)])
-            
+
             # Create Earth Engine polygon
             return ee.Geometry.Polygon([coordinates])
         elif wkt_string.startswith("POINT"):
@@ -49,10 +49,10 @@ def geojson_to_ee_geometry(geojson_data):
         # Ensure Earth Engine is initialized
         if not initialize_earth_engine():
             raise ValueError("Earth Engine initialization failed")
-            
+
         if isinstance(geojson_data, str):
             geojson_data = json.loads(geojson_data)
-            
+
         # Handle different GeoJSON structures
         if 'features' in geojson_data:
             # FeatureCollection
@@ -68,9 +68,9 @@ def geojson_to_ee_geometry(geojson_data):
             geometry = geojson_data
         else:
             raise ValueError("Invalid GeoJSON structure")
-            
+
         return ee.Geometry(geometry)
-        
+
     except Exception as e:
         logger.error(f"Error converting GeoJSON to EE geometry: {str(e)}")
         raise ValueError(f"Invalid GeoJSON format: {str(e)}")
@@ -105,7 +105,7 @@ def validate_coordinates(coordinates_data):
                 # Ensure Earth Engine is initialized
                 if not initialize_earth_engine():
                     raise ValueError("Earth Engine initialization failed")
-                    
+
                 # Assume [[lon, lat], [lon, lat], ...] format
                 ee_geometry = ee.Geometry.Polygon([coordinates_data])
                 return True, None
@@ -113,7 +113,7 @@ def validate_coordinates(coordinates_data):
                 return False, f"Error creating geometry: {str(e)}"
 
         return False, "Invalid coordinate format"
-        
+
     except Exception as e:
         logger.error(f"Coordinate validation error: {str(e)}")
         return False, f"Validation error: {str(e)}"
@@ -122,27 +122,27 @@ def validate_coordinates(coordinates_data):
 def validate_image_coverage(image, geometry, min_coverage_percent=70):
     """
     Validate that an image has sufficient coverage of the AOI.
-    
+
     Args:
         image: Earth Engine image
         geometry: AOI geometry
         min_coverage_percent: Minimum coverage percentage required
-    
+
     Returns:
         bool: True if image has sufficient coverage
     """
     try:
         # Get the image footprint
         image_geometry = image.geometry()
-        
+
         # Calculate intersection between image and AOI
         intersection = geometry.intersection(image_geometry, ee.ErrorMargin(1))
-        
+
         # Calculate coverage percentage
         aoi_area = geometry.area(ee.ErrorMargin(1))
         intersection_area = intersection.area(ee.ErrorMargin(1))
         coverage_percent = intersection_area.divide(aoi_area).multiply(100)
-        
+
         # Check if coverage meets minimum requirement
         return coverage_percent.gte(min_coverage_percent)
     except Exception as e:
@@ -159,7 +159,7 @@ def get_landsat_collection(geometry, start_date, end_date, cloud_cover=20):
         # Ensure Earth Engine is initialized
         if not initialize_earth_engine():
             raise ValueError("Earth Engine initialization failed")
-            
+
         start_year = int(start_date.split("-")[0])
         end_year = int(end_date.split("-")[0])
         collections = []
@@ -223,22 +223,22 @@ def get_landsat_collection(geometry, start_date, end_date, cloud_cover=20):
 
         collection_size = collection.size().getInfo()
         logger.info(f"Landsat collection contains {collection_size} images")
-        
+
         # Apply band harmonization to ensure compatibility across different Landsat missions
         collection = harmonize_landsat_bands(collection, analysis_type='ndvi')
         logger.info("Applied NDVI band harmonization to mixed Landsat collection")
-        
+
         # Add coverage validation to filter images with good AOI coverage
         def add_coverage_property(image):
             coverage_valid = validate_image_coverage(image, geometry, 90)  # 90% minimum coverage
             return image.set('aoi_coverage_valid', coverage_valid)
-        
+
         collection_with_coverage = collection.map(add_coverage_property)
         well_covered_collection = collection_with_coverage.filter(ee.Filter.eq('aoi_coverage_valid', 1))
-        
+
         well_covered_count = well_covered_collection.size().getInfo()
         logger.info(f"Found {well_covered_count} images with good AOI coverage (≥90%)")
-        
+
         # Use well-covered images if available, otherwise fall back to all images
         if well_covered_count > 0:
             final_collection = well_covered_collection
@@ -246,7 +246,7 @@ def get_landsat_collection(geometry, start_date, end_date, cloud_cover=20):
         else:
             final_collection = collection
             logger.warning("No well-covered images found, using all available images")
-        
+
         if final_collection.size().getInfo() == 0:
             raise Exception("No suitable Landsat images found")
 
@@ -264,7 +264,7 @@ def get_sentinel2_collection(geometry, start_date, end_date, cloud_cover=20):
         # Ensure Earth Engine is initialized
         if not initialize_earth_engine():
             raise ValueError("Earth Engine initialization failed")
-            
+
         collection = (
             ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
             .filterDate(start_date, end_date)
@@ -274,7 +274,7 @@ def get_sentinel2_collection(geometry, start_date, end_date, cloud_cover=20):
 
         collection_size = collection.size().getInfo()
         logger.info(f"Sentinel-2 collection contains {collection_size} images")
-        
+
         if collection_size == 0:
             raise Exception("No suitable Sentinel-2 images found")
 
@@ -287,10 +287,10 @@ def get_sentinel2_collection(geometry, start_date, end_date, cloud_cover=20):
 def calculate_ndvi_landsat(image):
     """
     Calculate NDVI for harmonized Landsat image using standardized band names
-    
+
     Args:
         image: Earth Engine image with harmonized RED and NIR bands
-        
+
     Returns:
         ee.Image: Image with NDVI band added
     """
@@ -298,17 +298,17 @@ def calculate_ndvi_landsat(image):
         # Scale factors for Landsat Collection 2 Level 2
         scale_factor = 0.0000275
         offset = -0.2
-        
+
         # Apply scaling to RED and NIR bands
         red_scaled = image.select('RED').multiply(scale_factor).add(offset)
         nir_scaled = image.select('NIR').multiply(scale_factor).add(offset)
-        
+
         # Calculate NDVI
         ndvi = nir_scaled.subtract(red_scaled).divide(nir_scaled.add(red_scaled)).rename('NDVI')
-        
+
         # Add NDVI band to the original image
         return image.addBands(ndvi).set('system:time_start', image.get('system:time_start'))
-        
+
     except Exception as e:
         logger.error(f"Error calculating NDVI for harmonized Landsat image: {str(e)}")
         raise
@@ -318,11 +318,11 @@ def harmonize_landsat_bands(collection, analysis_type='ndvi'):
     """
     Harmonize band names across different Landsat missions to ensure compatibility.
     Supports different analysis types by selecting appropriate bands.
-    
+
     Args:
         collection: Earth Engine ImageCollection with mixed Landsat missions
         analysis_type: str, either 'ndvi' or 'lst' to determine which bands to include
-        
+
     Returns:
         ee.ImageCollection: Collection with harmonized band names
     """
@@ -330,10 +330,10 @@ def harmonize_landsat_bands(collection, analysis_type='ndvi'):
         def harmonize_image(image):
             # Get band names to identify Landsat mission
             band_names = image.bandNames()
-            
+
             # Check if this is Landsat 8/9 (has ST_B10) or Landsat 4-7 (has ST_B6)
             is_landsat_89 = band_names.contains('ST_B10')
-            
+
             if analysis_type == 'lst':
                 # Include thermal bands for LST analysis
                 harmonized = ee.Algorithms.If(
@@ -349,14 +349,14 @@ def harmonize_landsat_bands(collection, analysis_type='ndvi'):
                     is_landsat_89,
                     # Landsat 8/9: RED=SR_B4, NIR=SR_B5
                     image.select(['SR_B4', 'SR_B5', 'QA_PIXEL'], ['RED', 'NIR', 'QA_PIXEL']),
-                    # Landsat 4-7: RED=SR_B3, NIR=SR_B4  
+                    # Landsat 4-7: RED=SR_B3, NIR=SR_B4
                     image.select(['SR_B3', 'SR_B4', 'QA_PIXEL'], ['RED', 'NIR', 'QA_PIXEL'])
                 )
-            
+
             return ee.Image(harmonized).copyProperties(image, image.propertyNames())
-        
+
         return collection.map(harmonize_image)
-        
+
     except Exception as e:
         logger.error(f"Error harmonizing Landsat bands: {str(e)}")
         return collection
@@ -371,7 +371,7 @@ def get_landsat_collection_for_lst(geometry, start_date, end_date, cloud_cover=2
         # Ensure Earth Engine is initialized
         if not initialize_earth_engine():
             raise ValueError("Earth Engine initialization failed")
-            
+
         start_year = int(start_date.split("-")[0])
         end_year = int(end_date.split("-")[0])
         collections = []
@@ -435,22 +435,22 @@ def get_landsat_collection_for_lst(geometry, start_date, end_date, cloud_cover=2
 
         collection_size = collection.size().getInfo()
         logger.info(f"Landsat collection for LST contains {collection_size} images")
-        
+
         # Apply band harmonization specifically for LST analysis
         collection = harmonize_landsat_bands(collection, analysis_type='lst')
         logger.info("Applied LST band harmonization to mixed Landsat collection")
-        
+
         # Add coverage validation to filter images with good AOI coverage
         def add_coverage_property(image):
             coverage_valid = validate_image_coverage(image, geometry, 90)  # 90% minimum coverage
             return image.set('aoi_coverage_valid', coverage_valid)
-        
+
         collection_with_coverage = collection.map(add_coverage_property)
         well_covered_collection = collection_with_coverage.filter(ee.Filter.eq('aoi_coverage_valid', 1))
-        
+
         well_covered_count = well_covered_collection.size().getInfo()
         logger.info(f"Found {well_covered_count} images with good AOI coverage for LST analysis")
-        
+
         # Use well-covered images if available, otherwise fall back to all images
         if well_covered_count > 0:
             final_collection = well_covered_collection
@@ -458,7 +458,7 @@ def get_landsat_collection_for_lst(geometry, start_date, end_date, cloud_cover=2
         else:
             final_collection = collection
             logger.warning("No well-covered images found for LST, using all available images")
-        
+
         if final_collection.size().getInfo() == 0:
             raise Exception("No suitable Landsat images found for LST analysis")
 
@@ -466,4 +466,3 @@ def get_landsat_collection_for_lst(geometry, start_date, end_date, cloud_cover=2
     except Exception as e:
         logger.error(f"Error creating Landsat collection for LST: {str(e)}")
         raise
-

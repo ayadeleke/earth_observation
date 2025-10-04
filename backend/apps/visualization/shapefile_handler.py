@@ -2,6 +2,7 @@ import json
 from shapely.geometry import shape, Polygon, mapping
 from shapely.wkt import loads, dumps
 
+
 class ShapefileHandler:
     @staticmethod
     def parse_coordinates(coords_array):
@@ -14,14 +15,14 @@ class ShapefileHandler:
         """
         if not coords_array or len(coords_array) < 3:
             raise ValueError("At least 3 coordinates are required to form a polygon")
-        
+
         # Create a polygon from coordinates
         polygon = Polygon(coords_array)
-        
+
         # Validate polygon
         if not polygon.is_valid:
             raise ValueError("Invalid polygon: The coordinates do not form a valid polygon")
-            
+
         # Convert to WKT format
         return dumps(polygon)
 
