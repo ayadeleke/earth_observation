@@ -18,16 +18,16 @@ def get_cloud_cover_with_masking_info(collection, geometry, use_cloud_masking=Fa
     """
     try:
         logger.info(f"🎭 get_cloud_cover_with_masking_info called with: use_cloud_masking={use_cloud_masking}, strict_masking={strict_masking}")
-        
+
         if use_cloud_masking:
             logger.info("🎯 CLOUD MASKING IS ENABLED - Will apply reduction to effective cloud cover")
         else:
             logger.info("🚫 CLOUD MASKING IS DISABLED - Effective cloud cover will equal original")
         import ee
-        
+
         # Sort collection chronologically and limit to reasonable number
         sorted_collection = collection.sort('system:time_start').limit(max_images)
-        
+
         def extract_cloud_info_with_masking(image):
             # Get original cloud cover
             original_cloud_cover = ee.Algorithms.If(
@@ -35,7 +35,7 @@ def get_cloud_cover_with_masking_info(collection, geometry, use_cloud_masking=Fa
                 image.get('CLOUD_COVER'),
                 0
             )
-            
+
             # Calculate effective cloud cover based on masking settings
             if use_cloud_masking:
                 # Use client-side calculation instead of complex Earth Engine computation
@@ -49,13 +49,13 @@ def get_cloud_cover_with_masking_info(collection, geometry, use_cloud_masking=Fa
             else:
                 # When masking is disabled, effective cloud cover is same as original
                 effective_cloud_cover = original_cloud_cover
-            
+
             # Get acquisition date
             date = ee.Date(image.get('system:time_start')).format('YYYY-MM-dd')
-            
+
             # Get image ID
             image_id = image.get('system:id')
-            
+
             return ee.Feature(None, {
                 'image_id': image_id,
                 'date': date,
@@ -63,27 +63,27 @@ def get_cloud_cover_with_masking_info(collection, geometry, use_cloud_masking=Fa
                 'effective_cloud_cover': effective_cloud_cover,
                 'cloud_masking_applied': use_cloud_masking,
                 # Add debug info to see what's happening
-                'masking_type': ee.Algorithms.If(use_cloud_masking, 
-                    ee.Algorithms.If(strict_masking, 'strict', 'basic'), 
-                    'none')
+                'masking_type': ee.Algorithms.If(use_cloud_masking,
+                                                 ee.Algorithms.If(strict_masking, 'strict', 'basic'),
+                                                 'none')
             })
-        
+
         # Map the function over the collection
         image_info_collection = sorted_collection.map(extract_cloud_info_with_masking)
-        
+
         # Get the information
         image_list = image_info_collection.getInfo()
-        
+
         if not image_list or 'features' not in image_list:
             return []
-        
+
         # Extract the actual data from the features
         result = []
         for feature in image_list.get('features', []):
             props = feature.get('properties', {})
             if props.get('date') and props.get('image_id'):
                 original_cloud_cover = props.get('cloud_cover', 0)
-                
+
                 # ALWAYS use client-side calculation for cloud masking (ignore Earth Engine values)
                 if use_cloud_masking:
                     if strict_masking:
@@ -91,14 +91,14 @@ def get_cloud_cover_with_masking_info(collection, geometry, use_cloud_masking=Fa
                         effective_cloud_cover = max(0, original_cloud_cover * 0.3)
                         logger.info(f"✅ STRICT masking applied: {original_cloud_cover:.1f}% -> {effective_cloud_cover:.1f}%")
                     else:
-                        # Basic masking: 50% reduction in cloud cover  
+                        # Basic masking: 50% reduction in cloud cover
                         effective_cloud_cover = max(0, original_cloud_cover * 0.5)
                         logger.info(f"✅ BASIC masking applied: {original_cloud_cover:.1f}% -> {effective_cloud_cover:.1f}%")
                 else:
                     # No masking - use original cloud cover
                     effective_cloud_cover = original_cloud_cover
                     logger.info(f"❌ No masking: {original_cloud_cover:.1f}% -> {effective_cloud_cover:.1f}%")
-                
+
                 result.append({
                     'date': props['date'],
                     'image_id': props['image_id'],
@@ -106,15 +106,15 @@ def get_cloud_cover_with_masking_info(collection, geometry, use_cloud_masking=Fa
                     'effective_cloud_cover': effective_cloud_cover,
                     'cloud_masking_applied': use_cloud_masking  # Force this to match the use_cloud_masking parameter
                 })
-        
+
         logger.info(f"Extracted cloud cover info for {len(result)} images with masking={use_cloud_masking}")
-        
+
         # Debug: Show first few cloud cover values to verify masking is working
         if result:
             masking_status = "ENABLED" if use_cloud_masking else "DISABLED"
             strictness = "STRICT" if strict_masking else "BASIC"
             logger.info(f"🎭 Cloud masking {masking_status} ({strictness})")
-            
+
             if use_cloud_masking:
                 for i, item in enumerate(result[:3]):  # Show first 3 items for debugging
                     original = item.get('cloud_cover', 0)
@@ -124,9 +124,9 @@ def get_cloud_cover_with_masking_info(collection, geometry, use_cloud_masking=Fa
                     logger.info(f"  ✅ Sample {i+1}: {original:.1f}% -> {effective:.1f}% (reduced by {reduction:.1f}% = {reduction_percent:.0f}% reduction)")
             else:
                 logger.info(f"  ❌ Cloud masking disabled - no reduction applied")
-        
+
         return result
-        
+
     except Exception as e:
         logger.error(f"Error extracting cloud cover with masking info: {str(e)}")
         return []
@@ -137,28 +137,28 @@ def calculate_annual_means(sample_data, value_key='ndvi'):
     try:
         # Group data by year
         annual_data = defaultdict(list)
-        
+
         for item in sample_data:
             date_str = item.get('date', '')
             if date_str:
                 year = date_str[:4]  # Extract year from YYYY-MM-DD format
                 annual_data[year].append(item)
-        
+
         # Calculate annual means
         annual_means = []
         for year in sorted(annual_data.keys()):
             year_items = annual_data[year]
-            
+
             if year_items:
                 # Calculate mean NDVI for the year
                 mean_ndvi = sum(item.get(value_key, 0) for item in year_items) / len(year_items)
-                
+
                 # Use representative values from the year (first occurrence)
                 representative_item = year_items[0]
-                
+
                 # Calculate mean cloud cover for the year
                 mean_cloud_cover = sum(item.get('cloud_cover', 0) for item in year_items) / len(year_items)
-                
+
                 annual_means.append({
                     "date": f"{year}-06-15",  # Use mid-year date for annual mean
                     "ndvi": round(mean_ndvi, 4),
@@ -171,10 +171,10 @@ def calculate_annual_means(sample_data, value_key='ndvi'):
                     "annual_observations": len(year_items),
                     "analysis_type": "Annual Mean"
                 })
-        
+
         logger.info(f"Calculated {len(annual_means)} annual means from {len(sample_data)} individual observations")
         return annual_means
-        
+
     except Exception as e:
         logger.error(f"Error calculating annual means: {str(e)}")
         return sample_data  # Return original data if calculation fails
@@ -188,7 +188,7 @@ def process_ndvi_analysis(geometry, start_date, end_date, satellite="landsat", c
         logger.info(f"   🛰️  Satellite: {satellite}")
         logger.info(f"   ☁️  Cloud cover threshold: {cloud_cover}%")
         logger.info(f"   🎭 Cloud masking: enabled={use_cloud_masking}, strict={strict_masking}")
-        
+
         if use_cloud_masking:
             logger.info("✅ CLOUD MASKING ENABLED - Table should show 'Yes' values")
         else:
@@ -217,15 +217,15 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
         logger.error(f"  strict_masking = {strict_masking} (type: {type(strict_masking)})")
         logger.error(f"  cloud_cover = {cloud_cover}")
         logger.error(f"  date_range = {start_date} to {end_date}")
-        
+
         # Respect the actual parameters passed from frontend
         logger.error(f"🔧 Using actual parameters: use_cloud_masking={use_cloud_masking}, strict_masking={strict_masking}")
-        
+
         logger.info(f"=== NDVI ANALYSIS STARTED ===")
         logger.info(f"Getting Landsat collection for {start_date} to {end_date}")
         logger.info(f"Cloud masking parameters: enabled={use_cloud_masking}, strict={strict_masking}")
         logger.info(f"Cloud cover threshold: {cloud_cover}%")
-        
+
         # CRITICAL: Log exactly what parameters we received
         if use_cloud_masking:
             logger.error("🟢 CLOUD MASKING IS ENABLED - expecting 'Yes' values in table")
@@ -234,11 +234,11 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
 
         # Use shared Landsat collection to ensure consistency
         original_collection = get_landsat_collection(geometry, start_date, end_date, cloud_cover)
-        
+
         # Apply cloud masking if requested
         if use_cloud_masking:
             logger.info("Applying cloud masking to Landsat collection")
-            
+
             def mask_clouds(image):
                 qa = image.select("QA_PIXEL")
                 # Cloud shadow, cloud, and cirrus masks
@@ -254,7 +254,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                     mask = cloud.eq(0)
 
                 return image.updateMask(mask)
-            
+
             collection = original_collection.map(mask_clouds)
         else:
             collection = original_collection
@@ -303,32 +303,32 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
         sample_data = []
         try:
             from datetime import datetime
-            
+
             # Using Flask approach: Calculate NDVI and cloud info together for each image
             logger.info(f"🔍 Using Flask approach for cloud masking with use_cloud_masking={use_cloud_masking}")
-            
+
             if True:  # Always process
                 # Sample actual NDVI values from the collection using harmonized calculation
                 def sample_ndvi_from_image(image):
                     # Calculate NDVI using harmonized bands
                     from .earth_engine import calculate_ndvi_landsat
                     return calculate_ndvi_landsat(image)
-                
+
                 # Use Flask approach: Calculate NDVI and cloud info together for each image
                 sorted_collection = original_collection.sort('system:time_start').limit(100)
-                
+
                 def calculate_ndvi_with_cloud_info(image):
                     """Calculate NDVI using harmonized bands - avoiding client-side variables in server-side operations"""
                     from .earth_engine import calculate_ndvi_landsat
-                    
+
                     # Get basic image info (all server-side operations)
                     original_cloud_cover = image.get('CLOUD_COVER')
                     image_id = image.get('system:id')
-                    
+
                     # Calculate NDVI using the harmonized function
                     ndvi_image = calculate_ndvi_landsat(image)
                     ndvi_band = ndvi_image.select('NDVI')
-                    
+
                     # Calculate NDVI mean
                     ndvi_mean = ndvi_band.reduceRegion(
                         reducer=ee.Reducer.mean(),
@@ -337,7 +337,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                         maxPixels=1e9,
                         bestEffort=True
                     ).get('NDVI')
-                    
+
                     # Return feature with basic values (no client-side variables)
                     feature = ee.Feature(None, {
                         'date': ee.Date(image.get('system:time_start')).format('YYYY-MM-dd'),
@@ -346,12 +346,12 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                         'original_cloud_cover': original_cloud_cover,
                         'ndvi': ndvi_mean
                     })
-                    
+
                     return feature
-                
+
                 # Apply to collection and get results
                 ndvi_features = sorted_collection.map(calculate_ndvi_with_cloud_info)
-                
+
                 logger.error("🔍 About to call getInfo() on Earth Engine features...")
                 try:
                     feature_data = ndvi_features.getInfo()
@@ -361,7 +361,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                 except Exception as ee_error:
                     logger.error(f"❌ Earth Engine getInfo() failed: {ee_error}")
                     feature_data = None
-                
+
                 # Process results
                 if feature_data and feature_data.get('features'):
                     # Get center point for coordinates
@@ -369,18 +369,18 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                     center_coords = center_point['coordinates']
                     lat = center_coords[1]
                     lon = center_coords[0]
-                    
+
                     for feature in feature_data['features']:
                         props = feature['properties']
                         if props.get('ndvi') is not None:
-                            
+
                             # Extract basic data from Earth Engine
                             original_cloud_cover = props.get('original_cloud_cover', 0)
                             date_str = props['date']
                             doy = props.get('doy', 1)  # Day of Year from Earth Engine
                             image_id = props.get('image_id', 'Unknown')
                             ndvi_value = props['ndvi']
-                            
+
                             # Apply cloud masking logic CLIENT-SIDE (simple and reliable)
                             if use_cloud_masking:
                                 # Cloud masking ENABLED - apply consistent reduction
@@ -400,7 +400,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                                 adjusted_cloud_cover = original_cloud_cover
                                 cloud_masking_applied = False
                                 logger.error(f"🔴 NDVI {date_str}: MASKING DISABLED -> {original_cloud_cover}% (no change)")
-                            
+
                             sample_item = {
                                 "date": date_str,
                                 "doy": int(doy),  # Day of Year from Earth Engine
@@ -421,16 +421,16 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                                 "adjustedCloudCover": adjusted_cloud_cover,
                                 "cloudMaskingApplied": cloud_masking_applied
                             }
-                            
+
                             # Debug: Log first few sample items to verify cloud masking data
                             if len(sample_data) < 5:
                                 logger.error(f"📊 NDVI Sample {len(sample_data) + 1} ({date_str}): original={original_cloud_cover}%, adjusted={adjusted_cloud_cover}%, masking_applied={cloud_masking_applied}")
                                 logger.error(f"   Frontend fields: originalCloudCover={sample_item['originalCloudCover']}, adjustedCloudCover={sample_item['adjustedCloudCover']}, cloudMaskingApplied={sample_item['cloudMaskingApplied']}")
-                            
+
                             sample_data.append(sample_item)
-                        
+
                 logger.info(f"Generated {len(sample_data)} actual NDVI sample points from GEE")
-                
+
                 # Final verification: Log what we're sending to frontend
                 if sample_data:
                     first_sample = sample_data[0]
@@ -448,17 +448,17 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                         center_coords = center_point['coordinates']
                         lat = center_coords[1]
                         lon = center_coords[0]
-                        
+
                         # Create a few sample points for testing
                         from datetime import datetime, timedelta
                         base_date = datetime.strptime(start_date, '%Y-%m-%d')
-                        
+
                         for i in range(3):  # Create 3 sample points
-                            sample_date = base_date + timedelta(days=i*30)
+                            sample_date = base_date + timedelta(days=i * 30)
                             date_str = sample_date.strftime('%Y-%m-%d')
-                            
+
                             original_cloud_cover = 5.0 + (i * 2.0)  # Vary cloud cover
-                            
+
                             # Apply cloud masking logic (consistent with main logic)
                             if use_cloud_masking:
                                 if strict_masking:
@@ -469,19 +469,19 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                                     # Basic masking: 50% reduction (keep 50% of original)
                                     adjusted_cloud_cover = max(0.0, original_cloud_cover * 0.5)
                                     masking_type = "BASIC (50% reduction)"
-                                
+
                                 cloud_masking_applied = True
                                 logger.error(f"🟢 FALLBACK: {masking_type} for {date_str} -> {original_cloud_cover}% -> {adjusted_cloud_cover:.1f}%")
                             else:
                                 adjusted_cloud_cover = original_cloud_cover
                                 cloud_masking_applied = False
                                 logger.error(f"🔴 FALLBACK: Cloud masking DISABLED for {date_str} -> {original_cloud_cover}% (no change)")
-                            
+
                             # Calculate realistic DoY for the date
                             from datetime import datetime
                             sample_date = datetime.strptime(date_str, '%Y-%m-%d')
                             doy = sample_date.timetuple().tm_yday
-                            
+
                             sample_data.append({
                                 "date": date_str,
                                 "doy": doy,  # Calculated Day of Year
@@ -501,7 +501,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                                 "adjustedCloudCover": adjusted_cloud_cover,
                                 "cloudMaskingApplied": cloud_masking_applied
                             })
-                        
+
                         logger.error(f"✅ FALLBACK generated {len(sample_data)} sample points")
                     except Exception as fallback_error:
                         logger.error(f"❌ FALLBACK failed: {fallback_error}")
@@ -509,7 +509,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                         from datetime import datetime
                         emergency_date = datetime.strptime(start_date, '%Y-%m-%d')
                         emergency_doy = emergency_date.timetuple().tm_yday
-                        
+
                         # Calculate emergency cloud cover values with clear masking effect
                         original_emergency_cloud = 10.0
                         if use_cloud_masking:
@@ -519,9 +519,9 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                                 adjusted_emergency_cloud = max(0.0, original_emergency_cloud * 0.5)  # 50% reduction
                         else:
                             adjusted_emergency_cloud = original_emergency_cloud
-                        
+
                         logger.error(f"🚨 EMERGENCY FALLBACK: {original_emergency_cloud}% -> {adjusted_emergency_cloud}% (masking={use_cloud_masking})")
-                        
+
                         sample_data = [{
                             "date": start_date,
                             "doy": emergency_doy,  # Calculated Day of Year
@@ -552,7 +552,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
         if sample_data:
             sample_data.sort(key=lambda x: x.get('date', ''))
             logger.info(f"Sorted {len(sample_data)} NDVI data points chronologically")
-            
+
             # Calculate annual means for time series
             annual_data = calculate_annual_means(sample_data, 'ndvi')
             logger.info(f"Calculated {len(annual_data)} annual mean NDVI values")

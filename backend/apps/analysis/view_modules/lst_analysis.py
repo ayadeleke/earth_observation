@@ -17,28 +17,28 @@ def calculate_annual_lst_means(sample_data):
     try:
         # Group data by year
         annual_data = defaultdict(list)
-        
+
         for item in sample_data:
             date_str = item.get('date', '')
             if date_str:
                 year = date_str[:4]  # Extract year from YYYY-MM-DD format
                 annual_data[year].append(item)
-        
+
         # Calculate annual means
         annual_means = []
         for year in sorted(annual_data.keys()):
             year_items = annual_data[year]
-            
+
             if year_items:
                 # Calculate mean LST for the year
                 mean_lst = sum(item.get('lst', 0) for item in year_items) / len(year_items)
-                
+
                 # Use representative values from the year (first occurrence)
                 representative_item = year_items[0]
-                
+
                 # Calculate mean cloud cover for the year
                 mean_cloud_cover = sum(item.get('cloud_cover', 0) for item in year_items) / len(year_items)
-                
+
                 annual_means.append({
                     "date": f"{year}-06-15",  # Use mid-year date for annual mean
                     "lst": round(mean_lst, 2),
@@ -51,10 +51,10 @@ def calculate_annual_lst_means(sample_data):
                     "annual_observations": len(year_items),
                     "analysis_type": "Annual Mean LST"
                 })
-        
+
         logger.info(f"Calculated {len(annual_means)} annual LST means from {len(sample_data)} individual observations")
         return annual_means
-        
+
     except Exception as e:
         logger.error(f"Error calculating annual LST means: {str(e)}")
         return sample_data  # Return original data if calculation fails
@@ -67,16 +67,16 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
         logger.error(f"  use_cloud_masking = {use_cloud_masking} (type: {type(use_cloud_masking)})")
         logger.error(f"  strict_masking = {strict_masking} (type: {type(strict_masking)})")
         logger.error(f"  cloud_cover = {cloud_cover}")
-        
+
         logger.info(f"Processing LST analysis for {start_date} to {end_date}")
 
         # Get Landsat collection with thermal bands for LST analysis (already harmonized)
         harmonized_collection = get_landsat_collection_for_lst(geometry, start_date, end_date, cloud_cover)
-        
+
         # Apply cloud masking if requested
         if use_cloud_masking:
             logger.error("🟢 LST: Applying cloud masking to collection")
-            
+
             def mask_clouds(image):
                 qa = image.select("QA_PIXEL")
                 cloud_shadow = qa.bitwiseAnd(1 << 4)
@@ -89,7 +89,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
                     mask = cloud.eq(0)
 
                 return image.updateMask(mask)
-            
+
             collection = harmonized_collection.map(mask_clouds)
         else:
             logger.error("🔴 LST: No cloud masking applied")
@@ -130,25 +130,25 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
         sample_data = []
         try:
             from datetime import datetime
-            
+
             # Use Flask approach: Calculate LST and cloud info together for each image
             logger.error(f"🔍 LST: Using Flask approach for cloud masking with use_cloud_masking={use_cloud_masking}")
-            
+
             # Use harmonized collection (already processed above) to ensure we get proper thermal bands
             sorted_collection = harmonized_collection.sort('system:time_start').limit(100)
-            
+
             def calculate_lst_with_cloud_info(image):
                 """Calculate LST and cloud cover info for each image (Flask approach for LST)"""
                 # Get basic image info
                 original_cloud_cover = image.get('CLOUD_COVER')
                 image_id = image.get('system:id')
-                
+
                 # Calculate LST (standard approach)
                 lst_image = calculate_landsat_lst(image)
-                
+
                 # Return basic server-side values (cloud masking calculation will be done client-side)
                 final_lst = lst_image
-                
+
                 # Calculate LST mean
                 lst_mean = final_lst.reduceRegion(
                     reducer=ee.Reducer.mean(),
@@ -157,7 +157,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
                     maxPixels=1e9,
                     bestEffort=True
                 ).get('LST')
-                
+
                 # Return feature with basic server-side values only
                 feature = ee.Feature(None, {
                     'date': ee.Date(image.get('system:time_start')).format('YYYY-MM-dd'),
@@ -165,13 +165,13 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
                     'original_cloud_cover': original_cloud_cover,
                     'lst': lst_mean
                 })
-                
+
                 return feature
-            
+
             # Apply to collection and get results (Flask approach)
             lst_features = sorted_collection.map(calculate_lst_with_cloud_info)
             feature_data = lst_features.getInfo()
-            
+
             # Process results using Flask approach
             if feature_data and feature_data.get('features'):
                 # Get center point for coordinates
@@ -179,17 +179,17 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
                 center_coords = center_point['coordinates']
                 lat = center_coords[1]
                 lon = center_coords[0]
-                
+
                 for feature in feature_data['features']:
                     props = feature['properties']
                     if props.get('lst') is not None:  # Skip null LST values
-                        
+
                         # Extract basic data from Earth Engine
                         original_cloud_cover = props.get('original_cloud_cover', 0)
                         date_str = props['date']
                         image_id = props.get('image_id', 'Unknown')
                         lst_value = props['lst']
-                        
+
                         # Apply cloud masking logic CLIENT-SIDE (same as NDVI)
                         if use_cloud_masking:
                             # Cloud masking ENABLED - apply consistent reduction
@@ -201,7 +201,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
                                 # Basic masking: 50% reduction (keep 50% of original)
                                 effective_cloud_cover = max(0.0, original_cloud_cover * 0.15)
                                 masking_type = "BASIC (50% reduction)"
-                            
+
                             cloud_masking_applied = True
                             logger.error(f"🟢 LST {date_str}: {masking_type} -> {original_cloud_cover}% -> {effective_cloud_cover:.1f}%")
                         else:
@@ -209,7 +209,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
                             effective_cloud_cover = original_cloud_cover
                             cloud_masking_applied = False
                             logger.error(f"🔴 LST {date_str}: MASKING DISABLED -> {original_cloud_cover}% (no change)")
-                        
+
                         sample_data.append({
                             "date": date_str,
                             "lst": round(float(lst_value), 2),
@@ -229,9 +229,9 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
                             "adjustedCloudCover": effective_cloud_cover,
                             "cloudMaskingApplied": cloud_masking_applied
                         })
-                    
+
                 logger.info(f"Generated {len(sample_data)} actual LST sample points from GEE")
-            
+
         except Exception as sample_error:
             logger.error(f"Error getting LST sample data: {sample_error}")
             sample_data = []
@@ -240,7 +240,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
         if sample_data:
             sample_data.sort(key=lambda x: x.get('date', ''))
             logger.info(f"Sorted {len(sample_data)} LST data points chronologically")
-            
+
             # Calculate annual means for time series
             annual_data = calculate_annual_lst_means(sample_data)
             logger.info(f"Calculated {len(annual_data)} annual mean LST values")

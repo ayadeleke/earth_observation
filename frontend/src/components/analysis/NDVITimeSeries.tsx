@@ -115,7 +115,12 @@ export const NDVITimeSeries: React.FC<NDVITimeSeriesProps> = ({
         </h2>
         <div className="small text-muted lh-sm">
           <div>{dateRange}</div>
-          <div>Cloud Cover &lt;{cloudCover || 'N/A'}% • {data.length} annual means from {totalObservations} observations</div>
+          <div>
+            {analysisType?.toLowerCase() !== 'sar' && (
+              <>Cloud Cover &lt;{cloudCover || 'N/A'}% • </>
+            )}
+            {data.length} annual means from {totalObservations} observations
+          </div>
         </div>
       </div>
       

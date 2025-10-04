@@ -28,19 +28,19 @@ logger = logging.getLogger(__name__)
 def process_shapefile_upload(shapefile_obj):
     """
     Process uploaded shapefile and extract geometry (Django version)
-    
+
     Args:
         shapefile_obj: Django file upload object
-        
+
     Returns:
         tuple: (success: bool, result: str or dict, error_message: str or None)
     """
     if not SHAPELY_AVAILABLE:
         logger.error("Shapely not available for shapefile processing")
         return False, None, "Shapefile upload requires shapely. Please install with: pip install shapely geopandas"
-    
+
     logger.info(f"Processing shapefile: {shapefile_obj.name}")
-    
+
     try:
         import os
         import tempfile
@@ -52,107 +52,107 @@ def process_shapefile_upload(shapefile_obj):
         except ImportError:
             logger.error("GeoPandas not available for shapefile processing")
             return False, None, "Shapefile upload requires geopandas. Please install with: pip install geopandas"
-        
+
         # Create temporary directory for extraction
         with tempfile.TemporaryDirectory() as temp_dir:
             zip_path = os.path.join(temp_dir, shapefile_obj.name)
-            
+
             # Save uploaded file
             with open(zip_path, 'wb') as f:
                 for chunk in shapefile_obj.chunks():
                     f.write(chunk)
             logger.info(f"Shapefile saved to: {zip_path}")
-            
+
             # Extract ZIP file
             try:
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                     zip_contents = zip_ref.namelist()
                     logger.info(f"ZIP contents: {zip_contents}")
-                    
+
                     zip_ref.extractall(temp_dir)
                     logger.info(f"ZIP file extracted to: {temp_dir}")
-                    
+
                     # Find all extracted files
                     extracted_files = []
                     for root, dirs, files in os.walk(temp_dir):
                         for file in files:
                             rel_path = os.path.relpath(os.path.join(root, file), temp_dir)
                             extracted_files.append(rel_path)
-                    
+
                     logger.info(f"All extracted files: {extracted_files}")
-                    
+
             except zipfile.BadZipFile:
                 return False, None, "Invalid ZIP file. Please upload a valid shapefile ZIP."
             except Exception as e:
                 return False, None, f"Error extracting ZIP file: {str(e)}"
-            
+
             # Find shapefile components
             shp_files = [f for f in extracted_files if f.lower().endswith('.shp')]
-            
+
             if not shp_files:
                 extensions_found = set(os.path.splitext(f)[1].lower() for f in extracted_files)
                 return False, None, f"No .shp file found in the uploaded ZIP. Found file extensions: {', '.join(sorted(extensions_found))}"
-            
+
             if len(shp_files) > 1:
                 return False, None, f"Multiple .shp files found: {shp_files}. Please upload a ZIP with only one shapefile."
-            
+
             shp_file = shp_files[0]
             base_name = os.path.splitext(os.path.basename(shp_file))[0]
             shp_dir = os.path.dirname(shp_file) if os.path.dirname(shp_file) else ""
-            
+
             logger.info(f"Found shapefile: {shp_file}")
-            
+
             # Check for required components
             required_extensions = ['.shp', '.shx', '.dbf']
             missing_components = []
-            
+
             for ext in required_extensions:
-                pattern_files = [f for f in extracted_files 
-                               if os.path.dirname(f) == shp_dir and
-                               os.path.splitext(os.path.basename(f))[0].lower() == base_name.lower() and
-                               os.path.splitext(f)[1].lower() == ext.lower()]
-                
+                pattern_files = [f for f in extracted_files
+                                 if os.path.dirname(f) == shp_dir and
+                                 os.path.splitext(os.path.basename(f))[0].lower() == base_name.lower() and
+                                 os.path.splitext(f)[1].lower() == ext.lower()]
+
                 if not pattern_files:
                     missing_components.append(ext)
-            
+
             if missing_components:
-                found_files = [f for f in extracted_files 
-                             if os.path.splitext(os.path.basename(f))[0].lower() == base_name.lower()]
+                found_files = [f for f in extracted_files
+                               if os.path.splitext(os.path.basename(f))[0].lower() == base_name.lower()]
                 return False, None, f"Missing required shapefile components: {', '.join(missing_components)}. Found files for '{base_name}': {found_files}"
-            
+
             # Read shapefile
             shp_path = os.path.join(temp_dir, shp_file)
             logger.info(f"Reading shapefile from: {shp_path}")
-            
+
             try:
                 gdf = gpd.read_file(shp_path)
                 logger.info(f"Shapefile loaded successfully. Shape: {gdf.shape}")
                 logger.info(f"CRS: {gdf.crs}")
-                
+
                 if gdf.empty:
                     return False, None, "Shapefile is empty (no features found)."
-                
+
                 # Convert to WGS84 if needed
                 if gdf.crs != 'EPSG:4326':
                     logger.info(f"Converting CRS from {gdf.crs} to EPSG:4326")
                     gdf = gdf.to_crs('EPSG:4326')
-                
+
                 # Use the first feature if multiple features exist
                 if len(gdf) > 1:
                     logger.info(f"Warning: Shapefile contains {len(gdf)} features. Using the first feature.")
                     gdf = gdf.iloc[:1]
-                
+
                 # Get geometry as GeoJSON
                 geom = gdf.geometry.iloc[0]
                 geojson_geom = geom_mapping(geom)
-                
+
                 logger.info(f"Geometry type: {geom.geom_type}")
                 logger.info(f"Geometry bounds: {geom.bounds}")
-                
+
                 # Convert to WKT for consistency
                 wkt_str = geom.wkt
                 logger.info(f"WKT geometry: {wkt_str[:200]}...")
-                
+
                 # Store both WKT and GeoJSON
                 result = {
                     'wkt': wkt_str,
@@ -160,12 +160,12 @@ def process_shapefile_upload(shapefile_obj):
                     'bounds': geom.bounds,
                     'geometry_type': geom.geom_type
                 }
-                
+
                 return True, result, None
-                
+
             except Exception as e:
                 return False, None, f"Error reading shapefile: {str(e)}. Please ensure it's a valid shapefile."
-    
+
     except Exception as e:
         logger.error(f"Error processing shapefile: {str(e)}")
         return False, None, f"Error processing shapefile: {str(e)}"
@@ -176,12 +176,12 @@ def convert_coordinates_to_geojson(coordinates_data):
     try:
         if not coordinates_data:
             return None
-        
+
         # If it's already a string, try to parse as WKT first, then as JSON
         if isinstance(coordinates_data, str):
             if coordinates_data.strip() == '':
                 return None
-                
+
             # Try parsing as JSON first (could be stringified GeoJSON)
             try:
                 parsed_json = json.loads(coordinates_data)
@@ -203,7 +203,7 @@ def convert_coordinates_to_geojson(coordinates_data):
                         return json.dumps(feature_collection)
             except json.JSONDecodeError:
                 pass
-            
+
             # Try parsing as WKT
             try:
                 geometry = wkt_loads(coordinates_data)
@@ -221,7 +221,7 @@ def convert_coordinates_to_geojson(coordinates_data):
                 return json.dumps(feature_collection)
             except Exception:
                 pass
-        
+
         # If it's a dict, handle as coordinate arrays or GeoJSON
         elif isinstance(coordinates_data, dict):
             # Check if it's already GeoJSON
@@ -240,7 +240,7 @@ def convert_coordinates_to_geojson(coordinates_data):
                         ]
                     }
                     return json.dumps(feature_collection)
-        
+
         # If it's a list, assume it's coordinate pairs for a polygon
         elif isinstance(coordinates_data, list):
             if len(coordinates_data) > 0:
@@ -260,10 +260,10 @@ def convert_coordinates_to_geojson(coordinates_data):
                     ]
                 }
                 return json.dumps(feature_collection)
-        
+
         logger.warning(f"Unable to convert coordinates data: {type(coordinates_data)} - {coordinates_data}")
         return None
-        
+
     except Exception as e:
         logger.error(f"Error converting coordinates to GeoJSON: {str(e)}")
         return None
@@ -273,17 +273,17 @@ def process_common_request_setup(request, analysis_type):
     """Common setup for all analysis requests"""
     try:
         logger.info(f"Starting {analysis_type} analysis request")
-        
+
         # Initialize Earth Engine
         initialize_earth_engine()
-        
+
         # Get request data - handle both JSON and FormData
         if hasattr(request, "data") and request.data:
             data = request.data.copy()  # Make a copy to avoid modifying original
         else:
             # Handle FormData from frontend - check both POST and FILES
             data = {}
-            
+
             # Add POST data
             if hasattr(request, 'POST') and request.POST:
                 for key, value in request.POST.items():
@@ -291,35 +291,35 @@ def process_common_request_setup(request, analysis_type):
                         data[key] = value[0]
                     else:
                         data[key] = value
-            
+
             # Add FILES data
             if hasattr(request, 'FILES') and request.FILES:
                 for key, value in request.FILES.items():
                     data[key] = value
-            
+
             # If still empty, try to get from request.data
             if not data and hasattr(request, 'data'):
                 data = dict(request.data)
-        
+
         logger.info(f"Raw request data keys: {list(data.keys())}")
-        
+
         # Debug: Log the coordinates data specifically
         if 'coordinates' in data:
             coord_data = data['coordinates']
             logger.info(f"Coordinates data type: {type(coord_data)}")
             logger.info(f"Coordinates data sample: {str(coord_data)[:200]}")
-        
+
         # Map frontend field names to backend expected names
         # Support both React-style (camelCase) and Flask-style (snake_case) field names
         field_mapping = {
             # Coordinates
             'coordinates': 'aoi_data',
             # Dates (React style)
-            'startDate': 'start_date', 
+            'startDate': 'start_date',
             'endDate': 'end_date',
             # Dates (Flask style)
             'start_date': 'start_date',
-            'end_date': 'end_date', 
+            'end_date': 'end_date',
             'start_year': 'start_year',
             'end_year': 'end_year',
             # Analysis parameters
@@ -340,7 +340,7 @@ def process_common_request_setup(request, analysis_type):
             'date_range_type': 'date_range_type',
             'polarization': 'polarization'
         }
-        
+
         # Apply field mapping with special handling for coordinates
         mapped_data = {}
         for frontend_key, backend_key in field_mapping.items():
@@ -355,16 +355,16 @@ def process_common_request_setup(request, analysis_type):
                         logger.warning(f"Failed to convert coordinates: {coordinates_data}")
                 else:
                     mapped_data[backend_key] = data[frontend_key]
-        
+
         # Special handling for coordinates -> aoi_data conversion
         coordinates_processed = False
-        
+
         # Check if shapefile data is provided
         if 'shapefile' in data and data['shapefile']:
             logger.info("Processing shapefile data from request")
             shapefile_data = data['shapefile']
             logger.info(f"Shapefile data type: {type(shapefile_data)}")
-            
+
             if not SHAPELY_AVAILABLE:
                 logger.error("Shapely not available for shapefile processing")
             else:
@@ -376,11 +376,11 @@ def process_common_request_setup(request, analysis_type):
                         if success and result and 'wkt' in result:
                             wkt_str = result['wkt']
                             logger.info(f"Converting shapefile WKT: {wkt_str[:100]}...")
-                            
+
                             # Convert WKT to GeoJSON format
                             geom = wkt_loads(wkt_str)
                             geojson_geom = mapping(geom)
-                            
+
                             # Create FeatureCollection format expected by backend
                             aoi_geojson = {
                                 "type": "FeatureCollection",
@@ -399,11 +399,11 @@ def process_common_request_setup(request, analysis_type):
                     elif isinstance(shapefile_data, dict) and 'wkt' in shapefile_data:
                         wkt_str = shapefile_data['wkt']
                         logger.info(f"Converting shapefile WKT: {wkt_str[:100]}...")
-                        
+
                         # Convert WKT to GeoJSON format
                         geom = wkt_loads(wkt_str)
                         geojson_geom = mapping(geom)
-                        
+
                         # Create FeatureCollection format expected by backend
                         aoi_geojson = {
                             "type": "FeatureCollection",
@@ -421,7 +421,7 @@ def process_common_request_setup(request, analysis_type):
                         logger.info(f"Converting shapefile WKT string: {shapefile_data[:100]}...")
                         geom = wkt_loads(shapefile_data)
                         geojson_geom = mapping(geom)
-                        
+
                         aoi_geojson = {
                             "type": "FeatureCollection",
                             "features": [{
@@ -441,12 +441,12 @@ def process_common_request_setup(request, analysis_type):
                     logger.error(f"Error processing shapefile data: {e}")
                     import traceback
                     logger.error(f"Traceback: {traceback.format_exc()}")
-        
+
         # Fall back to coordinates field if shapefile processing didn't work
         if not coordinates_processed and 'coordinates' in data and data['coordinates']:
             coordinates_str = data['coordinates']
             logger.info(f"Converting coordinates: {coordinates_str[:100]}...")
-            
+
             # Check if it's WKT format or already GeoJSON
             if coordinates_str.strip().startswith('POLYGON') or coordinates_str.strip().startswith('POINT'):
                 # Convert WKT to GeoJSON format
@@ -455,7 +455,7 @@ def process_common_request_setup(request, analysis_type):
                     from shapely.geometry import mapping
                     geom = wkt.loads(coordinates_str)
                     geojson_geom = mapping(geom)
-                    
+
                     # Create FeatureCollection format expected by backend
                     aoi_geojson = {
                         "type": "FeatureCollection",
@@ -474,7 +474,7 @@ def process_common_request_setup(request, analysis_type):
             else:
                 # Assume it's already in the right format
                 mapped_data['aoi_data'] = coordinates_str
-        
+
         # Copy any direct matches and additional fields
         for key, value in data.items():
             if key not in field_mapping:
@@ -484,11 +484,11 @@ def process_common_request_setup(request, analysis_type):
                 else:
                     # Keep additional fields like projectId, dateRangeType, etc.
                     mapped_data[key] = value
-        
+
         # Ensure analysis_type is set
         if 'analysis_type' not in mapped_data:
             mapped_data['analysis_type'] = analysis_type.lower()
-        
+
         logger.info(f"Mapped data keys: {list(mapped_data.keys())}")
         logger.info(f"Mapped data preview: {{'aoi_data': {'present' if 'aoi_data' in mapped_data else 'missing'}, 'start_date': mapped_data.get('start_date', 'missing'), 'end_date': mapped_data.get('end_date', 'missing')}}")
 
@@ -518,7 +518,7 @@ def parse_aoi_data(aoi_data):
     try:
         if not aoi_data:
             return None, "AOI data is required"
-        
+
         # If it's a string, try to parse as JSON first (GeoJSON), then as WKT
         if isinstance(aoi_data, str):
             try:
@@ -534,7 +534,7 @@ def parse_aoi_data(aoi_data):
         else:
             # It's already a dict (parsed JSON), treat as GeoJSON
             geometry = geojson_to_ee_geometry(aoi_data)
-        
+
         # Validate coordinates (this should show Ghana path/row 193/056)
         is_valid_coords, coord_message = validate_coordinates(geometry)
         if not is_valid_coords:
@@ -554,22 +554,22 @@ def extract_common_parameters(data, analysis_type):
         # Handle both year-based and date-based ranges (matching Flask behavior)
         start_date = data.get('start_date')
         end_date = data.get('end_date')
-        
+
         # Convert year-based ranges to date ranges if needed
         if data.get('start_year') and data.get('end_year'):
             start_date = f"{data.get('start_year')}-01-01"
             end_date = f"{data.get('end_year')}-12-31"
             logger.info(f"Converted year range {data.get('start_year')}-{data.get('end_year')} to date range {start_date} to {end_date}")
-        
+
         # Convert boolean parameters properly (handle both boolean and string inputs)
         use_cloud_masking = data.get('use_cloud_masking', False)
         if isinstance(use_cloud_masking, str):
             use_cloud_masking = use_cloud_masking.lower() in ['true', '1', 'yes']
-        
-        strict_masking = data.get('strict_masking', False) 
+
+        strict_masking = data.get('strict_masking', False)
         if isinstance(strict_masking, str):
             strict_masking = strict_masking.lower() in ['true', '1', 'yes', 'strict']
-            
+
         params = {
             'aoi_data': data.get('aoi_data'),
             'start_date': start_date,
@@ -578,7 +578,7 @@ def extract_common_parameters(data, analysis_type):
             'use_cloud_masking': use_cloud_masking,
             'strict_masking': strict_masking
         }
-        
+
         logger.info(f"Extracted cloud cover parameter: {params['cloud_cover']}%")
         logger.info(f"Extracted cloud masking parameters: use_cloud_masking={params['use_cloud_masking']}, strict_masking={params['strict_masking']}")
 
@@ -609,11 +609,24 @@ def extract_common_parameters(data, analysis_type):
 def finalize_analysis_response(request, data, analysis_results, analysis_type, file_prefix):
     """Finalize analysis response with file generation and database saving"""
     try:
+        # Add cloud masking parameters to response
+        use_cloud_masking = data.get('use_cloud_masking', False)
+        strict_masking = data.get('strict_masking', False)
+
+        # Add cloud masking info to response for frontend
+        analysis_results['cloud_masking_settings'] = {
+            'enabled': use_cloud_masking,
+            'strict': strict_masking,
+            'level': 'strict' if strict_masking else ('recommended' if use_cloud_masking else 'disabled')
+        }
+
+        logger.info(f"Adding cloud masking settings to {analysis_type} response: enabled={use_cloud_masking}, strict={strict_masking}")
+
         # Save to database
         save_analysis_to_database(
-            data, 
-            analysis_results, 
-            analysis_type, 
+            data,
+            analysis_results,
+            analysis_type,
             request.user if request.user.is_authenticated else None
         )
 
@@ -622,7 +635,7 @@ def finalize_analysis_response(request, data, analysis_results, analysis_type, f
             try:
                 csv_file = export_to_csv(analysis_results['data'], f'{file_prefix}_data', analysis_type)
                 plot_file = create_plot(analysis_results['data'], analysis_type, file_prefix)
-                
+
                 if csv_file:
                     analysis_results['csv_url'] = f"/media/{csv_file}"
                 if plot_file:
@@ -724,11 +737,11 @@ def extract_request_metadata(request):
             "remote_addr": request.META.get('REMOTE_ADDR', 'Unknown'),
             "content_type": request.META.get('CONTENT_TYPE', 'Unknown')
         }
-        
+
         if request.user.is_authenticated:
             metadata["user_id"] = request.user.id
             metadata["username"] = request.user.username
-            
+
         return metadata
     except Exception as e:
         logger.warning(f"Failed to extract request metadata: {str(e)}")

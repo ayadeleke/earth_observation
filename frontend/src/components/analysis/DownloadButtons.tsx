@@ -39,18 +39,37 @@ export const DownloadButtons: React.FC<DownloadButtonsProps> = ({
   const downloadCSV = () => {
     if (!data?.tableData) return;
     
-    // Convert data to CSV format
-    const headers = ['Date', 'Image ID', 'Value', 'Original Cloud Cover', 'Adjusted Cloud Cover', 'Cloud Masking Applied'];
+    // Check if this is SAR analysis to determine which headers to include
+    const isSAR = data.analysisType?.toLowerCase() === 'sar' || data.analysisType?.toLowerCase() === 'backscatter';
+    
+    // Convert data to CSV format with conditional headers
+    const headers = isSAR 
+      ? ['Date', 'Image ID', 'VV Backscatter (dB)', 'VH Backscatter (dB)', 'VV/VH Ratio', 'Orbit Direction']
+      : ['Date', 'Image ID', 'Value', 'Original Cloud Cover', 'Adjusted Cloud Cover', 'Cloud Masking Applied'];
+      
     const csvContent = [
       headers.join(','),
-      ...data.tableData.map((row: any) => [
-        row.date,
-        row.imageId,
-        row.ndviValue || row.lstValue || row.backscatterValue || 'N/A',
-        row.originalCloudCover,
-        row.adjustedCloudCover,
-        row.cloudMaskingApplied ? 'Yes' : 'No'
-      ].join(','))
+      ...data.tableData.map((row: any) => {
+        if (isSAR) {
+          return [
+            row.date,
+            row.imageId,
+            row.backscatterVV || row.backscatterValue || 'N/A',
+            row.backscatterVH || 'N/A',
+            row.vvVhRatio || 'N/A',
+            row.orbitDirection || 'N/A'
+          ].join(',');
+        } else {
+          return [
+            row.date,
+            row.imageId,
+            row.ndviValue || row.lstValue || row.backscatterValue || 'N/A',
+            row.originalCloudCover,
+            row.adjustedCloudCover,
+            row.cloudMaskingApplied ? 'Yes' : 'No'
+          ].join(',');
+        }
+      })
     ].join('\n');
     
     // Create and download file
