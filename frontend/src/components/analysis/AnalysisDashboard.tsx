@@ -35,7 +35,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
   onDataUpdate
 }) => {
   const [currentData, setCurrentData] = useState<AnalysisData | null>(analysisData || null);
-  const [loading, setLoading] = useState(false);
+  // Removed unused setLoading variable
 
   // Debug logging
   useEffect(() => {
@@ -110,7 +110,6 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
           <NDVITimeSeries 
             data={currentData.timeSeriesData} 
             analysisType={currentData.analysisType}
-            loading={loading}
             cloudCover={currentData.cloudCover}
           />
         </div>
@@ -147,7 +146,6 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
       <DataTable 
         data={currentData.tableData}
         analysisType={currentData.analysisType}
-        loading={loading}
       />
     </div>
   );
