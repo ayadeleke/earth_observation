@@ -279,17 +279,17 @@ const AnalysisPage: React.FC = () => {
     }));
   };
 
-  // Get CSRF token for Django
-  const getCsrfToken = () => {
-    const cookies = document.cookie.split(';');
-    for (let cookie of cookies) {
-      const [name, value] = cookie.trim().split('=');
-      if (name === 'csrftoken') {
-        return value;
-      }
-    }
-    return '';
-  };
+  // Get CSRF token for Django (currently unused but may be needed for future authentication)
+  // const getCsrfToken = () => {
+  //   const cookies = document.cookie.split(';');
+  //   for (let cookie of cookies) {
+  //     const [name, value] = cookie.trim().split('=');
+  //     if (name === 'csrftoken') {
+  //       return value;
+  //     }
+  //   }
+  //   return '';
+  // };
 
   return (
     <div>
@@ -393,9 +393,7 @@ const AnalysisPage: React.FC = () => {
                   clearLayers={clearMapLayers}
                   clearShapefileLayers={clearShapefileLayers}
                   uploadedShapefile={uploadedShapefile as any}
-                >
-                  {/* Analysis layers will be managed by AnalysisForm component */}
-                </InteractiveMap>
+                />
               </div>
             </div>
             
