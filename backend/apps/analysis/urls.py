@@ -22,10 +22,12 @@ urlpatterns = [
     path("get_image_metadata/", views.get_image_metadata, name="get_image_metadata"),
     # Trend analysis
     path("analyze_trends/", views.analyze_trends, name="analyze_trends"),
+    # Composite analysis
+    path("process_composite/", views.process_composite, name="process_composite"),
     # Database retrieval endpoints
-    path("history/", views.get_analysis_history, name="analysis_request_list"),
+    path("history/", views.get_analysis_history_endpoint, name="analysis_request_list"),
     path(
-        "result/<int:analysis_id>/", views.get_analysis_result, name="analysis_result"
+        "result/<int:analysis_id>/", views.get_analysis_result_endpoint, name="analysis_result"
     ),
-    path("delete/<int:analysis_id>/", views.delete_analysis, name="delete_analysis"),
+    path("delete/<int:analysis_id>/", views.delete_analysis_result_endpoint, name="delete_analysis"),
 ]
