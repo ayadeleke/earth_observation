@@ -1,0 +1,81 @@
+/* Custom styles for Bootstrap project */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* Landing page specific styles */
+.landing-page-container {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+}
+
+/* Fix for gradient text not displaying properly on some browsers */
+.gradient-text {
+  background: linear-gradient(135deg, #22c55e 0%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  display: inline-block;
+}
+
+/* Responsive adjustments for landing page */
+@media (max-width: 768px) {
+  .landing-page-container {
+    background-attachment: scroll !important;
+  }
+}
+
+/* Improve button hover effects */
+.btn {
+  transition: all 0.3s ease;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+}
+
+/* Fix for potential layout shifts */
+.min-vh-100 {
+  min-height: 100vh;
+}
+
+/* Custom components */
+.text-shadow {
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+/* Animation utilities */
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #0ea5e9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0284c7;
+}
