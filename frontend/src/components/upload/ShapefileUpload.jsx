@@ -2,90 +2,232 @@ import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 
 export const ShapefileUpload = ({ onFileUpload, onCoordinatesExtracted }) => {
-  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [uploadedFile, setUploadedFile] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [extractedCoords, setExtractedCoords] = useState(null);
 
-  const onDrop = useCallback(async (acceptedFiles) => {
+  const calculateBounds = (coordinates) => {
+    if (!coordinates || coordinates.length === 0) return null;
+    
+    let minLat = coordinates[0][0];
+    let maxLat = coordinates[0][0];
+    let minLng = coordinates[0][1];
+    let maxLng = coordinates[0][1];
+    
+    coordinates.forEach(([lat, lng]) => {
+      minLat = Math.min(minLat, lat);
+      maxLat = Math.max(maxLat, lat);
+      minLng = Math.min(minLng, lng);
+      maxLng = Math.max(maxLng, lng);
+    });
+    
+    return {
+      north: maxLat,
+      south: minLat,
+      east: maxLng,
+      west: minLng
+    };
+  };
+
+  const processShapefileLocally = useCallback(async (file) => {
+    try {
+      // Import required libraries dynamically
+      const JSZip = await import('jszip');
+      const shapefile = await import('shapefile');
+      
+      // Extract and process the ZIP file
+      const zip = new JSZip.default();
+      const zipContents = await zip.loadAsync(file);
+      
+      const allFiles = Object.keys(zipContents.files);
+      console.log('ZIP contents:', allFiles);
+      
+      // Find the .shp file
+      const shpFile = allFiles.find(name => 
+        name.toLowerCase().endsWith('.shp') && !name.endsWith('/')
+      );
+      
+      if (!shpFile) {
+        throw new Error(`No .shp file found in ZIP. Found: ${allFiles.join(', ')}`);
+      }
+      
+      // Extract the .shp file data
+      const shpData = await zipContents.files[shpFile].async('arraybuffer');
+      
+      // Parse the shapefile
+      const geojson = await shapefile.read(shpData);
+      console.log('Parsed shapefile:', geojson);
+      
+      if (!geojson.features || geojson.features.length === 0) {
+        throw new Error('No features found in shapefile');
+      }
+      
+      // Extract coordinates from the first feature
+      const firstFeature = geojson.features[0];
+      let coordinates = null;
+      let wkt = '';
+      
+      if (firstFeature.geometry.type === 'Polygon') {
+        const coords = firstFeature.geometry.coordinates[0];
+        // Convert to lat,lng format for the form
+        coordinates = coords.map(coord => [coord[1], coord[0]]); // [lat, lng]
+        const wktCoords = coords.map(coord => `${coord[0]} ${coord[1]}`).join(', ');
+        wkt = `POLYGON((${wktCoords}))`;
+        
+        console.log('Polygon processed:', {
+          originalCoords: coords.slice(0, 3),
+          convertedCoords: coordinates.slice(0, 3),
+          wkt: wkt.substring(0, 100) + '...'
+        });
+      } else if (firstFeature.geometry.type === 'MultiPolygon') {
+        const coords = firstFeature.geometry.coordinates[0][0];
+        coordinates = coords.map(coord => [coord[1], coord[0]]); // [lat, lng]
+        const wktCoords = coords.map(coord => `${coord[0]} ${coord[1]}`).join(', ');
+        wkt = `POLYGON((${wktCoords}))`;
+        
+        console.log('MultiPolygon processed:', {
+          originalCoords: coords.slice(0, 3),
+          convertedCoords: coordinates.slice(0, 3),
+          wkt: wkt.substring(0, 100) + '...'
+        });
+      } else {
+        throw new Error(`Unsupported geometry type: ${firstFeature.geometry.type}. Please use Polygon or MultiPolygon shapefiles.`);
+      }
+      
+      // Store the extracted data
+      const coordsData = {
+        coordinates,
+        wkt,
+        bounds: calculateBounds(coordinates),
+        geometry: firstFeature.geometry
+      };
+      
+      setExtractedCoords(coordsData);
+      
+      // Pass coordinates to parent components
+      if (onCoordinatesExtracted) {
+        onCoordinatesExtracted(coordinates, wkt, 'shapefile', firstFeature.geometry);
+      }
+      
+    } catch (error) {
+      console.error('Error processing shapefile:', error);
+      throw error;
+    }
+  }, [onCoordinatesExtracted]);
+
+  const onDrop = useCallback(async (acceptedFiles, rejectedFiles) => {
+    console.log('=== File Drop Debug ===');
+    console.log('Accepted files:', acceptedFiles);
+    console.log('Rejected files:', rejectedFiles);
+    
+    if (rejectedFiles && rejectedFiles.length > 0) {
+      console.log('File rejection reasons:', rejectedFiles.map(f => f.errors));
+      alert(`File rejected: ${rejectedFiles[0].errors.map(e => e.message).join(', ')}`);
+      return;
+    }
+    
+    if (acceptedFiles.length === 0) {
+      console.log('No files accepted');
+      return;
+    }
+    
     setIsProcessing(true);
     
-    // Check if we have the required shapefile components
-    const requiredExtensions = ['.shp', '.shx', '.dbf'];
-    const fileExtensions = acceptedFiles.map(file => 
-      file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
-    );
+    const file = acceptedFiles[0];
+    console.log('Processing file:', file.name, 'Type:', file.type, 'Size:', file.size);
     
-    const hasRequiredFiles = requiredExtensions.every(ext => 
-      fileExtensions.includes(ext)
-    );
-
-    if (!hasRequiredFiles) {
-      alert('Please upload all required shapefile components (.shp, .shx, .dbf)');
+    // Check if it's a zip file (preferred method)
+    const isZipFile = file.name.toLowerCase().endsWith('.zip');
+    
+    if (!isZipFile) {
+      alert(
+        'Please upload a ZIP file containing all shapefile components.\n\n' +
+        'Required files in the ZIP:\n' +
+        '• .shp (geometry data)\n' +
+        '• .shx (shape index)\n' +
+        '• .dbf (attribute data)\n' +
+        '• .prj (projection info - optional but recommended)\n\n' +
+        'Example: myarea.zip containing myarea.shp, myarea.shx, myarea.dbf'
+      );
       setIsProcessing(false);
       return;
     }
 
     try {
-      setUploadedFiles(acceptedFiles);
+      setUploadedFile(file);
       
-      // Create FormData for upload
-      const formData = new FormData();
-      acceptedFiles.forEach(file => {
-        formData.append('files', file);
-      });
-
-      // Upload to backend
-      const response = await fetch('/api/upload-shapefile/', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        
-        if (result.bounds) {
-          setExtractedCoords(result.bounds);
-          onCoordinatesExtracted && onCoordinatesExtracted(result.bounds);
-        }
-        
-        onFileUpload && onFileUpload(result);
-      } else {
-        const error = await response.json();
-        alert(`Upload failed: ${error.message || 'Unknown error'}`);
-      }
+      // Process the shapefile locally to extract coordinates and display on map
+      await processShapefileLocally(file);
+      
+      // Notify parent components about the upload
+      onFileUpload && onFileUpload(file);
+      
     } catch (error) {
-      console.error('Upload error:', error);
-      alert('Failed to upload shapefile. Please try again.');
+      console.error('Shapefile processing error:', error);
+      alert(`Failed to process shapefile: ${error.message}`);
+      setUploadedFile(null);
     } finally {
       setIsProcessing(false);
     }
-  }, [onFileUpload, onCoordinatesExtracted]);
+  }, [onFileUpload, processShapefileLocally]);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: {
-      'application/octet-stream': ['.shp', '.shx', '.dbf'],
-      'application/x-esri-shapefile': ['.shp'],
-      'application/zip': ['.zip']
+      'application/zip': ['.zip'],
+      'application/x-zip-compressed': ['.zip'],
+      'application/octet-stream': ['.zip']
     },
-    multiple: true
+    multiple: false,
+    maxFiles: 1,
+    noClick: false,
+    noKeyboard: false
   });
 
-  const removeFiles = () => {
-    setUploadedFiles([]);
+  const removeFile = () => {
+    setUploadedFile(null);
     setExtractedCoords(null);
+    onFileUpload && onFileUpload(null);
+    // Clear coordinates from form
+    if (onCoordinatesExtracted) {
+      onCoordinatesExtracted(null, '', 'clear', null);
+    }
   };
 
   return (
     <div>
       <div
         {...getRootProps()}
-        className={`border border-2 border-dashed rounded p-4 p-md-6 text-center ${
+        className={`border border-2 border-dashed rounded text-center ${
           isDragActive 
             ? 'border-primary bg-primary bg-opacity-10' 
             : 'border-secondary'
         }`}
-        style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
+        style={{ 
+          cursor: 'pointer', 
+          transition: 'all 0.3s ease',
+          borderRadius: '1rem',
+          border: '3px dashed #667eea',
+          backgroundColor: '#f8f9fa',
+          padding: window.innerWidth < 768 ? '1rem' : '1.5rem',
+          minHeight: '120px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}
+        onMouseEnter={(e) => {
+          if (!isDragActive) {
+            e.currentTarget.style.backgroundColor = '#e8f2ff';
+            e.currentTarget.style.borderColor = '#4f46e5';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isDragActive) {
+            e.currentTarget.style.backgroundColor = '#f8f9fa';
+            e.currentTarget.style.borderColor = '#667eea';
+          }
+        }}
       >
         <input {...getInputProps()} />
         
@@ -98,26 +240,28 @@ export const ShapefileUpload = ({ onFileUpload, onCoordinatesExtracted }) => {
           </div>
         ) : (
           <div>
-            <svg width="48" height="48" className="mx-auto text-muted mb-3" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-              <path
-                d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <i className="fas fa-cloud-upload-alt text-muted mb-2" style={{ fontSize: window.innerWidth < 768 ? '1.5rem' : '2rem' }}></i>
             <div>
               {isDragActive ? (
-                <p className="text-primary">Drop the shapefile components here...</p>
+                <p className="text-primary">Drop the ZIP file here...</p>
               ) : (
                 <>
-                  <p className="fs-6 fw-medium text-dark">Upload Shapefile</p>
-                  <p className="small text-muted mt-1">
-                    Drag and drop shapefile components (.shp, .shx, .dbf) or click to browse
+                  <p className="mb-2" style={{ fontSize: window.innerWidth < 768 ? '0.85rem' : '1rem' }}>
+                    <strong>Click here</strong> to select a shapefile ZIP or drag and drop
                   </p>
-                  <p className="small text-muted mt-2" style={{ fontSize: '0.75rem' }}>
-                    You can also upload a .zip file containing all components
+                  <p className="small text-muted mb-3">
+                    Shapefile will be displayed on map and coordinates extracted
                   </p>
+                  <button 
+                    type="button" 
+                    className="btn btn-outline-primary"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      open();
+                    }}
+                  >
+                    <i className="fas fa-folder-open me-1"></i>Choose ZIP File
+                  </button>
                 </>
               )}
             </div>
@@ -125,56 +269,67 @@ export const ShapefileUpload = ({ onFileUpload, onCoordinatesExtracted }) => {
         )}
       </div>
 
-      {uploadedFiles.length > 0 && (
-        <div className="bg-light rounded p-3">
-          <div className="d-flex justify-content-between align-items-center mb-2">
-            <h6 className="fw-medium text-dark mb-0">Uploaded Files:</h6>
-            <button
-              onClick={removeFiles}
-              className="btn btn-sm btn-outline-danger"
+      {/* Requirements Information */}
+      <div className="mt-3">
+        <div className="small text-dark fw-medium mb-2">📋 How It Works:</div>
+        <ul className="small text-muted mb-0 ps-3">
+          <li><strong>Upload:</strong> ZIP file containing .shp, .shx, .dbf files</li>
+          <li><strong>Display:</strong> Area will be shown on the interactive map</li>
+          <li><strong>Extract:</strong> Polygon coordinates will be used for analysis</li>
+          <li><strong>Support:</strong> Polygon and MultiPolygon geometries only</li>
+        </ul>
+        <div className="mt-2">
+          <small className="text-muted">
+            <i className="fas fa-info-circle me-1"></i>
+            Single .shp files cannot be uploaded as they require companion files that browsers cannot upload together.
+          </small>
+        </div>
+        
+        {/* Debug info for development */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-2">
+            <small className="text-info">
+              <i className="fas fa-bug me-1"></i>
+              Debug: Component ready | isDragActive: {isDragActive.toString()} | Click or drag ZIP files
+            </small>
+          </div>
+        )}
+      </div>
+
+      {uploadedFile && (
+        <div className="mt-3">
+          <div className="alert alert-success d-flex justify-content-between align-items-center" style={{ margin: '0.5rem 0' }}>
+            <div className="text-truncate" style={{ maxWidth: window.innerWidth < 768 ? '200px' : '300px' }}>
+              <i className="fas fa-check-circle me-1"></i>
+              <span title={uploadedFile.name} style={{ fontSize: window.innerWidth < 768 ? '0.8rem' : '0.9rem' }}>
+                {window.innerWidth < 768 && uploadedFile.name.length > 25 
+                  ? uploadedFile.name.substring(0, 25) + '...' 
+                  : uploadedFile.name}
+              </span>
+            </div>
+            <button 
+              type="button" 
+              className="btn btn-sm btn-outline-danger ms-2 flex-shrink-0"
+              onClick={removeFile}
+              title="Remove shapefile"
             >
-              Remove All
+              <i className="fas fa-times"></i>
             </button>
           </div>
-          <ul className="list-unstyled mb-0">
-            {uploadedFiles.map((file, index) => (
-              <li key={index} className="small text-muted d-flex align-items-start mb-1">
-                <svg width="16" height="16" className="me-2 text-success flex-shrink-0 mt-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <div className="flex-grow-1">
-                  <div className="text-break">
-                    <span className="fw-medium">{file.name.length > 30 ? file.name.substring(0, 30) + '...' : file.name}</span>
-                  </div>
-                  <div className="text-muted" style={{ fontSize: '0.75rem' }}>
-                    {(file.size / 1024).toFixed(1)} KB
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
         </div>
       )}
 
       {extractedCoords && (
-        <div className="alert alert-success border-success-subtle rounded p-4">
-          <div className="flex items-center">
-            <svg className="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <h4 className="font-medium text-green-800">Shapefile Processed Successfully!</h4>
+        <div className="alert alert-success border-success-subtle rounded p-3 mt-3">
+          <div className="d-flex align-items-center">
+            <i className="fas fa-check-circle text-success me-2" style={{ fontSize: '1.2rem' }}></i>
+            <div>
+              <h6 className="fw-medium text-success mb-0">Shapefile Loaded Successfully!</h6>
+              <p className="small text-success mb-0 mt-1">
+                Area displayed on map and coordinates extracted for analysis
+              </p>
+            </div>
           </div>
-          <p className="text-sm text-green-700 mt-1">
-            Area bounds extracted and ready for analysis
-          </p>
         </div>
       )}
     </div>

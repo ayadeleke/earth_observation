@@ -19,6 +19,19 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
     try:
         logger.info(f"Processing SAR analysis for {start_date} to {end_date}")
 
+        # Validate date range to prevent overly broad analysis
+        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
+        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+        date_range_days = (end_date_obj - start_date_obj).days
+        date_range_years = date_range_days / 365.25
+
+        # Warn about very long date ranges before processing
+        if date_range_years > 10:
+            logger.warning(f"Very long date range detected: {date_range_years:.1f} years")
+            logger.warning("This may result in too many images. Consider using shorter periods for focused analysis.")
+        elif date_range_years > 3:
+            logger.info(f"Long date range: {date_range_years:.1f} years - this may result in many images")
+
         # Check geometry size and simplify if needed to prevent memory issues
         area_km2 = geometry.area().divide(1000000).getInfo()
         if area_km2 > 1000:  # If area > 1000 km², use lower resolution
@@ -70,27 +83,59 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
                 original_collection_size = collection.size().getInfo()
                 logger.info(f"Total Sentinel-1 images available: {original_collection_size}")
 
+                # Check if there are too many images and suggest optimization
+                if original_collection_size > 200:
+                    # Return early with suggestion for optimization
+                    return {
+                        "success": False,
+                        "error": f"Too many Sentinel-1 images found ({original_collection_size} images)",
+                        "suggestion": "Please reduce your analysis scope for better results:",
+                        "recommendations": [
+                            "Reduce the date range (try 1-2 years instead of longer periods)",
+                            "Use a smaller area of interest",
+                            "Consider using monthly or seasonal analysis instead of daily"
+                        ],
+                        "analysis_type": "SAR",
+                        "message": f"Analysis scope too broad - {original_collection_size} images found. Please reduce date range or area coverage."
+                    }
+                elif original_collection_size > 150:
+                    logger.warning(f"Very high image availability: {original_collection_size} total images found")
+                    logger.warning("Consider reducing date range or area coverage for more focused analysis")
+
                 # Limit to 50 images max to prevent memory issues while showing more data
                 limited_collection = collection.limit(50)
                 collection_size = min(original_collection_size, 50)
                 logger.info(f"Using {collection_size} SAR images for analysis")
 
-                # Create representative metadata entries - aim for good temporal coverage
+                # Warn if very few images are available
+                if collection_size < 5:
+                    logger.warning(f"Only {collection_size} SAR images available - limited temporal coverage")
+                elif collection_size < 10:
+                    logger.info(f"Limited SAR image availability: {collection_size} images - consider expanding date range")
+                elif collection_size > 150:
+                    logger.warning(f"Very high image availability: {original_collection_size} total images found")
+                    logger.warning("Consider reducing date range or area coverage for more focused analysis")
+                elif collection_size > 75:
+                    logger.info(f"High image availability: {collection_size} images - consider shorter date range for focused analysis")
+                else:
+                    logger.info(f"Good SAR temporal coverage: {collection_size} images available")
+
+                # Create representative metadata entries based on actual available images
                 metadata_list = []
-                # Generate at least 40 samples for good temporal coverage, even if we have fewer actual images
-                # This spreads the analysis across the entire time period
-                desired_samples = 40  # Fixed number for consistent temporal resolution
-                max_samples = desired_samples
-                logger.info(f"Creating {max_samples} SAR sample points distributed across time period (based on {collection_size} available images)")
+                # Use the actual number of available images instead of fixed 40
+                # This ensures the count represents real temporal observations
+                max_samples = collection_size  # Use actual image count, not synthetic 40
+                logger.info(f"Creating {max_samples} SAR sample points based on {collection_size} actual available images")
 
                 for i in range(max_samples):
-                    # Generate dates across the time period
+                    # Generate dates across the actual user-specified time period
                     start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
                     end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
                     total_days = (end_date_obj - start_date_obj).days
 
                     if collection_size > 1:
-                        days_offset = (total_days * i) // collection_size
+                        # Distribute dates evenly across the actual time period
+                        days_offset = (total_days * i) // (collection_size - 1) if collection_size > 1 else total_days // 2
                     else:
                         days_offset = total_days // 2
 
@@ -107,14 +152,30 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
 
             except Exception as metadata_error:
                 logger.error(f"Error creating SAR metadata: {metadata_error}")
-                # Final fallback - create minimal synthetic data
-                metadata_list = [{
-                    'properties': {
-                        'image_id': 'S1A_synthetic_20200101T052943_001',
-                        'timestamp': int(datetime(2020, 1, 1).timestamp() * 1000),
-                        'orbit_direction': orbit_direction
-                    }
-                }]
+                # Fallback based on actual availability
+                if collection_size > 0:
+                    # Use actual collection size for fallback
+                    metadata_list = []
+                    for i in range(min(collection_size, 5)):  # At least try a few samples
+                        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
+                        days_offset = i * 30  # 30-day intervals as fallback
+                        image_date = start_date_obj + timedelta(days=days_offset)
+                        metadata_list.append({
+                            'properties': {
+                                'image_id': f'S1A_fallback_{image_date.strftime("%Y%m%d")}T052943_001',
+                                'timestamp': int(image_date.timestamp() * 1000),
+                                'orbit_direction': orbit_direction
+                            }
+                        })
+                else:
+                    # Final fallback - create minimal synthetic data
+                    metadata_list = [{
+                        'properties': {
+                            'image_id': 'S1A_synthetic_20200101T052943_001',
+                            'timestamp': int(datetime(2020, 1, 1).timestamp() * 1000),
+                            'orbit_direction': orbit_direction
+                        }
+                    }]
 
             # Get geometry center for consistent sampling
             center = geometry.centroid().coordinates().getInfo()
@@ -170,13 +231,13 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
                     # Extract image index from collection (for Earth Engine sampling)
                     image_index = valid_data_count
 
-                    # Calculate temporal position (0 to 1) within the date range
+                    # Calculate temporal position (0 to 1) within the actual user-specified date range
                     try:
                         current_date = datetime.strptime(date_str, '%Y-%m-%d')
-                        start_date_obj = datetime.strptime("2014-01-01", '%Y-%m-%d')
-                        end_date_obj = datetime.strptime("2024-12-31", '%Y-%m-%d')
+                        start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+                        end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
 
-                        # Calculate temporal position (0 to 1)
+                        # Calculate temporal position (0 to 1) within actual date range
                         total_span = (end_date_obj - start_date_obj).days
                         current_span = (current_date - start_date_obj).days
                         temporal_position = current_span / total_span if total_span > 0 else 0.5
@@ -249,13 +310,22 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
             sample_data.sort(key=lambda x: x.get('date', ''))
             logger.info(f"Sorted {len(sample_data)} SAR data points chronologically")
 
+        # Store collection info for message
+        try:
+            total_available = collection.size().getInfo()
+        except:
+            total_available = "unknown"
+
+        # Create annual averages for time series
+        annual_time_series = create_annual_averages(sample_data, start_date, end_date)
+
         return {
             "success": True,
             "demo_mode": False,
             "analysis_type": "SAR",
             "satellite": "Sentinel-1 (Real Data)",
             "data": sample_data,  # Individual images for data table
-            "time_series_data": sample_data,  # Same as data for SAR (no annual averaging needed)
+            "time_series_data": annual_time_series,  # Annual averages for time series visualization
             "statistics": {
                 "mean_vv": round(stats.get("VV", -12.0), 2) if stats else -12.0,
                 "min_vv": round(min([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else -15.0,
@@ -266,14 +336,16 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
                 "max_vh": round(max([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -15.0,
                 "std_vh": round(np.std([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else 2.0,
                 "area_km2": round(area_km2, 2),
-                "pixel_count": pixel_count,
+                "pixel_count": pixel_count,  # Keep for spatial reference
+                "total_individual_observations": len(sample_data),  # Total individual SAR acquisitions
+                "annual_observations": len(annual_time_series),  # Number of years with data
                 "date_range": f"{start_date} to {end_date}",
                 "orbit_direction": orbit_direction,
-                "data_type": "Individual Images",
+                "data_type": "Annual Averages",
                 "num_images": len(sample_data),
-                "temporal_coverage": f"{len(sample_data)} acquisitions over {round((area_km2), 1)} km²"
+                "temporal_coverage": f"{len(annual_time_series)} annual averages from {len(sample_data)} acquisitions over {round((area_km2), 1)} km²"
             },
-            "message": f"Real Earth Engine SAR analysis completed successfully using {len(sample_data)} individual images",
+            "message": f"SAR analysis completed with {len(annual_time_series)} annual averages from {len(sample_data)} Sentinel-1 acquisitions (from {total_available} total available)",
             "timestamp": datetime.now().isoformat(),
         }
 
@@ -356,6 +428,89 @@ def calculate_change_detection(geometry, date1, date2, orbit_direction="DESCENDI
     except Exception as e:
         logger.error(f"SAR change detection error: {str(e)}")
         raise
+
+
+def create_annual_averages(sample_data, start_date, end_date):
+    """Create annual averages from individual SAR acquisitions within the specified date range"""
+    try:
+        logger.info(f"Creating annual averages from SAR sample data for {start_date} to {end_date}")
+        
+        if not sample_data:
+            logger.warning("No sample data available for annual averaging")
+            return []
+        
+        # Parse date range
+        start_year = datetime.strptime(start_date, '%Y-%m-%d').year
+        end_year = datetime.strptime(end_date, '%Y-%m-%d').year
+        
+        # Group data by year
+        yearly_data = {}
+        for sample in sample_data:
+            try:
+                sample_date = datetime.strptime(sample['date'], '%Y-%m-%d')
+                year = sample_date.year
+                
+                # Only include years within the specified range
+                if start_year <= year <= end_year:
+                    if year not in yearly_data:
+                        yearly_data[year] = []
+                    yearly_data[year].append(sample)
+            except Exception as e:
+                logger.warning(f"Error parsing date {sample.get('date')}: {e}")
+                continue
+        
+        # Calculate annual averages only for years with data
+        annual_averages = []
+        for year in range(start_year, end_year + 1):
+            year_samples = yearly_data.get(year, [])
+            
+            if not year_samples:
+                # Skip years with no data instead of creating empty entries
+                logger.debug(f"No data available for year {year}, skipping")
+                continue
+                
+            # Calculate mean values for the year
+            vv_values = [s['backscatter_vv'] for s in year_samples if s.get('backscatter_vv') is not None]
+            vh_values = [s['backscatter_vh'] for s in year_samples if s.get('backscatter_vh') is not None]
+            
+            if not vv_values or not vh_values:
+                logger.warning(f"No valid backscatter data for year {year}")
+                continue
+                
+            mean_vv = round(np.mean(vv_values), 2)
+            mean_vh = round(np.mean(vh_values), 2)
+            mean_ratio = round(mean_vv / mean_vh if mean_vh != 0 else 0, 3)
+            
+            # Use first sample for location and metadata
+            reference_sample = year_samples[0]
+            
+            annual_averages.append({
+                "date": f"{year}-06-15",  # Mid-year date for annual average
+                "backscatter_vv": mean_vv,
+                "backscatter_vh": mean_vh,
+                "vv_backscatter": mean_vv,  # Backward compatibility
+                "vh_backscatter": mean_vh,  # Backward compatibility
+                "vv_vh_ratio": mean_ratio,
+                "lat": reference_sample.get('lat'),
+                "lon": reference_sample.get('lon'),
+                "orbit_direction": reference_sample.get('orbit_direction'),
+                "image_id": f"Annual_Average_{year}",
+                "satellite": "Sentinel-1",
+                "polarization": ['VV', 'VH'],
+                "count": len(year_samples),  # Number of acquisitions in this year
+                "std_vv": round(np.std(vv_values), 2) if len(vv_values) > 1 else 0,
+                "std_vh": round(np.std(vh_values), 2) if len(vh_values) > 1 else 0,
+                "acquisitions_count": len(year_samples)
+            })
+            
+            logger.info(f"Year {year}: {len(year_samples)} acquisitions, VV={mean_vv}dB, VH={mean_vh}dB")
+        
+        logger.info(f"Created {len(annual_averages)} annual averages from {len(sample_data)} individual acquisitions for period {start_date} to {end_date}")
+        return annual_averages
+        
+    except Exception as e:
+        logger.error(f"Error creating annual averages: {e}")
+        return sample_data  # Fallback to original data
 
 
 def calculate_coherence(geometry, start_date, end_date, orbit_direction="DESCENDING"):

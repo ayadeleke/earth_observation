@@ -23,7 +23,7 @@ The Earth Observation Analysis Platform is a full-stack application designed for
 
 ### Main Dashboard
 ![Landing Page](screenshots/landing_page.png)
-*The first page of the Application where user choose to try the application or authentical by registering or login
+*The first page of the Application where user choose to try the application or authentical by registering or login*
 
 ### Analysis Configuration
 ![Analysis Demo Page](screenshots/demo_page.png)
@@ -65,7 +65,7 @@ The Earth Observation Analysis Platform is a full-stack application designed for
 
 - Python 3.10+
 - Node.js 18+
-- PostgreSQL 12+
+- PostgreSQL 14+
 - Google Earth Engine account with service account credentials
 - Git
 
@@ -179,6 +179,7 @@ docker run -p 3000:3000 earth-observation-frontend
 ```
 
 ## 🌐 Deployment Plan
+![Deployment Plan](screenshots/deployment_plan.png)
 
 ### Production Environment Setup
 
