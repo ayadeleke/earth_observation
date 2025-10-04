@@ -12,7 +12,6 @@ import {
   BarChart3,
   FileText,
   Shield,
-  Heart,
   HelpCircle,
   BookOpen
 } from 'lucide-react';
@@ -21,9 +20,9 @@ export const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   const productLinks = [
-    { href: '/', label: 'NDVI Analysis', icon: BarChart3 },
-    { href: '/', label: 'LST Analysis', icon: Globe },
-    { href: '/', label: 'SAR Analysis', icon: BarChart3 },
+    { href: '/analysis', label: 'NDVI Analysis', icon: BarChart3 },
+    { href: '/lst', label: 'LST Analysis', icon: Globe },
+    { href: '/sar', label: 'SAR Analysis', icon: BarChart3 },
     { href: '/demo', label: 'Demo', icon: Globe },
   ];
 

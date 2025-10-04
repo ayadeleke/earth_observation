@@ -19,11 +19,11 @@ const AnalysisPage: React.FC = () => {
   const [lastFormData, setLastFormData] = useState<any>(null);
 
   // Handle area selection from map
-  const handleAreaSelect = (coordinates: any, wkt: string = '', source: string = 'drawing') => {
-    // Create GeoJSON geometry for map visualization
-    let geometry = null;
-    if (Array.isArray(coordinates) && coordinates.length > 0) {
-      geometry = {
+  const handleAreaSelect = (coordinates: any, wkt: string = '', source: string = 'drawing', geometry: any = null) => {
+    // Use provided geometry or create GeoJSON geometry for map visualization
+    let mapGeometry = geometry;
+    if (!mapGeometry && Array.isArray(coordinates) && coordinates.length > 0) {
+      mapGeometry = {
         type: 'Polygon',
         coordinates: [coordinates.map((coord: any) => {
           if (Array.isArray(coord) && coord.length === 2) {
@@ -33,7 +33,7 @@ const AnalysisPage: React.FC = () => {
         })]
       };
     }
-    setGeometryForMap(geometry);
+    setGeometryForMap(mapGeometry);
     
     // Clear uploaded shapefile when drawing on map (not when shapefile sets coordinates)
     if (wkt && uploadedShapefile && source === 'drawing') {
@@ -220,10 +220,15 @@ const AnalysisPage: React.FC = () => {
 
   // Helper functions for data transformation
   const transformTimeSeriesData = (data: any[], analysisType: string) => {
-    if (!Array.isArray(data)) return [];
+    if (!Array.isArray(data)) {
+      console.log('=== transformTimeSeriesData Debug ===');
+      console.log('Input data is not an array:', data);
+      return [];
+    }
     
     console.log('=== transformTimeSeriesData Debug ===');
-    console.log('Input data:', data.slice(0, 2));
+    console.log('Input data length:', data.length);
+    console.log('Sample input:', data.slice(0, 2));
     console.log('Analysis type:', analysisType);
     
     const transformed = data.map((item: any) => {
@@ -233,50 +238,140 @@ const AnalysisPage: React.FC = () => {
         time: date.getTime()
       };
       
-      // Add analysis-specific data
+      // Add analysis-specific data with proper field mapping
       switch (analysisType.toLowerCase()) {
         case 'ndvi':
-          result.ndvi = parseFloat(item.ndvi || item.value || 0);
+          result.ndvi = parseFloat(item.ndvi || item.mean_ndvi || item.value || 0);
           break;
         case 'lst':
-          result.lst = parseFloat(item.lst || item.temperature || item.value || 0);
+          result.lst = parseFloat(item.lst || item.mean_lst || item.temperature || item.value || 0);
           break;
         case 'sar':
-          result.backscatter = parseFloat(item.backscatter || item.value || 0);
+          // SAR backend returns backscatter_vv, vv_backscatter fields
+          result.backscatter = parseFloat(item.backscatter || item.backscatter_vv || item.vv_backscatter || item.mean_backscatter || item.value || 0);
           break;
         default:
-          result.value = parseFloat(item.value || 0);
+          result.value = parseFloat(item.value || item.ndvi || item.lst || item.backscatter || item.backscatter_vv || 0);
       }
       
       return result;
     });
     
-    console.log('Transformed data:', transformed.slice(0, 2));
+    console.log('Transformed time series data length:', transformed.length);
+    console.log('Sample transformed:', transformed.slice(0, 2));
     return transformed;
   };
 
   const transformStatistics = (stats: any, analysisType: string) => {
     if (!stats) return {};
     
-    return {
-      mean: parseFloat(stats.mean || 0),
-      min: parseFloat(stats.min || 0),
-      max: parseFloat(stats.max || 0),
-      std: parseFloat(stats.std || stats.stdDev || 0),
-      count: parseInt(stats.count || stats.pixels || 0),
-      analysisType: analysisType
+    console.log('=== transformStatistics Debug ===');
+    console.log('Input stats:', stats);
+    console.log('Analysis type:', analysisType);
+    
+    let transformed: any = {
+      analysisType: analysisType,
+      area_km2: parseFloat(stats.area_km2 || 0),
+      pixel_count: parseInt(stats.pixel_count || 0),
+      date_range: stats.date_range || '',
+      total_observations: parseInt(stats.total_individual_observations || stats.annual_observations || 0),
+      
+      // The Statistics component expects a 'count' field specifically
+      count: parseInt(stats.total_individual_observations || stats.annual_observations || stats.count || stats.pixel_count || stats.observations || 0)
     };
+    
+    // Handle analysis-specific statistics with proper field mapping
+    switch (analysisType.toLowerCase()) {
+      case 'ndvi':
+        transformed.mean = parseFloat(stats.mean_ndvi || stats.mean || 0);
+        transformed.min = parseFloat(stats.min_ndvi || stats.min || 0);
+        transformed.max = parseFloat(stats.max_ndvi || stats.max || 0);
+        transformed.std = parseFloat(stats.std_ndvi || stats.std || stats.stdDev || 0);
+        break;
+      case 'lst':
+        transformed.mean = parseFloat(stats.mean_lst || stats.mean_temperature || stats.mean || 0);
+        transformed.min = parseFloat(stats.min_lst || stats.min_temperature || stats.min || 0);
+        transformed.max = parseFloat(stats.max_lst || stats.max_temperature || stats.max || 0);
+        transformed.std = parseFloat(stats.std_lst || stats.std_temperature || stats.std || stats.stdDev || 0);
+        break;
+      case 'sar':
+        // SAR backend returns mean_vv, min_vv, max_vv, std_vv fields
+        transformed.mean = parseFloat(stats.mean_backscatter || stats.mean_vv || stats.mean || 0);
+        transformed.min = parseFloat(stats.min_backscatter || stats.min_vv || stats.min || 0);
+        transformed.max = parseFloat(stats.max_backscatter || stats.max_vv || stats.max || 0);
+        transformed.std = parseFloat(stats.std_backscatter || stats.std_vv || stats.std || stats.stdDev || 0);
+        break;
+      default:
+        transformed.mean = parseFloat(stats.mean || 0);
+        transformed.min = parseFloat(stats.min || 0);
+        transformed.max = parseFloat(stats.max || 0);
+        transformed.std = parseFloat(stats.std || stats.stdDev || 0);
+    }
+    
+    console.log('Transformed stats with count field:', transformed);
+    console.log('Count value specifically:', transformed.count);
+    return transformed;
   };
 
   const transformDataForTable = (data: any[], analysisType: string) => {
     if (!Array.isArray(data)) return [];
     
-    return data.map((item: any, index: number) => ({
-      id: index + 1,
-      date: item.date || item.time || 'Unknown',
-      value: parseFloat(item.value || item.ndvi || item.lst || item.backscatter || 0),
-      analysisType: analysisType
-    }));
+    console.log('=== transformDataForTable Debug ===');
+    console.log('Input data:', data.slice(0, 2));
+    console.log('Analysis type:', analysisType);
+    
+    const transformed = data.map((item: any, index: number) => {
+      // Create the row object with DataTable expected field names
+      const row: any = {
+        id: index + 1,
+        date: item.date || item.time || 'Unknown',
+        imageId: item.image_id || item.imageId || `img_${index + 1}`,
+        
+        // Analysis-specific value fields that DataTable expects
+        ndviValue: undefined,
+        lstValue: undefined,
+        backscatterValue: undefined,
+        
+        // Cloud cover and masking fields that DataTable expects
+        originalCloudCover: parseFloat(item.cloud_cover || item.originalCloudCover || 0),
+        adjustedCloudCover: parseFloat(item.adjusted_cloud_cover || item.adjustedCloudCover || item.cloud_cover || 0),
+        cloudMaskingApplied: Boolean(item.cloud_masking_applied || item.cloudMaskingApplied || false),
+        
+        // Additional metadata
+        lat: parseFloat(item.lat || 0),
+        lon: parseFloat(item.lon || 0),
+        satellite: item.satellite || '',
+        
+        // For SAR-specific fields - map both VV and VH backscatter properly
+        backscatterVV: parseFloat(item.backscatter_vv || item.vv_backscatter || item.backscatterVV || 0),
+        backscatterVH: parseFloat(item.backscatter_vh || item.vh_backscatter || item.backscatterVH || 0),
+        vvVhRatio: parseFloat(item.vv_vh_ratio || item.vvVhRatio || 0),
+        orbitDirection: item.orbit_direction || item.orbitDirection || 'ASCENDING'
+      };
+      
+      // Set the appropriate analysis-specific value field
+      switch (analysisType.toLowerCase()) {
+        case 'ndvi':
+          row.ndviValue = parseFloat(item.ndvi || item.value || 0);
+          break;
+        case 'lst':
+          row.lstValue = parseFloat(item.lst || item.temperature || item.value || 0);
+          break;
+        case 'sar':
+        case 'backscatter':
+          // SAR backend returns backscatter_vv, backscatter_vh, vv_backscatter fields
+          row.backscatterValue = parseFloat(item.backscatter || item.backscatter_vv || item.vv_backscatter || item.value || 0);
+          break;
+        default:
+          row.ndviValue = parseFloat(item.value || item.ndvi || item.lst || item.backscatter || 0);
+      }
+      
+      return row;
+    });
+    
+    console.log('Transformed table data sample:', transformed.slice(0, 2));
+    console.log('Field names in transformed data:', transformed.length > 0 ? Object.keys(transformed[0]) : []);
+    return transformed;
   };
 
   // Get CSRF token for Django (currently unused but may be needed for future authentication)
@@ -393,6 +488,7 @@ const AnalysisPage: React.FC = () => {
                   clearLayers={clearMapLayers}
                   clearShapefileLayers={clearShapefileLayers}
                   uploadedShapefile={uploadedShapefile as any}
+                  geometry={geometryForMap}
                 />
               </div>
             </div>
@@ -455,39 +551,50 @@ const AnalysisPage: React.FC = () => {
                 console.log('Cloud masking applied from backend:', results.data?.[0]?.cloudMaskingApplied);
                 console.log('Cloud masking settings from backend:', results.cloud_masking_settings);
                 console.log('lastFormData:', lastFormData);
-                console.log('lastFormData?.enableCloudMasking:', lastFormData?.enableCloudMasking);
-                console.log('lastFormData?.maskingStrictness:', lastFormData?.maskingStrictness);
                 
-                // Use backend cloud masking settings if available, fallback to form data
-                const enableCloudMasking = results.cloud_masking_settings?.enabled ?? 
-                                         results.data?.[0]?.cloudMaskingApplied ?? 
-                                         lastFormData?.enableCloudMasking ?? false;
-                const maskingStrictness = results.cloud_masking_settings?.strict ? 'true' : 
-                                        (lastFormData?.maskingStrictness || 'false');
-                
-                console.log('Final enableCloudMasking value:', enableCloudMasking);
-                console.log('Final maskingStrictness value:', maskingStrictness);
                 return null;
               })()}
-              <AnalysisDashboard 
-                analysisData={{
+              
+              {/* Create unified analysis data object with consistent source of truth */}
+              {(() => {
+                // Use original form data as primary source of truth for user inputs
+                const unifiedAnalysisData = {
+                  // Backend-generated data (analysis results)
                   timeSeriesData: transformTimeSeriesData(results.time_series_data || [], results.analysis_type || 'ndvi'),
                   statistics: transformStatistics(results.statistics, results.analysis_type || 'ndvi'),
                   tableData: transformDataForTable(results.data || [], results.analysis_type || 'ndvi'),
                   geometry: results.geometry || geometryForMap,
-                  analysisType: results.analysis_type?.toLowerCase() || 'ndvi',
-                  satellite: results.satellite || 'landsat',
-                  startDate: results.start_date || '2020-01-01',
-                  endDate: results.end_date || '2023-12-31',
-                  cloudCover: results.cloud_cover || 30,
+                  
+                  // Original user inputs (consistent source of truth)
+                  analysisType: lastFormData?.analysisType || results.analysis_type?.toLowerCase() || 'ndvi',
+                  satellite: lastFormData?.satellite || results.satellite || 'landsat',
+                  startDate: lastFormData?.startDate || results.start_date || '2020-01-01',
+                  endDate: lastFormData?.endDate || results.end_date || '2023-12-31',
+                  cloudCover: lastFormData?.cloudCover || results.cloud_cover || 20,
+                  
+                  // Cloud masking settings (prefer backend processed values, fallback to user input)
                   enableCloudMasking: results.cloud_masking_settings?.enabled ?? 
                                     results.data?.[0]?.cloudMaskingApplied ?? 
                                     lastFormData?.enableCloudMasking ?? false,
                   maskingStrictness: results.cloud_masking_settings?.strict ? 'true' : 
-                                   (lastFormData?.maskingStrictness || 'false')
-                }}
-                onDataUpdate={(data) => console.log('Dashboard data updated:', data)}
-              />
+                                   (lastFormData?.maskingStrictness || 'false'),
+                  
+                  // Additional metadata
+                  cloud_masking_settings: results.cloud_masking_settings
+                };
+                
+                console.log('=== Unified Analysis Data ===');
+                console.log('Using form data for:', ['analysisType', 'satellite', 'startDate', 'endDate', 'cloudCover']);
+                console.log('Using backend data for:', ['timeSeriesData', 'statistics', 'tableData', 'geometry', 'enableCloudMasking']);
+                console.log('Final unified data:', unifiedAnalysisData);
+                
+                return (
+                  <AnalysisDashboard 
+                    analysisData={unifiedAnalysisData}
+                    onDataUpdate={(data) => console.log('Dashboard data updated:', data)}
+                  />
+                );
+              })()}
             </div>
           </div>
         )}
