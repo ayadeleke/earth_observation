@@ -203,22 +203,22 @@ def generate_csv_file(data, analysis_type="ndvi", metadata=None):
                 df['cloud_cover_threshold'] = metadata['cloud_cover_threshold']
             if 'analysis_region' in metadata:
                 df['analysis_region'] = metadata['analysis_region']
-            
+
             # Generate synthetic image IDs based on date and satellite
             if 'date' in df.columns:
                 df['image_id'] = df.apply(lambda row: generate_image_id(
-                    row['date'], 
+                    row['date'],
                     metadata.get('satellite', 'Unknown'),
                     analysis_type
                 ), axis=1)
-                
+
                 # Add estimated cloud cover values only if not already present from GEE
-                df['estimated_cloud_cover'] = df.apply(lambda row: 
-                    row.get('cloud_cover') if 'cloud_cover' in row and row['cloud_cover'] is not None
-                    else estimate_cloud_cover(
-                        row.get('ndvi', row.get('lst', row.get('backscatter_vv', 0))),
-                        analysis_type
-                    ), axis=1)
+                df['estimated_cloud_cover'] = df.apply(lambda row:
+                                                       row.get('cloud_cover') if 'cloud_cover' in row and row['cloud_cover'] is not None
+                                                       else estimate_cloud_cover(
+                                                           row.get('ndvi', row.get('lst', row.get('backscatter_vv', 0))),
+                                                           analysis_type
+                                                       ), axis=1)
 
         # Reorder columns for better readability
         column_order = []
@@ -230,11 +230,11 @@ def generate_csv_file(data, analysis_type="ndvi", metadata=None):
             column_order.append('satellite')
         if 'estimated_cloud_cover' in df.columns:
             column_order.append('estimated_cloud_cover')
-            
+
         # Add analysis-specific columns
         remaining_cols = [col for col in df.columns if col not in column_order]
         column_order.extend(remaining_cols)
-        
+
         # Reorder DataFrame
         df = df[column_order]
 
@@ -267,7 +267,7 @@ def generate_image_id(date, satellite, analysis_type):
         date_obj = pd.to_datetime(date)
         date_str = date_obj.strftime("%Y%m%d")
         time_str = date_obj.strftime("%H%M%S")
-        
+
         if 'Landsat' in satellite:
             # Landsat format: LC08_L2SP_123034_20230615_20230617_02_T1
             satellite_code = 'LC08' if 'Landsat 8' in satellite or date_obj.year < 2021 else 'LC09'
@@ -275,14 +275,14 @@ def generate_image_id(date, satellite, analysis_type):
             row = 34   # Example row
             processing_date = (date_obj + pd.Timedelta(days=2)).strftime("%Y%m%d")
             return f"{satellite_code}_L2SP_{path:03d}{row:03d}_{date_str}_{processing_date}_02_T1"
-            
+
         elif 'Sentinel-2' in satellite:
             # Sentinel-2 format: S2A_MSIL2A_20230615T103031_N0509_R108_T31TDH_20230615T134849
             time_id = f"{date_str}T{time_str}"
             tile_id = "T31TDH"  # Example tile
             proc_time = f"{date_str}T134849"
             return f"S2A_MSIL2A_{time_id}_N0509_R108_{tile_id}_{proc_time}"
-            
+
         elif 'Sentinel-1' in satellite:
             # Sentinel-1 format: S1A_IW_GRDH_1SDV_20230615T054321_20230615T054346_048794_05E0A1_1234
             time_start = f"{date_str}T{time_str}"
@@ -291,11 +291,11 @@ def generate_image_id(date, satellite, analysis_type):
             mission_id = "05E0A1"
             product_id = "1234"
             return f"S1A_IW_GRDH_1SDV_{time_start}_{time_end}_{orbit}_{mission_id}_{product_id}"
-            
+
         else:
             # Generic format
             return f"{satellite.replace(' ', '_').upper()}_{date_str}_{analysis_type.upper()}"
-            
+
     except Exception as e:
         # Fallback format
         return f"IMG_{date.replace('-', '')}_{analysis_type.upper()}"
@@ -304,21 +304,21 @@ def generate_image_id(date, satellite, analysis_type):
 def get_actual_cloud_cover_from_gee(collection, geometry, max_images=100):
     """
     Extract actual cloud cover values from Google Earth Engine image collection.
-    
+
     Args:
         collection: Earth Engine ImageCollection
         geometry: Earth Engine geometry for the area of interest
         max_images: Maximum number of images to extract metadata from (default: 100)
-        
+
     Returns:
         list: List of dictionaries with date, image_id, and cloud_cover
     """
     try:
         import ee
-        
+
         # Sort collection chronologically and limit to reasonable number
         sorted_collection = collection.sort('system:time_start').limit(max_images)
-        
+
         # Get the list of images with their properties
         def extract_image_info(image):
             # Get image properties
@@ -331,50 +331,50 @@ def get_actual_cloud_cover_from_gee(collection, geometry, max_images=100):
                     None
                 )
             )
-            
+
             # Get acquisition date
             date = ee.Date(image.get('system:time_start')).format('YYYY-MM-dd')
-            
+
             # Get image ID
             image_id = image.get('system:id')
-            
+
             return ee.Feature(None, {
                 'image_id': image_id,
                 'date': date,
                 'cloud_cover': cloud_cover
             })
-        
+
         # Map the function over the collection
         image_info_collection = sorted_collection.map(extract_image_info)
-        
+
         # Get the information
         image_list = image_info_collection.getInfo()
-        
+
         if not image_list or 'features' not in image_list:
             return []
-            
+
         cloud_cover_data = []
-        
+
         for feature in image_list['features']:
             properties = feature.get('properties', {})
-            
+
             image_id = properties.get('image_id', 'Unknown')
             date = properties.get('date', 'Unknown')
             cloud_cover = properties.get('cloud_cover')
-            
+
             if cloud_cover is not None and date != 'Unknown':
                 # Extract just the image name from full path
                 if isinstance(image_id, str) and '/' in image_id:
                     image_id = image_id.split('/')[-1]
-                
+
                 cloud_cover_data.append({
                     'date': date,
                     'image_id': str(image_id),
                     'cloud_cover': round(float(cloud_cover), 2)
                 })
-        
+
         return cloud_cover_data
-        
+
     except Exception as e:
         print(f"Error extracting cloud cover from GEE: {e}")
         return []
@@ -407,7 +407,7 @@ def estimate_cloud_cover(value, analysis_type):
         else:
             # Default for other analysis types - use deterministic calculation
             return round(10 + (abs(value * 100) % 10), 1)  # 10-20% range, deterministic
-    except:
+    except BaseException:
         return round(10.0, 1)  # Default 10%
 
 
