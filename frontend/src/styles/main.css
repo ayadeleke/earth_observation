@@ -1,0 +1,129 @@
+/* Earth Observation Analysis - Main Styles */
+body {
+    background-color: #f8f9fa;
+}
+
+.header-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 3rem 0 2rem;
+    margin-bottom: 2rem;
+    border-radius: 0 0 1rem 1rem;
+}
+
+@media (max-width: 768px) {
+    .header-section {
+        padding: 2rem 0 1.5rem;
+        text-align: center;
+    }
+    
+    .header-section h1 {
+        font-size: 2rem !important;
+        line-height: 1.2;
+    }
+    
+    .header-section .lead {
+        font-size: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .header-section .btn {
+        font-size: 0.875rem;
+        padding: 0.5rem 1rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .header-section {
+        padding: 1.5rem 0 1rem;
+    }
+    
+    .header-section h1 {
+        font-size: 1.75rem !important;
+    }
+    
+    .header-section .feature-icon {
+        font-size: 1.25rem;
+    }
+}
+
+.card {
+    border: none;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-radius: 1rem;
+}
+
+.map-container {
+    height: 450px;
+    border-radius: 1rem;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.form-section {
+    background: white;
+    padding: 2rem;
+    border-radius: 1rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.result-container {
+    margin-top: 2rem;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    padding: 0.75rem 2rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.form-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.feature-icon {
+    font-size: 1.5rem;
+    color: #667eea;
+    margin-right: 0.5rem;
+}
+
+#loadingSpinner {
+    display: none;
+}
+
+/* Data table styles */
+.data-table-section {
+    margin-top: 2rem;
+}
+
+.download-buttons {
+    margin-top: 1rem;
+}
+
+.download-buttons .btn {
+    margin-right: 0.5rem;
+}
+
+/* Additional styles for React compatibility */
+.nav-tabs .nav-link.active {
+    background-color: #667eea;
+    border-color: #667eea;
+    color: white;
+}
+
+.nav-tabs .nav-link {
+    color: #667eea;
+}
+
+.upload-area:hover {
+    border-color: #667eea !important;
+    background-color: #f0f2ff !important;
+}
