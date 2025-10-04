@@ -136,6 +136,11 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# Additional locations of static files for development
+STATICFILES_DIRS = [
+    BASE_DIR / "static",
+]
+
 # Media files
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -260,6 +265,16 @@ EARTH_ENGINE_USE_APP_DEFAULT = env("EARTH_ENGINE_USE_APP_DEFAULT", default=True)
 # File Upload Settings
 FILE_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024 * 1024  # 16MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024 * 1024  # 16MB
+
+# CORS Settings for React frontend
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development only
 
 # Logging
 LOGGING = {
