@@ -69,12 +69,12 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
             try:
                 original_collection_size = collection.size().getInfo()
                 logger.info(f"Total Sentinel-1 images available: {original_collection_size}")
-                
+
                 # Limit to 50 images max to prevent memory issues while showing more data
                 limited_collection = collection.limit(50)
                 collection_size = min(original_collection_size, 50)
                 logger.info(f"Using {collection_size} SAR images for analysis")
-                
+
                 # Create representative metadata entries - aim for good temporal coverage
                 metadata_list = []
                 # Generate at least 40 samples for good temporal coverage, even if we have fewer actual images
@@ -82,21 +82,21 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
                 desired_samples = 40  # Fixed number for consistent temporal resolution
                 max_samples = desired_samples
                 logger.info(f"Creating {max_samples} SAR sample points distributed across time period (based on {collection_size} available images)")
-                
+
                 for i in range(max_samples):
                     # Generate dates across the time period
-                    start_date_obj = datetime.strptime(start_date, "%Y-%m-%d") 
+                    start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
                     end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
                     total_days = (end_date_obj - start_date_obj).days
-                    
+
                     if collection_size > 1:
                         days_offset = (total_days * i) // collection_size
                     else:
                         days_offset = total_days // 2
-                        
+
                     image_date = start_date_obj + timedelta(days=days_offset)
                     timestamp = int(image_date.timestamp() * 1000)  # Convert to milliseconds
-                    
+
                     metadata_list.append({
                         'properties': {
                             'image_id': f'S1A_IW_GRDH_1SDV_{image_date.strftime("%Y%m%d")}T052943_001',
@@ -104,7 +104,7 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
                             'orbit_direction': orbit_direction
                         }
                     })
-                    
+
             except Exception as metadata_error:
                 logger.error(f"Error creating SAR metadata: {metadata_error}")
                 # Final fallback - create minimal synthetic data
@@ -115,24 +115,24 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
                         'orbit_direction': orbit_direction
                     }
                 }]
-            
+
             # Get geometry center for consistent sampling
             center = geometry.centroid().coordinates().getInfo()
             center_lon, center_lat = center[0], center[1]
-            
+
             # Create sample data using statistics (avoid individual image sampling)
             valid_data_count = 0
             for i, metadata in enumerate(metadata_list):
                 if not metadata or 'properties' not in metadata:
                     logger.warning(f"Invalid metadata structure at index {i}")
                     continue
-                    
+
                 props = metadata['properties']
                 logger.debug(f"Processing metadata {i}: {props}")
-                
+
                 # Extract date from timestamp (now always available)
                 date_str = None
-                
+
                 if props.get('timestamp'):
                     try:
                         timestamp = props.get('timestamp')
@@ -141,7 +141,7 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
                         logger.debug(f"Extracted date {date_str} from timestamp")
                     except Exception as e:
                         logger.warning(f"Error converting timestamp {props.get('timestamp')}: {e}")
-                
+
                 # Fallback to image ID extraction if timestamp fails
                 if not date_str and props.get('image_id'):
                     try:
@@ -156,67 +156,67 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
                             logger.debug(f"Extracted date {date_str} from image ID")
                     except Exception as e:
                         logger.warning(f"Error extracting date from image ID: {e}")
-                
+
                 # Final fallback - this should not happen with our improved metadata generation
                 if not date_str:
                     logger.warning(f"No valid date found, skipping sample {valid_data_count}")
                     continue
-                
+
                 # Calculate actual backscatter values for this specific image
                 try:
                     # For efficiency, use a sampled approach instead of individual image processing
                     # This provides real variation while maintaining performance
-                    
+
                     # Extract image index from collection (for Earth Engine sampling)
                     image_index = valid_data_count
-                    
+
                     # Calculate temporal position (0 to 1) within the date range
                     try:
                         current_date = datetime.strptime(date_str, '%Y-%m-%d')
                         start_date_obj = datetime.strptime("2014-01-01", '%Y-%m-%d')
                         end_date_obj = datetime.strptime("2024-12-31", '%Y-%m-%d')
-                        
+
                         # Calculate temporal position (0 to 1)
                         total_span = (end_date_obj - start_date_obj).days
                         current_span = (current_date - start_date_obj).days
                         temporal_position = current_span / total_span if total_span > 0 else 0.5
-                        
-                    except:
+
+                    except BaseException:
                         temporal_position = valid_data_count / len(metadata_list) if len(metadata_list) > 0 else 0.5
-                    
+
                     # Get base statistics and add realistic temporal and spatial variation
                     mean_vv = stats.get("VV", -12.0)
                     mean_vh = stats.get("VH", -18.0)
-                    
+
                     # Add realistic variations based on SAR characteristics:
                     # 1. Seasonal variation (vegetation phenology affects backscatter)
-                    seasonal_variation_vv = 2.0 * math.sin(2 * math.pi * temporal_position) # ±2 dB seasonal
-                    seasonal_variation_vh = 1.5 * math.sin(2 * math.pi * temporal_position + math.pi/4) # ±1.5 dB
-                    
+                    seasonal_variation_vv = 2.0 * math.sin(2 * math.pi * temporal_position)  # ±2 dB seasonal
+                    seasonal_variation_vh = 1.5 * math.sin(2 * math.pi * temporal_position + math.pi / 4)  # ±1.5 dB
+
                     # 2. Random variation (atmospheric conditions, incidence angle variations)
                     random.seed(hash(date_str) % 2**32)  # Consistent random based on date
                     random_variation_vv = random.uniform(-1.5, 1.5)  # ±1.5 dB random
                     random_variation_vh = random.uniform(-1.2, 1.2)  # ±1.2 dB random
-                    
+
                     # 3. Calculate final backscatter values
                     vv_value = round(mean_vv + seasonal_variation_vv + random_variation_vv, 2)
                     vh_value = round(mean_vh + seasonal_variation_vh + random_variation_vh, 2)
-                    
+
                     # Ensure realistic SAR backscatter ranges
                     vv_value = max(min(vv_value, -5.0), -25.0)  # Clamp to realistic range
                     vh_value = max(min(vh_value, -10.0), -30.0)  # Clamp to realistic range
-                    
+
                     logger.debug(f"Calculated backscatter for {date_str}: VV={vv_value}dB, VH={vh_value}dB")
-                        
+
                 except Exception as calc_error:
                     logger.warning(f"Error calculating backscatter for image {props.get('image_id')}: {calc_error}")
                     # Simple fallback
                     mean_vv = stats.get("VV", -12.0)
                     mean_vh = stats.get("VH", -18.0)
-                    
+
                     vv_variation = (valid_data_count % 10 - 5) * 0.6  # ±3 dB variation
                     vh_variation = (valid_data_count % 10 - 5) * 0.6
-                    
+
                     vv_value = round(mean_vv + vv_variation, 2)
                     vh_value = round(mean_vh + vh_variation, 2)
 
@@ -235,11 +235,11 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
                     "polarization": ['VV', 'VH'],
                     "count": pixel_count if pixel_count > 0 else 1000  # Add pixel count for frontend
                 })
-                
+
                 valid_data_count += 1
-                
+
             logger.info(f"Generated {len(sample_data)} SAR sample points")
-            
+
         except Exception as sample_error:
             logger.error(f"Error getting SAR sample data: {sample_error}")
             sample_data = []
