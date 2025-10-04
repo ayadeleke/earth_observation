@@ -23,6 +23,7 @@ export const InteractiveMap = ({
   clearLayers = false,
   clearShapefileLayers = false,
   uploadedShapefile = null,
+  geometry = null,
   initialBounds = null, 
   height = '600px',
   className = '',
@@ -255,6 +256,65 @@ export const InteractiveMap = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadedShapefile]); // processAndDisplayShapefile excluded to prevent recreation
+
+  // Handle geometry display (from shapefile or other sources)
+  useEffect(() => {
+    console.log('Geometry useEffect triggered:', {
+      geometry: !!geometry,
+      geometryType: geometry?.type,
+      mapRef: !!mapRef.current,
+      shapefileLayerRef: !!shapefileLayerRef.current
+    });
+    
+    if (geometry && mapRef.current) {
+      console.log('Displaying geometry on map...');
+      
+      // Remove existing shapefile layer if any
+      if (shapefileLayerRef.current) {
+        mapRef.current.removeLayer(shapefileLayerRef.current);
+        shapefileLayerRef.current = null;
+      }
+      
+      try {
+        // Create a layer from the geometry
+        const geoJsonLayer = L.geoJSON(geometry, {
+          style: {
+            color: '#ff7800',
+            fillColor: '#ff7800',
+            fillOpacity: 0.3,
+            weight: 2,
+            dashArray: '5, 5' // Dashed line to distinguish from drawn shapes
+          }
+        });
+        
+        // Add popup with info
+        geoJsonLayer.bindPopup(`
+          <strong>Uploaded Shapefile</strong><br>
+          Type: ${geometry.type}<br>
+          <small>Area of Interest</small>
+        `);
+        
+        // Add to map and store reference
+        shapefileLayerRef.current = geoJsonLayer;
+        mapRef.current.addLayer(geoJsonLayer);
+        
+        // Fit map to geometry bounds
+        const bounds = geoJsonLayer.getBounds();
+        if (bounds.isValid()) {
+          mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+        }
+        
+        console.log('Geometry displayed successfully on map');
+      } catch (error) {
+        console.error('Error displaying geometry on map:', error);
+      }
+    } else if (!geometry && shapefileLayerRef.current && mapRef.current) {
+      console.log('Removing geometry layer...');
+      // Remove geometry layer when no geometry is provided
+      mapRef.current.removeLayer(shapefileLayerRef.current);
+      shapefileLayerRef.current = null;
+    }
+  }, [geometry]);
 
   // Default center and zoom
   const defaultCenter = [52.5, 13.4];

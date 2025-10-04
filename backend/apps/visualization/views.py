@@ -30,7 +30,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def calculate_ndvi_landsat(image, enable_cloud_masking=True, masking_strictness=False):
+def calculate_ndvi_landsat(image, enable_cloud_masking=False, masking_strictness=False):
     """
     Calculate NDVI for Landsat image (handles different band names) with optional cloud masking
     
@@ -98,7 +98,7 @@ def calculate_ndvi_landsat(image, enable_cloud_masking=True, masking_strictness=
     return image.addBands(ndvi).set('system:time_start', image.get('system:time_start'))
 
 
-def calculate_lst_landsat(image, enable_cloud_masking=True, masking_strictness=False):
+def calculate_lst_landsat(image, enable_cloud_masking=False, masking_strictness=False):
     """
     Calculate Land Surface Temperature for Landsat image with optional cloud masking
     Handles Landsat 5/7 (ST_B6) and Landsat 8/9 (ST_B10) thermal bands
@@ -162,7 +162,7 @@ def calculate_lst_landsat(image, enable_cloud_masking=True, masking_strictness=F
     return image.addBands(lst_celsius.rename('LST'))
 
 
-def calculate_sentinel2_ndvi(image, enable_cloud_masking=True, masking_strictness=False):
+def calculate_sentinel2_ndvi(image, enable_cloud_masking=False, masking_strictness=False):
     """
     Calculate NDVI for Sentinel-2 image with optional cloud masking
     
@@ -207,7 +207,7 @@ def calculate_sentinel2_ndvi(image, enable_cloud_masking=True, masking_strictnes
     return image.addBands(ndvi)
 
 
-def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_date=None, satellite='landsat', cloud_cover=20, selected_images=None, cloud_masking_level='recommended'):
+def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_date=None, satellite='landsat', cloud_cover=20, selected_images=None, cloud_masking_level='disabled'):
     """
     Create an interactive map with calculated analysis layers - Django version of Flask functionality
     
@@ -302,15 +302,28 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
                 selected_images[0] == 'first_last'):
                 
                 logger.info("Using first and last images for analysis page custom map")
-                full_image_list = collection.getInfo()['features']
+                # Get all images and sort them specifically by date for first/last selection
+                date_sorted_collection = collection.sort('system:time_start')  # Sort by date only
+                full_image_list = date_sorted_collection.getInfo()['features']
                 
                 if len(full_image_list) >= 2:
-                    # Use first and last images
+                    # Use first and last images by DATE, not by cloud cover
                     first_img = ee.Image(full_image_list[0]['id'])
                     last_img = ee.Image(full_image_list[-1]['id'])
                     images = [first_img, last_img]
-                    logger.info(f"Selected first image: {full_image_list[0]['id']}")
-                    logger.info(f"Selected last image: {full_image_list[-1]['id']}")
+                    
+                    # Log the actual dates for verification
+                    first_date = full_image_list[0]['properties'].get('system:time_start')
+                    last_date = full_image_list[-1]['properties'].get('system:time_start')
+                    
+                    if first_date and last_date:
+                        first_readable = datetime.fromtimestamp(first_date/1000).strftime('%Y-%m-%d')
+                        last_readable = datetime.fromtimestamp(last_date/1000).strftime('%Y-%m-%d')
+                        logger.info(f"Selected first image: {full_image_list[0]['id']} (Date: {first_readable})")
+                        logger.info(f"Selected last image: {full_image_list[-1]['id']} (Date: {last_readable})")
+                    else:
+                        logger.info(f"Selected first image: {full_image_list[0]['id']}")
+                        logger.info(f"Selected last image: {full_image_list[-1]['id']}")
                 elif len(full_image_list) == 1:
                     # Only one image available
                     images = [ee.Image(full_image_list[0]['id'])]
@@ -361,6 +374,13 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
             except Exception as e:
                 logger.error(f"Error getting default images: {e}")
                 raise ValueError("Failed to get default images. Check the date range and parameters.")
+        
+        # Add raw RGB layers FIRST for cloud inspection (first and last images only)
+        if len(images) >= 1:
+            logger.info(f"About to add raw RGB layers for {len(images)} images")
+            add_raw_rgb_layers(map_obj, images, geometry, satellite)
+        else:
+            logger.warning("No images available for raw RGB layers")
         
         # Add analysis layers based on type
         if analysis_type.lower() == 'ndvi':
@@ -670,21 +690,22 @@ def get_sentinel2_collection(geometry, start_date, end_date, cloud_cover):
 
 
 def get_sentinel1_collection(geometry, start_date, end_date):
-    """Get Sentinel-1 collection for the specified parameters with complete ROI coverage"""
+    """Get Sentinel-1 collection for the specified parameters with flexible coverage"""
     collection = (
         ee.ImageCollection("COPERNICUS/S1_GRD")
         .filterDate(start_date, end_date)
         .filterBounds(geometry)
         .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
         .filterMetadata('resolution_meters', 'equals', 10)
-        .filter(ee.Filter.eq('orbitProperties_pass', 'ASCENDING'))
+        # Include both ASCENDING and DESCENDING for more images
+        .filter(ee.Filter.inList('orbitProperties_pass', ['ASCENDING', 'DESCENDING']))
         .filter(ee.Filter.eq('instrumentMode', 'IW'))
     )
     
     logger.info(f"Total Sentinel-1 images before coverage filtering: {collection.size().getInfo()}")
     
     try:
-        # Apply less strict coverage filtering for Sentinel-1
+        # Apply more lenient coverage filtering for Sentinel-1
         def check_coverage_s1(image):
             footprint = image.geometry()
             intersection = footprint.intersection(geometry, ee.ErrorMargin(10))  # 10m tolerance for SAR
@@ -696,8 +717,8 @@ def get_sentinel1_collection(geometry, start_date, end_date):
         # Add coverage info to images
         collection_with_coverage = collection.map(check_coverage_s1)
         
-        # Filter for images with at least 90% coverage
-        filtered_collection = collection_with_coverage.filter(ee.Filter.gte('coverage_percent', 90))
+        # Filter for images with at least 85% coverage (more lenient for SAR)
+        filtered_collection = collection_with_coverage.filter(ee.Filter.gte('coverage_percent', 85))
         filtered_count = filtered_collection.size().getInfo()
         logger.info(f"Sentinel-1 images after coverage filtering: {filtered_count}")
         
@@ -710,7 +731,119 @@ def get_sentinel1_collection(geometry, start_date, end_date):
         return collection
 
 
-def add_ndvi_layers(map_obj, images, geometry, satellite, collection, cloud_masking_level='recommended'):
+def add_raw_rgb_layers(map_obj, images, geometry, satellite):
+    """Add raw RGB imagery layers without any processing to show actual cloud coverage"""
+    try:
+        logger.info(f"🚀 STARTING add_raw_rgb_layers with {len(images)} images for {satellite}")
+        logger.info(f"Adding raw RGB layers for {satellite} to inspect cloud coverage")
+        
+        # Only add first and last images to avoid cluttering the map
+        indices_to_add = []
+        if len(images) >= 1:
+            indices_to_add.append(0)  # First image
+        if len(images) >= 2:
+            indices_to_add.append(-1)  # Last image
+        
+        for idx in indices_to_add:
+            try:
+                image = images[idx]
+                image_clipped = image.clip(geometry)
+                date_info = ee.Date(image.get('system:time_start')).format('YYYY-MM-dd').getInfo()
+                
+                # Set up RGB visualization parameters based on satellite
+                if satellite.lower() == 'sentinel2':
+                    # Sentinel-2 RGB bands (B4=Red, B3=Green, B2=Blue)
+                    vis_params = {
+                        'bands': ['B4', 'B3', 'B2'],
+                        'min': 0,
+                        'max': 3000,
+                        'gamma': 1.4
+                    }
+                elif 'sentinel1' in satellite.lower() or 'sentinel-1' in satellite.lower():
+                    # For SAR, show VV polarization in grayscale
+                    vis_params = {
+                        'bands': ['VV'],
+                        'min': -25,
+                        'max': 0,
+                        'palette': ['black', 'white']
+                    }
+                else:
+                    # Landsat RGB bands - determine version by checking band names
+                    try:
+                        band_names = image.bandNames().getInfo()
+                        if 'SR_B4' in band_names:  # Landsat 8/9
+                            # Use scaled surface reflectance values (already scaled in Collection 2)
+                            vis_params = {
+                                'bands': ['SR_B4', 'SR_B3', 'SR_B2'],
+                                'min': 7000,   # Increased min for better contrast
+                                'max': 18000,  # Increased max for better contrast  
+                                'gamma': 1.8   # Higher gamma for better visibility
+                            }
+                        else:  # Landsat 4-7
+                            vis_params = {
+                                'bands': ['SR_B3', 'SR_B2', 'SR_B1'],
+                                'min': 7000,   # Increased min for better contrast
+                                'max': 18000,  # Increased max for better contrast
+                                'gamma': 1.8   # Higher gamma for better visibility
+                            }
+                    except Exception as e:
+                        logger.warning(f"Error getting band names for Landsat: {e}")
+                        # Default Landsat 8/9 parameters with better scaling
+                        vis_params = {
+                            'bands': ['SR_B4', 'SR_B3', 'SR_B2'],
+                            'min': 7000,
+                            'max': 18000,
+                            'gamma': 1.8
+                        }
+                
+                # Create descriptive layer name that will appear at the top of the layer list
+                if idx == 0:
+                    layer_name = f' First Image Orthomosaic {date_info}'
+                else:
+                    layer_name = f' Last Image Orthomosaic {date_info}'
+
+                # Add the raw image layer with explicit parameters
+                try:
+                    # Use the standard geemap addLayer method without extra parameters
+                    map_obj.addLayer(image_clipped, vis_params, layer_name)
+                    logger.info(f"Added raw RGB layer: {layer_name}")
+                except Exception as e:
+                    logger.warning(f"Standard addLayer failed for {layer_name}: {e}")
+                    # Try with ee_object parameter explicitly
+                    try:
+                        map_obj.addLayer(ee_object=image_clipped, vis_params=vis_params, name=layer_name)
+                        logger.info(f"Added raw RGB layer with explicit parameters: {layer_name}")
+                    except Exception as e2:
+                        logger.error(f"All addLayer attempts failed for {layer_name}: {e2}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to add raw RGB layer for image {idx}: {e}")
+                # Try with simplified parameters if the above fails
+                try:
+                    image = images[idx]
+                    image_clipped = image.clip(geometry)
+                    date_info = ee.Date(image.get('system:time_start')).format('YYYY-MM-dd').getInfo()
+                    
+                    # Simple fallback visualization
+                    if satellite.lower() == 'sentinel2':
+                        vis_params = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000}
+                    else:
+                        # Use better scaling for Landsat fallback
+                        vis_params = {'bands': ['SR_B4', 'SR_B3', 'SR_B2'], 'min': 7000, 'max': 18000, 'gamma': 1.8}
+                    
+                    layer_name = f'🔍 RAW {"First" if idx == 0 else "Last"} Image {date_info}'
+                    map_obj.addLayer(image_clipped, vis_params, layer_name)
+                    logger.info(f"Added fallback raw RGB layer: {layer_name}")
+                except Exception as e2:
+                    logger.error(f"Failed to add raw RGB layer even with fallback: {e2}")
+        
+        logger.info("Successfully added raw RGB layers for cloud inspection")
+        
+    except Exception as e:
+        logger.error(f"Error adding raw RGB layers: {e}")
+
+
+def add_ndvi_layers(map_obj, images, geometry, satellite, collection, cloud_masking_level='disabled'):
     """Add NDVI analysis layers to the map including temporal changes"""
     try:
         # Convert cloud_masking_level to boolean parameters
@@ -823,7 +956,7 @@ def add_ndvi_layers(map_obj, images, geometry, satellite, collection, cloud_mask
         logger.error(f"Error adding NDVI layers: {e}")
 
 
-def add_lst_layers(map_obj, images, geometry, satellite, collection, cloud_masking_level='recommended'):
+def add_lst_layers(map_obj, images, geometry, satellite, collection, cloud_masking_level='disabled'):
     """Add LST analysis layers to the map"""
     try:
         # Convert cloud_masking_level to boolean parameters
@@ -1675,7 +1808,25 @@ def create_custom_map(request):
             end_date = data.get('end_date')
             cloud_cover = int(data.get('cloud_cover', 20))
             selected_indices = data.get('selected_indices', '').split(',') if data.get('selected_indices') else []
-            cloud_masking_level = data.get('cloud_masking_level', 'recommended')
+            cloud_masking_level = data.get('cloud_masking_level', 'disabled')
+            
+            # Convert use_cloud_masking parameter to cloud_masking_level for compatibility
+            use_cloud_masking = data.get('use_cloud_masking')
+            if use_cloud_masking is not None:
+                if isinstance(use_cloud_masking, str):
+                    use_cloud_masking = use_cloud_masking.lower() in ['true', '1', 'yes']
+                
+                if use_cloud_masking is False:
+                    cloud_masking_level = 'disabled'
+                    logger.info("Cloud masking explicitly disabled via use_cloud_masking parameter (shapefile upload)")
+                elif use_cloud_masking is True:
+                    strict_masking = data.get('strict_masking', False)
+                    if isinstance(strict_masking, str):
+                        strict_masking = strict_masking.lower() in ['true', '1', 'yes', 'strict']
+                    cloud_masking_level = 'strict' if strict_masking else 'recommended'
+                    logger.info(f"Cloud masking enabled via use_cloud_masking parameter (shapefile upload): {cloud_masking_level}")
+            
+            logger.info(f"Final cloud_masking_level (shapefile upload): {cloud_masking_level}")
             
             # Process shapefile to get coordinates
             shapefile = request.FILES.get('shapefile')
@@ -1711,7 +1862,25 @@ def create_custom_map(request):
                     selected_indices = selected_indices_raw.split(',') if selected_indices_raw else []
             else:
                 selected_indices = selected_indices_raw
-            cloud_masking_level = data.get('cloud_masking_level', 'recommended')
+            cloud_masking_level = data.get('cloud_masking_level', 'disabled')
+            
+            # Convert use_cloud_masking parameter to cloud_masking_level for compatibility
+            use_cloud_masking = data.get('use_cloud_masking')
+            if use_cloud_masking is not None:
+                if isinstance(use_cloud_masking, str):
+                    use_cloud_masking = use_cloud_masking.lower() in ['true', '1', 'yes']
+                
+                if use_cloud_masking is False:
+                    cloud_masking_level = 'disabled'
+                    logger.info("Cloud masking explicitly disabled via use_cloud_masking parameter")
+                elif use_cloud_masking is True:
+                    strict_masking = data.get('strict_masking', False)
+                    if isinstance(strict_masking, str):
+                        strict_masking = strict_masking.lower() in ['true', '1', 'yes', 'strict']
+                    cloud_masking_level = 'strict' if strict_masking else 'recommended'
+                    logger.info(f"Cloud masking enabled via use_cloud_masking parameter: {cloud_masking_level}")
+            
+            logger.info(f"Final cloud_masking_level: {cloud_masking_level}")
         
         # Validate required parameters
         if not all([start_date, end_date, coordinates]):

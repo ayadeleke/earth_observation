@@ -2,10 +2,11 @@
 __pycache__/
 *.py[codz]
 *$py.class
+views_backup/
 
 # C extensions
 *.so
-
+backend/apps/analysis/views_backup/
 # Distribution / packaging
 .Python
 build/
@@ -27,6 +28,7 @@ share/python-wheels/
 MANIFEST
 support/
 media/
+node_modules/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -52,6 +54,8 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+static/
+staticfiles/
 
 # Translations
 *.mo

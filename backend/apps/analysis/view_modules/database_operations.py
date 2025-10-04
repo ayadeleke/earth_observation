@@ -51,7 +51,7 @@ def get_analysis_history():
     try:
         # Get recent analysis requests
         recent_analyses = AnalysisRequest.objects.order_by('-created_at')[:10]
-        
+
         history = []
         for analysis in recent_analyses:
             history.append({
@@ -65,7 +65,7 @@ def get_analysis_history():
                 "end_date": analysis.end_date.isoformat() if analysis.end_date else None,
                 "cloud_cover": analysis.cloud_cover
             })
-        
+
         return {
             "success": True,
             "history": history,
@@ -84,7 +84,7 @@ def get_analysis_result_by_id(analysis_id):
     try:
         analysis_request = AnalysisRequest.objects.get(id=analysis_id)
         result = AnalysisResult.objects.get(analysis_request=analysis_request)
-        
+
         return {
             "success": True,
             "analysis_request": {
@@ -121,7 +121,7 @@ def delete_analysis_by_id(analysis_id):
     try:
         analysis_request = AnalysisRequest.objects.get(id=analysis_id)
         analysis_request.delete()
-        
+
         return {
             "success": True,
             "message": f"Analysis {analysis_id} deleted successfully",
@@ -148,7 +148,7 @@ def update_analysis_status(analysis_id, new_status):
         analysis_request = AnalysisRequest.objects.get(id=analysis_id)
         analysis_request.status = new_status
         analysis_request.save()
-        
+
         logger.info(f"Updated analysis {analysis_id} status to {new_status}")
         return True
 
@@ -166,14 +166,14 @@ def get_analysis_statistics():
         total_analyses = AnalysisRequest.objects.count()
         completed_analyses = AnalysisRequest.objects.filter(status='completed').count()
         failed_analyses = AnalysisRequest.objects.filter(status='failed').count()
-        
+
         # Get analysis type breakdown
         type_breakdown = {}
         for analysis_type in ['ndvi', 'lst', 'backscatter', 'sentinel1', 'sentinel2', 'comprehensive']:
             count = AnalysisRequest.objects.filter(analysis_type=analysis_type).count()
             if count > 0:
                 type_breakdown[analysis_type] = count
-        
+
         return {
             "total_analyses": total_analyses,
             "completed_analyses": completed_analyses,
