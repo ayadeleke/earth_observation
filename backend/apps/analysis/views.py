@@ -601,13 +601,15 @@ def get_image_metadata(request):
                 .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", cloud_cover))
             )
         elif satellite.lower() == 'sentinel1':
+            # Use both ascending and descending passes for better coverage
             collection = (
                 ee.ImageCollection("COPERNICUS/S1_GRD")
                 .filterDate(start_date, end_date)
                 .filterBounds(geometry)
-                .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
+                .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
                 .filter(ee.Filter.eq('instrumentMode', 'IW'))
-                .filter(ee.Filter.eq('orbitProperties_pass', 'DESCENDING'))
+                # Include both ASCENDING and DESCENDING for more images
+                .filter(ee.Filter.inList('orbitProperties_pass', ['ASCENDING', 'DESCENDING']))
             )
         else:
             return Response({
@@ -617,9 +619,41 @@ def get_image_metadata(request):
 
         # Apply complete coverage filtering to match Flask behavior
         logger.info(f"Total images before coverage filtering: {collection.size().getInfo()}")
-        collection = filter_for_complete_coverage(collection, geometry)
+        
+        # Use more lenient filtering for Sentinel-1 SAR data
+        if satellite.lower() == 'sentinel1':
+            # For SAR data, use less strict coverage requirements
+            def check_sar_coverage(image):
+                footprint = image.geometry()
+                intersection = footprint.intersection(geometry, ee.ErrorMargin(10))  # 10m tolerance for SAR
+                intersection_area = intersection.area()
+                roi_area = geometry.area()
+                coverage_percent = intersection_area.divide(roi_area).multiply(100)
+                return image.set('coverage_percent', coverage_percent)
+            
+            collection_with_coverage = collection.map(check_sar_coverage)
+            # Use 85% coverage threshold for SAR (more lenient)
+            collection = collection_with_coverage.filter(ee.Filter.gte('coverage_percent', 85))
+        else:
+            # Use standard strict filtering for optical satellites
+            collection = filter_for_complete_coverage(collection, geometry)
+        
         filtered_count = collection.size().getInfo()
         logger.info(f"Images after coverage filtering: {filtered_count}")
+        
+        # If no images with good coverage, fall back to original collection for Sentinel-1
+        if filtered_count == 0 and satellite.lower() == 'sentinel1':
+            logger.warning("No Sentinel-1 images with good coverage, using all available images")
+            collection = (
+                ee.ImageCollection("COPERNICUS/S1_GRD")
+                .filterDate(start_date, end_date)
+                .filterBounds(geometry)
+                .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
+                .filter(ee.Filter.eq('instrumentMode', 'IW'))
+                .filter(ee.Filter.inList('orbitProperties_pass', ['ASCENDING', 'DESCENDING']))
+            )
+            filtered_count = collection.size().getInfo()
+            logger.info(f"Fallback: Using {filtered_count} unfiltered Sentinel-1 images")
 
         # Sort by cloud cover and date
         collection = collection.sort('CLOUD_COVER').sort('system:time_start')

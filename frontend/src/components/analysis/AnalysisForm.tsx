@@ -18,7 +18,7 @@ interface FormData {
 
 interface AnalysisFormProps {
   onSubmit: (formData: FormData, dateRangeType: string) => void;
-  onAreaSelect: (coordinates: any, wkt: string, source: string) => void;
+  onAreaSelect: (coordinates: any, wkt: string, source: string, geometry?: any) => void;
   loading?: boolean;
   error?: string;
   initialData?: Partial<FormData>;
@@ -118,7 +118,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
   };
 
   // Handle area selection from map or shapefile
-  const handleAreaSelect = (coordinates: any, wkt: string = '', source: string = 'drawing') => {
+  const handleAreaSelect = (coordinates: any, wkt: string = '', source: string = 'drawing', geometry: any = null) => {
     // Update coordinates field
     setFormData((prev: FormData) => ({
       ...prev,
@@ -126,7 +126,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
     }));
     
     // Call parent handler
-    onAreaSelect(coordinates, wkt, source);
+    onAreaSelect(coordinates, wkt, source, geometry);
   };
 
   // Handle form submission
@@ -284,9 +284,9 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                         handleAreaSelect(coords, result.wkt || '', 'shapefile');
                       }
                     }}
-                    onCoordinatesExtracted={(bounds: any) => {
-                      console.log('Coordinates extracted from shapefile:', bounds);
-                      handleAreaSelect(bounds, '', 'shapefile');
+                    onCoordinatesExtracted={(bounds: any, wkt: string, source: string, geometry: any) => {
+                      console.log('Coordinates extracted from shapefile:', bounds, geometry);
+                      handleAreaSelect(bounds, wkt || '', source, geometry);
                     }}
                   />
                 </div>
