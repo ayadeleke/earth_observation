@@ -2,7 +2,7 @@
 
 A comprehensive web-based platform for analyzing satellite data using Google Earth Engine, providing NDVI (Normalized Difference Vegetation Index), LST (Land Surface Temperature), and SAR (Synthetic Aperture Radar) backscatter analysis capabilities.
 
-## 🌍 Description
+## Description
 
 The Earth Observation Analysis Platform is a full-stack application designed for geospatial analysis and environmental monitoring. It integrates multiple satellite data sources including Landsat, Sentinel-1, and Sentinel-2 to provide comprehensive Earth observation capabilities.
 
@@ -19,7 +19,7 @@ The Earth Observation Analysis Platform is a full-stack application designed for
 - **Historical Data**: Analysis from 1988 onwards with multi-mission Landsat harmonization
 - **Export Capabilities**: Data export to CSV and interactive map generation
 
-## 📸 Screenshots
+## Screenshots
 
 ### Main Dashboard
 ![Landing Page](screenshots/landing_page.png)
@@ -59,7 +59,7 @@ The Earth Observation Analysis Platform is a full-stack application designed for
 - CORS support for cross-origin requests
 - File upload handling for shapefiles
 
-## 🚀 Setup Instructions
+## Setup Instructions
 
 ### Prerequisites
 
@@ -178,7 +178,7 @@ docker build -t earth-observation-frontend .
 docker run -p 3000:3000 earth-observation-frontend
 ```
 
-## 🌐 Deployment Plan
+## Deployment Plan
 ![Deployment Plan](screenshots/deployment_plan.png)
 
 ### Production Environment Setup
@@ -425,7 +425,7 @@ docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
 - Frontend code splitting and lazy loading
 - Image compression for map outputs
 
-## 📝 Usage
+## Usage
 
 1. **Access the Application**: Navigate to `http://localhost:3000`
 2. **Select Analysis Type**: Choose between NDVI, LST, or SAR analysis
@@ -434,7 +434,7 @@ docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
 5. **Run Analysis**: Execute the analysis and view results in tables and charts
 6. **Export Data**: Download CSV files or interactive maps
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -442,15 +442,14 @@ docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🆘 Support
+## Support
 
 For support and questions:
 - Create an issue on GitHub
-- Check the documentation in the `/docs` folder
 - Review the Earth Engine API documentation
 
 ## 🔄 Version History
