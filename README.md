@@ -1,6 +1,6 @@
-# Earth Observation Analysis Platform
+# Project Prototype (MVP) - Earth Observation Analysis Platform
 
-A comprehensive web-based platform for analyzing satellite data using Google Earth Engine, providing NDVI (Normalized Difference Vegetation Index), LST (Land Surface Temperature), and SAR (Synthetic Aperture Radar) backscatter analysis capabilities.
+This project is the prototype (initial version) of the web-based platform for analyzing satellite data using Google Earth Engine, providing NDVI (Normalized Difference Vegetation Index), LST (Land Surface Temperature), and SAR (Synthetic Aperture Radar) backscatter analysis capabilities. It represents a Minimum Viable Product (MVP) that demonstrates the core functionality of the application. While not feature-complete, it provides a working version of the UI, backend, and database integration.
 
 ## Description
 
@@ -411,7 +411,8 @@ docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
 - API rate limiting
 - Input validation and sanitization
 
-#### 7. Scaling Considerations
+#### 7. Conclusion & Scaling Considerations
+- This prototype demonstrates the core functionality of the Earth Observation App. Future work will focus on expanding features and scaling deployment.
 
 **Horizontal Scaling:**
 - Load balancer for multiple backend instances
