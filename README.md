@@ -19,6 +19,20 @@ The Earth Observation Analysis Platform is a full-stack application designed for
 - **Historical Data**: Analysis from 1988 onwards with multi-mission Landsat harmonization
 - **Export Capabilities**: Data export to CSV and interactive map generation
 
+## Prototype Presentation
+
+Watch project prototype demonstration showcasing the platform's capabilities:
+
+[![Earth Observation Platform Prototype Demo](https://img.youtube.com/vi/DW72FsNV2z4/maxresdefault.jpg)](https://youtu.be/DW72FsNV2z4)
+
+**[View Prototype Demonstration](https://youtu.be/DW72FsNV2z4)**
+
+The video demonstrates:
+- Platform overview and user interface
+- NDVI, LST, and SAR analysis workflows
+- Interactive mapping and data visualization
+- Export and analysis capabilities
+
 ## Screenshots
 
 ### Main Dashboard
@@ -33,9 +47,6 @@ The Earth Observation Analysis Platform is a full-stack application designed for
 ### User Project Dashboard
 ![User Dashboard](screenshots/user_dashboard.png)
 *List of User's existing project are here or new project is created from here*
-
-
-
 
 ### Technology Stack
 
