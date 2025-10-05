@@ -19,7 +19,7 @@ The Earth Observation Analysis Platform is a full-stack application designed for
 - **Historical Data**: Analysis from 1988 onwards with multi-mission Landsat harmonization
 - **Export Capabilities**: Data export to CSV and interactive map generation
 
-**[Link to project GitHub repo]([https://youtu.be/DW72FsNV2z4](https://github.com/ayadeleke/earth_observation.git))**
+**[Link to project GitHub repo]([https://github.com/ayadeleke/earth_observation.git])**
 
 ## Prototype Presentation
 
