@@ -1,6 +1,6 @@
 # Project Prototype (MVP) - Earth Observation Analysis Platform
 
-This project is the prototype (initial version) of the web-based platform for analyzing satellite data using Google Earth Engine, providing NDVI (Normalized Difference Vegetation Index), LST (Land Surface Temperature), and SAR (Synthetic Aperture Radar) backscatter analysis capabilities. It represents a Minimum Viable Product (MVP) that demonstrates the core functionality of the application. While not feature-complete, it provides a working version of the UI, backend, and database integration.
+This project is the prototype (initial version) of my web-based platform used for analyzing satellite data using Google Earth Engine, providing NDVI (Normalized Difference Vegetation Index), LST (Land Surface Temperature), and SAR (Synthetic Aperture Radar) backscatter analysis capabilities. It represents a Minimum Viable Product (MVP) that demonstrates the core functionality of the application. While not feature-complete, it provides a working version of the UI, backend, and database integration.
 
 ## Description
 
