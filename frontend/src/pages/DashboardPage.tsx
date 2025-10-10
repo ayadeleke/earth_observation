@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import authService from '../services/authService';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Project {
   id: number;
@@ -11,6 +13,7 @@ interface Project {
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -19,26 +22,45 @@ const DashboardPage: React.FC = () => {
   const [newProjectDescription, setNewProjectDescription] = useState<string>('');
   const [creating, setCreating] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
 
   // Load projects on component mount
   useEffect(() => {
-    loadProjects();
-  }, []);
+    console.log('DashboardPage mounted. Authenticated:', isAuthenticated, 'User:', user);
+    if (isAuthenticated) {
+      loadProjects();
+    }
+  }, [isAuthenticated, user]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setActiveDropdown(null);
+    };
+    
+    if (activeDropdown !== null) {
+      document.addEventListener('click', handleClickOutside);
+      return () => {
+        document.removeEventListener('click', handleClickOutside);
+      };
+    }
+  }, [activeDropdown]);
 
   const loadProjects = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8000/projects/');
-      if (response.ok) {
-        const data = await response.json();
-        setProjects(data);
-        // Set recent projects as the 3 most recent
-        setRecentProjects(data.slice(0, 3));
-      } else {
-        console.error('Failed to load projects');
-      }
-    } catch (error) {
+      const api = authService.getAuthenticatedAPI();
+      const response = await api.get('/projects/');
+      // Handle paginated response - projects are in response.data.results
+      const projectsData = response.data.results ? Array.isArray(response.data.results) ? response.data.results : [] : [];
+      setProjects(projectsData);
+      // Set recent projects as the 3 most recent
+      setRecentProjects(projectsData.slice(0, 3));
+    } catch (error: any) {
       console.error('Error loading projects:', error);
+      // Ensure projects is always an array even on error
+      setProjects([]);
+      setRecentProjects([]);
     } finally {
       setLoading(false);
     }
@@ -50,38 +72,58 @@ const DashboardPage: React.FC = () => {
       return;
     }
 
+    // Check for duplicate project names
+    const trimmedName = newProjectName.trim();
+    const existingProject = projects.find(project => 
+      project.name.toLowerCase() === trimmedName.toLowerCase()
+    );
+    
+    if (existingProject) {
+      setError(`A project with the name "${trimmedName}" already exists. Please choose a different name.`);
+      return;
+    }
+
     try {
       setCreating(true);
       setError('');
       
-      const response = await fetch('http://localhost:8000/projects/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: newProjectName.trim(),
-          description: newProjectDescription.trim()
-        })
+      const api = authService.getAuthenticatedAPI();
+      const response = await api.post('/projects/', {
+        name: trimmedName,
+        description: newProjectDescription.trim()
       });
 
-      if (response.ok) {
-        const newProject = await response.json();
-        setProjects([newProject, ...projects]);
-        setRecentProjects([newProject, ...recentProjects.slice(0, 2)]);
-        setShowNewProjectModal(false);
-        setNewProjectName('');
-        setNewProjectDescription('');
-        
-        // Navigate to analysis page with the new project
-        navigate(`/analysis?project=${newProject.id}`);
-      } else {
-        const errorData = await response.json();
-        setError(errorData.detail || 'Failed to create project');
-      }
-    } catch (error) {
+      const newProject = response.data;
+      setProjects(prevProjects => [newProject, ...(Array.isArray(prevProjects) ? prevProjects : [])]);
+      setRecentProjects(prevRecent => [newProject, ...(Array.isArray(prevRecent) ? prevRecent.slice(0, 2) : [])]);
+      setShowNewProjectModal(false);
+      setNewProjectName('');
+      setNewProjectDescription('');
+      
+      // Navigate to analysis page with the new project
+      navigate(`/analysis?project=${newProject.id}`);
+    } catch (error: any) {
       console.error('Error creating project:', error);
-      setError('Failed to create project. Please try again.');
+      
+      // Handle different types of errors
+      let errorMessage = 'Failed to create project. Please try again.';
+      
+      if (error.response?.data) {
+        // Check for field-specific validation errors
+        if (error.response.data.name) {
+          errorMessage = Array.isArray(error.response.data.name) 
+            ? error.response.data.name[0] 
+            : error.response.data.name;
+        } else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail;
+        } else if (error.response.data.non_field_errors) {
+          errorMessage = Array.isArray(error.response.data.non_field_errors)
+            ? error.response.data.non_field_errors[0]
+            : error.response.data.non_field_errors;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setCreating(false);
     }
@@ -97,6 +139,24 @@ const DashboardPage: React.FC = () => {
 
   const openProject = (projectId: number) => {
     navigate(`/analysis?project=${projectId}`);
+  };
+
+  const deleteProject = async (projectId: number, projectName: string) => {
+    if (!window.confirm(`Are you sure you want to delete "${projectName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const api = authService.getAuthenticatedAPI();
+      await api.delete(`/projects/${projectId}/`);
+
+      // Update both projects and recent projects lists
+      setProjects(prevProjects => prevProjects.filter(p => p.id !== projectId));
+      setRecentProjects(prevRecent => prevRecent.filter(p => p.id !== projectId));
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      alert('Failed to delete project. Please try again.');
+    }
   };
 
   return (
@@ -154,25 +214,81 @@ const DashboardPage: React.FC = () => {
                     {recentProjects.map((project) => (
                       <div
                         key={project.id}
-                        className="p-3 border rounded-3 hover-shadow cursor-pointer"
+                        className="p-3 border rounded-3 hover-shadow"
                         style={{ 
-                          transition: 'all 0.2s ease',
-                          cursor: 'pointer'
+                          transition: 'all 0.2s ease'
                         }}
-                        onClick={() => openProject(project.id)}
                       >
                         <div className="d-flex justify-content-between align-items-start">
-                          <div className="flex-grow-1">
+                          <div 
+                            className="flex-grow-1 cursor-pointer"
+                            onClick={() => openProject(project.id)}
+                            style={{ cursor: 'pointer' }}
+                          >
                             <h6 className="fw-bold mb-1">{project.name}</h6>
                             {project.description && (
                               <p className="text-muted small mb-2">{project.description}</p>
                             )}
                             <small className="text-muted">
-                              <i className="fas fa-calendar-alt me-1"></i>
-                              Created {formatDate(project.created_at)}
+                              {project.updated_at !== project.created_at ? (
+                                <>
+                                  <i className="fas fa-edit me-1"></i>
+                                  Last updated {formatDate(project.updated_at)}
+                                </>
+                              ) : (
+                                <>
+                                  <i className="fas fa-calendar-plus me-1"></i>
+                                  Created {formatDate(project.created_at)}
+                                </>
+                              )}
                             </small>
                           </div>
-                          <i className="fas fa-arrow-right text-primary"></i>
+                          <div className="d-flex align-items-center gap-2">
+                            <div className="dropdown position-relative">
+                              <button
+                                className="btn btn-link text-muted p-1"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveDropdown(activeDropdown === project.id ? null : project.id);
+                                }}
+                              >
+                                <i className="fas fa-ellipsis-v"></i>
+                              </button>
+                              {activeDropdown === project.id && (
+                                <div className="dropdown-menu dropdown-menu-end show position-absolute" style={{ 
+                                  right: 0, 
+                                  top: '100%',
+                                  zIndex: 1050
+                                }}>
+                                  <button
+                                    className="dropdown-item"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveDropdown(null);
+                                      openProject(project.id);
+                                    }}
+                                  >
+                                    <i className="fas fa-play me-2"></i>
+                                    Open Project
+                                  </button>
+                                  <hr className="dropdown-divider" />
+                                  <button
+                                    className="dropdown-item text-danger"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveDropdown(null);
+                                      deleteProject(project.id, project.name);
+                                    }}
+                                  >
+                                    <i className="fas fa-trash me-2"></i>
+                                    Delete
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            <i className="fas fa-arrow-right text-primary"></i>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -249,7 +365,7 @@ const DashboardPage: React.FC = () => {
                   <div className="d-flex align-items-center p-3 border rounded-3">
                     <div className="bg-success rounded-circle me-3" style={{ width: '12px', height: '12px' }}></div>
                     <div className="flex-grow-1">
-                      <div className="fw-semibold">Django API</div>
+                      <div className="fw-semibold">Server</div>
                       <small className="text-success">Running</small>
                     </div>
                   </div>

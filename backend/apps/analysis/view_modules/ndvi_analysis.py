@@ -194,9 +194,11 @@ def process_ndvi_analysis(geometry, start_date, end_date, satellite="landsat", c
         else:
             logger.info("❌ CLOUD MASKING DISABLED - Table will show 'No' values")
 
-        if satellite.lower() == "landsat":
+        # Normalize satellite name to handle both display and internal formats
+        satellite_normalized = satellite.lower()
+        if "landsat" in satellite_normalized:
             return process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover, use_cloud_masking, strict_masking)
-        elif satellite.lower() == "sentinel2" or satellite.lower() == "sentinel":
+        elif "sentinel2" in satellite_normalized or "sentinel-2" in satellite_normalized or satellite_normalized == "sentinel":
             return process_sentinel2_ndvi_analysis(geometry, start_date, end_date, cloud_cover, use_cloud_masking, strict_masking)
         else:
             logger.error(f"Unsupported satellite for NDVI: {satellite}")

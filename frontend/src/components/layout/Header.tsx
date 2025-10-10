@@ -10,9 +10,10 @@ import {
   Settings, 
   User,
   LogOut,
+  LogIn,
+  UserPlus,
   Layout as LayoutIcon,
-  FolderOpen,
-  FileText
+  FolderOpen
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -30,14 +31,23 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const navigationItems = [
+  // Navigation items that are always visible
+  const publicNavigationItems = [
     { path: '/', label: 'Home', icon: Home },
-    { path: '/analysis', label: 'Analysis', icon: BarChart3 },
     { path: '/demo', label: 'Demo', icon: Globe },
+  ];
+
+  // Navigation items only visible to authenticated users
+  const authenticatedNavigationItems = [
+    { path: '/analysis', label: 'Analysis', icon: BarChart3 },
     { path: '/dashboard', label: 'Dashboard', icon: LayoutIcon },
     { path: '/projects', label: 'Projects', icon: FolderOpen },
-    { path: '/results', label: 'Results', icon: FileText },
   ];
+
+  // Combine navigation items based on authentication status
+  const navigationItems = user 
+    ? [...publicNavigationItems, ...authenticatedNavigationItems]
+    : publicNavigationItems;
 
   const handleLogout = () => {
     if (onLogout) {
@@ -158,10 +168,28 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
                 )}
               </div>
             ) : (
-              <div className="d-flex align-items-center">
-                <Link to="/login" className="nav-link text-light opacity-75">
-                  Sign In
-                </Link>
+              <div className="nav-item dropdown">
+                <button
+                  className="nav-link dropdown-toggle d-flex align-items-center border-0 bg-transparent text-light"
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                >
+                  <User style={{ width: '16px', height: '16px' }} className="me-2" />
+                  Account
+                </button>
+
+                {/* Account Dropdown Menu */}
+                {isUserMenuOpen && (
+                  <div className="dropdown-menu dropdown-menu-end show position-absolute bg-white border shadow-lg rounded" style={{ top: '100%', right: '0', minWidth: '160px' }}>
+                    <Link to="/login" className="dropdown-item d-flex align-items-center">
+                      <LogIn style={{ width: '16px', height: '16px' }} className="me-2" />
+                      Sign In
+                    </Link>
+                    <Link to="/register" className="dropdown-item d-flex align-items-center">
+                      <UserPlus style={{ width: '16px', height: '16px' }} className="me-2" />
+                      Sign Up
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
           </div>
