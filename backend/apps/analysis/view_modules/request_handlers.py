@@ -623,12 +623,26 @@ def finalize_analysis_response(request, data, analysis_results, analysis_type, f
         logger.info(f"Adding cloud masking settings to {analysis_type} response: enabled={use_cloud_masking}, strict={strict_masking}")
 
         # Save to database
-        save_analysis_to_database(
+        # Extract project from request data if provided
+        project = None
+        if data.get('project_id'):
+            try:
+                from apps.core.models import AnalysisProject
+                project = AnalysisProject.objects.get(id=data['project_id'], user=request.user)
+            except AnalysisProject.DoesNotExist:
+                logger.warning(f"Project {data['project_id']} not found for user {request.user}")
+        
+        analysis_id = save_analysis_to_database(
             data,
             analysis_results,
             analysis_type,
-            request.user if request.user.is_authenticated else None
+            request.user if request.user.is_authenticated else None,
+            project
         )
+        
+        # Add analysis ID to response
+        if analysis_id:
+            analysis_results['analysis_id'] = analysis_id
 
         # Generate CSV and plot files if data exists
         if analysis_results.get('data'):

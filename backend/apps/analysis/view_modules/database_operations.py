@@ -14,12 +14,13 @@ from ..models import AnalysisRequest, AnalysisResult
 logger = logging.getLogger(__name__)
 
 
-def save_analysis_to_database(request_data, analysis_results, analysis_type, user=None):
+def save_analysis_to_database(request_data, analysis_results, analysis_type, user=None, project=None):
     """Save analysis request and results to database."""
     try:
         # Extract parameters from request_data to match model fields
         analysis_request = AnalysisRequest.objects.create(
             user=user,
+            project=project,
             name=f"{analysis_type.upper()} Analysis {timezone.now().strftime('%Y-%m-%d %H:%M')}",
             analysis_type=analysis_type,
             satellite=request_data.get('satellite', 'landsat'),

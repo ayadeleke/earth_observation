@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import authService from '../services/authService';
 
 interface Project {
   id: number;
@@ -15,24 +16,38 @@ const ProjectsPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
 
   useEffect(() => {
     loadProjects();
   }, []);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setActiveDropdown(null);
+    };
+    
+    if (activeDropdown !== null) {
+      document.addEventListener('click', handleClickOutside);
+      return () => {
+        document.removeEventListener('click', handleClickOutside);
+      };
+    }
+  }, [activeDropdown]);
+
   const loadProjects = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8000/projects/');
-      if (response.ok) {
-        const data = await response.json();
-        setProjects(data);
-      } else {
-        setError('Failed to load projects');
-      }
+      const api = authService.getAuthenticatedAPI();
+      const response = await api.get('/projects/');
+      // Handle paginated response - projects are in response.data.results
+      const projectsData = response.data.results ? Array.isArray(response.data.results) ? response.data.results : [] : [];
+      setProjects(projectsData);
     } catch (error) {
       console.error('Error loading projects:', error);
       setError('Failed to connect to server');
+      setProjects([]);
     } finally {
       setLoading(false);
     }
@@ -44,15 +59,10 @@ const ProjectsPage: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/projects/${projectId}/`, {
-        method: 'DELETE',
-      });
+      const api = authService.getAuthenticatedAPI();
+      await api.delete(`/projects/${projectId}/`);
 
-      if (response.ok) {
-        setProjects(projects.filter(p => p.id !== projectId));
-      } else {
-        alert('Failed to delete project');
-      }
+      setProjects(projects.filter(p => p.id !== projectId));
     } catch (error) {
       console.error('Error deleting project:', error);
       alert('Failed to delete project');
@@ -150,50 +160,64 @@ const ProjectsPage: React.FC = () => {
                               <p className="card-text text-muted mb-3">{project.description}</p>
                             )}
                           </div>
-                          <div className="dropdown">
+                          <div className="dropdown position-relative">
                             <button
                               className="btn btn-link text-muted p-0"
                               type="button"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveDropdown(activeDropdown === project.id ? null : project.id);
+                              }}
                             >
                               <i className="fas fa-ellipsis-v"></i>
                             </button>
-                            <ul className="dropdown-menu">
-                              <li>
+                            {activeDropdown === project.id && (
+                              <div className="dropdown-menu dropdown-menu-end show position-absolute" style={{ 
+                                right: 0, 
+                                top: '100%',
+                                zIndex: 1050
+                              }}>
                                 <button
                                   className="dropdown-item"
-                                  onClick={() => openProject(project.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveDropdown(null);
+                                    openProject(project.id);
+                                  }}
                                 >
                                   <i className="fas fa-play me-2"></i>
                                   Open Project
                                 </button>
-                              </li>
-                              <li><hr className="dropdown-divider" /></li>
-                              <li>
+                                <hr className="dropdown-divider" />
                                 <button
                                   className="dropdown-item text-danger"
-                                  onClick={() => deleteProject(project.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveDropdown(null);
+                                    deleteProject(project.id);
+                                  }}
                                 >
                                   <i className="fas fa-trash me-2"></i>
                                   Delete
                                 </button>
-                              </li>
-                            </ul>
+                              </div>
+                            )}
                           </div>
                         </div>
                         
                         <div className="text-muted small mb-3">
-                          <i className="fas fa-calendar-plus me-1"></i>
-                          Created {formatDate(project.created_at)}
+                          {project.updated_at !== project.created_at ? (
+                            <>
+                              <i className="fas fa-edit me-1"></i>
+                              Last updated {formatDate(project.updated_at)}
+                            </>
+                          ) : (
+                            <>
+                              <i className="fas fa-calendar-plus me-1"></i>
+                              Created {formatDate(project.created_at)}
+                            </>
+                          )}
                         </div>
-                        
-                        {project.updated_at !== project.created_at && (
-                          <div className="text-muted small mb-3">
-                            <i className="fas fa-edit me-1"></i>
-                            Updated {formatDate(project.updated_at)}
-                          </div>
-                        )}
                         
                         <button
                           className="btn btn-primary w-100"

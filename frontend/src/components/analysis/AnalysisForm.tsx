@@ -22,6 +22,7 @@ interface AnalysisFormProps {
   loading?: boolean;
   error?: string;
   initialData?: Partial<FormData>;
+  initialDateRangeType?: string;
 }
 
 export const AnalysisForm: React.FC<AnalysisFormProps> = ({
@@ -29,7 +30,8 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
   onAreaSelect,
   loading = false,
   error = '',
-  initialData = {}
+  initialData = {},
+  initialDateRangeType = 'years'
 }) => {
   const [formData, setFormData] = useState<FormData>({
     coordinates: '',
@@ -48,7 +50,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
   });
 
   const [activeTab, setActiveTab] = useState<string>('coordinates');
-  const [dateRangeType, setDateRangeType] = useState<string>('years');
+  const [dateRangeType, setDateRangeType] = useState<string>(initialDateRangeType);
   const [eeStatus, setEeStatus] = useState<any>(null);
 
   // Check Earth Engine status on component mount
@@ -73,6 +75,21 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
 
     checkEarthEngineStatus();
   }, []);
+
+  // Update form data when initialData changes (for loading saved analyses)
+  useEffect(() => {
+    if (initialData && Object.keys(initialData).length > 0) {
+      setFormData((prev: FormData) => ({
+        ...prev,
+        ...initialData
+      }));
+    }
+  }, [initialData]);
+
+  // Update date range type when initialDateRangeType changes
+  useEffect(() => {
+    setDateRangeType(initialDateRangeType);
+  }, [initialDateRangeType]);
 
   // Handle input changes
   const handleInputChange = (e: any) => {
