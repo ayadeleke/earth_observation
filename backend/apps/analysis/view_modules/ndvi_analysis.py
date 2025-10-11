@@ -1,6 +1,6 @@
 """
 NDVI Analysis module for processing Normalized Difference Vegetation Index.
-Handles Landsat and Sentinel-2 NDVI calculations.
+Handles Landsat and Sentinel-2 NDVI calculations with caching support.
 """
 
 import logging
@@ -8,6 +8,7 @@ import ee
 from datetime import datetime
 from collections import defaultdict
 from .earth_engine import get_landsat_collection, get_sentinel2_collection
+from apps.core.caching import cache_analysis_result, cache_earth_engine_data, AnalysisCache, monitor_performance
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +181,8 @@ def calculate_annual_means(sample_data, value_key='ndvi'):
         return sample_data  # Return original data if calculation fails
 
 
+@cache_analysis_result(timeout=3600, key_prefix="ndvi_analysis")
+@monitor_performance
 def process_ndvi_analysis(geometry, start_date, end_date, satellite="landsat", cloud_cover=20, use_cloud_masking=False, strict_masking=False):
     """Process NDVI analysis using Earth Engine"""
     try:
@@ -211,6 +214,8 @@ def process_ndvi_analysis(geometry, start_date, end_date, satellite="landsat", c
         raise
 
 
+@cache_analysis_result(timeout=3600, key_prefix="landsat_ndvi")
+@monitor_performance
 def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20, use_cloud_masking=False, strict_masking=False):
     """Process Landsat NDVI analysis with correct Ghana coordinates"""
     try:

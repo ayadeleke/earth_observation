@@ -1,6 +1,5 @@
 """
-URL patterns for the core app.
-These match the Flask app routes for authentication and basic functionality.
+URL patterns for the core app for authentication and basic functionality.
 """
 
 from django.urls import path
@@ -19,7 +18,7 @@ urlpatterns = [
     path("token/verify/", TokenVerifyView.as_view(), name="token_verify"),
     path("change-password/", views.ChangePasswordView.as_view(), name="change_password"),
     
-    # Earth Engine authentication endpoints (matching Flask routes)
+    # Earth Engine authentication endpoints
     path("check_ee/", views.check_earth_engine, name="check_earth_engine"),
     path("auth/ee/check/", views.check_auth, name="check_auth"),
     path("auth/ee/status/", views.auth_status, name="auth_status"),

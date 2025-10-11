@@ -28,9 +28,9 @@ export const Footer: React.FC = () => {
 
   const companyLinks = [
     { href: '/about', label: 'About Us' },
-    { href: '/contact', label: 'Contact' },
-    { href: '/careers', label: 'Careers' },
-    { href: '/blog', label: 'Blog' },
+    { href: '/#', label: 'Contact' },
+    { href: '/#', label: 'Careers' },
+    { href: '/#', label: 'Blog' },
   ];
 
   const resourceLinks = [
