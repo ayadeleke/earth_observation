@@ -1,8 +1,9 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { Layout } from './components/layout';
-import LandingPage from './components/LandingPage';
+import LandingPage from './pages/LandingPage';
 import DemoPage from './pages/DemoPage';
+import AboutPage from './pages/AboutPage';
 import AnalysisPage from './pages/AnalysisPage';
 import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
@@ -50,6 +51,7 @@ const AppContent: React.FC = () => {
     <Layout user={transformUser(user)} onLogout={logout} showFooter={shouldShowFooter}>
       <Routes>
         <Route path="/demo" element={<DemoPage />} />
+        <Route path="/about" element={<AboutPage />} />
         <Route path="/analysis" element={
           <ProtectedRoute>
             <AnalysisPage />

@@ -1,7 +1,11 @@
 """
 Minimal views module that imports and exposes all endpoints from micro-modules.
-This file acts as the main entry point for all analysis endpoints.
+This file acts as the main entry point for all analysis endpoints with caching support.
 """
+
+# Import caching utilities
+from .cached_views import CachedAnalysisViewMixin, SmartCacheInvalidator
+from apps.core.caching import AnalysisCache
 
 # Import from basic endpoints module (NDVI, LST, SAR)
 from .view_modules.basic_endpoints import (

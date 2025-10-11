@@ -13,7 +13,8 @@ import {
   LogIn,
   UserPlus,
   Layout as LayoutIcon,
-  FolderOpen
+  FolderOpen,
+  Info
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -34,20 +35,22 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   // Navigation items that are always visible
   const publicNavigationItems = [
     { path: '/', label: 'Home', icon: Home },
-    { path: '/demo', label: 'Demo', icon: Globe },
+    // Only show demo for non-authenticated users
+    ...(user ? [] : [{ path: '/demo', label: 'Demo', icon: Globe }]),
   ];
 
   // Navigation items only visible to authenticated users
   const authenticatedNavigationItems = [
-    { path: '/analysis', label: 'Analysis', icon: BarChart3 },
     { path: '/dashboard', label: 'Dashboard', icon: LayoutIcon },
+    { path: '/analysis', label: 'Analysis', icon: BarChart3 },
     { path: '/projects', label: 'Projects', icon: FolderOpen },
+    { path: '/about', label: 'About', icon: Info },
   ];
 
   // Combine navigation items based on authentication status
-  const navigationItems = user 
+  const navigationItems = user
     ? [...publicNavigationItems, ...authenticatedNavigationItems]
-    : publicNavigationItems;
+    : [...publicNavigationItems, { path: '/about', label: 'About', icon: Info }];
 
   const handleLogout = () => {
     if (onLogout) {
@@ -127,11 +130,11 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                 >
                   <div className="rounded-circle d-flex align-items-center justify-content-center me-2" 
-                       style={{ 
-                         width: '32px', 
-                         height: '32px', 
-                         background: 'linear-gradient(135deg, #60a5fa 0%, #a855f7 100%)' 
-                       }}>
+                        style={{ 
+                          width: '32px', 
+                          height: '32px', 
+                          background: 'linear-gradient(135deg, #60a5fa 0%, #a855f7 100%)' 
+                        }}>
                     {user.avatar ? (
                       <img src={user.avatar} alt={user.name} className="rounded-circle" style={{ width: '32px', height: '32px' }} />
                     ) : (

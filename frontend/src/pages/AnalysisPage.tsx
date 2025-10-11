@@ -27,6 +27,57 @@ const AnalysisPage: React.FC = () => {
   const [initialDateRangeType, setInitialDateRangeType] = useState<string>('years');
   const [mapDrawnCoordinates, setMapDrawnCoordinates] = useState<string>('');
 
+  // Delete analysis function
+  const deleteAnalysis = async (analysisId: number, analysisName: string) => {
+    if (!window.confirm(`Are you sure you want to delete the analysis "${analysisName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const token = authService.getAccessToken();
+      const response = await fetch(`http://localhost:8000/api/v1/analysis/delete/${analysisId}/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        // Remove the deleted analysis from the local state
+        setProjectAnalyses(prev => prev.filter(analysis => analysis.id !== analysisId));
+        
+        // Clear current selection if the deleted analysis was selected
+        if (selectedAnalysis?.id === analysisId) {
+          setSelectedAnalysis(null);
+          setFormInitialData({});
+          setResults(null);
+          setShowResults(false);
+          setGeometryForMap(null);
+          setLastFormData(null);
+          setLoadedAnalysisMessage('');
+          setInitialDateRangeType('years');
+        }
+        
+        setLoadedAnalysisMessage(`Analysis "${result.deleted_analysis?.name || analysisName}" deleted successfully`);
+        
+        // Clear the success message after 5 seconds
+        setTimeout(() => {
+          setLoadedAnalysisMessage('');
+        }, 5000);
+        
+      } else {
+        const errorData = await response.json();
+        setError(`Failed to delete analysis: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error deleting analysis:', err);
+      setError('Failed to delete analysis. Please try again.');
+    }
+  };
+
   // Helper function to convert GeoJSON to WKT
   const convertGeoJSONToWKT = (geoJson: any): string => {
     try {
@@ -319,6 +370,16 @@ const AnalysisPage: React.FC = () => {
         console.log('Original time_series_data sample:', result.time_series_data?.slice(0, 2));
         console.log('Original statistics:', result.statistics);
         
+        // Check if this is a duplicate analysis
+        if (result.is_duplicate) {
+          setLoadedAnalysisMessage(`${result.duplicate_message || 'Loaded existing analysis with same parameters'}`);
+          
+          // Set a timeout to clear the duplicate message after 7 seconds
+          setTimeout(() => {
+            setLoadedAnalysisMessage('');
+          }, 7000);
+        }
+        
         setResults(result);
         setShowResults(true);
         setError(''); // Clear any previous errors
@@ -607,70 +668,82 @@ const AnalysisPage: React.FC = () => {
                           <strong>Satellite:</strong> {analysis.satellite}<br/>
                           <strong>Date Range:</strong> {analysis.start_date} to {analysis.end_date}
                         </p>
-                        <button
-                          className={`btn ${selectedAnalysis?.id === analysis.id ? 'btn-primary' : 'btn-outline-primary'} btn-sm`}
-                          onClick={() => {
-                            setSelectedAnalysis(analysis);
-                            if (analysis.results) {
-                              // Process saved results the same way as fresh analysis results
-                              console.log('=== Loading Saved Analysis Results ===');
-                              console.log('Saved analysis data:', analysis.results);
-                              
-                              // Set the results directly - they should have the same structure as fresh results
-                              setResults(analysis.results);
-                              setShowResults(true);
-                              
-                              // Create form data for proper transformation and form population
-                              const formData = {
-                                analysisType: analysis.analysis_type,
-                                satellite: analysis.satellite,
-                                startDate: analysis.start_date,
-                                endDate: analysis.end_date,
-                                cloudCover: analysis.cloud_cover || 20,
-                                cloudCoverValue: analysis.cloud_cover || 20, // Sync with cloudCover
-                                coordinates: convertGeoJSONToWKT(analysis.geometry_data),
-                                // Convert boolean fields to form format
-                                enableCloudMasking: analysis.use_cloud_masking !== undefined ? analysis.use_cloud_masking : true,
-                                maskingStrictness: analysis.strict_masking ? 'true' : 'false', // Form expects 'true'/'false' strings
-                                polarization: analysis.polarization || 'VV',
-                                // Add year fields if needed (extract from dates)
-                                startYear: new Date(analysis.start_date).getFullYear(),
-                                endYear: new Date(analysis.end_date).getFullYear()
-                              };
-                              
-                              // Set form data for dashboard transformation
-                              setLastFormData(formData);
-                              
-                              // Set initial data for the form to populate fields
-                              setFormInitialData(formData);
-                              
-                              // Set date range type to 'dates' since saved analyses use specific dates
-                              setInitialDateRangeType('dates');
-                              
-                              // Set success message
-                              setLoadedAnalysisMessage(`Loaded ${analysis.analysis_type.toUpperCase()} analysis from ${new Date(analysis.created_at).toLocaleDateString()}`);
-                              
-                              console.log('Set form data for saved analysis:', formData);
-                              
-                              // Update map geometry if available
-                              if (analysis.geometry_data) {
-                                // Use the original GeoJSON for map display
-                                let mapGeometry = analysis.geometry_data;
+                        <div className="d-flex gap-2">
+                          <button
+                            className={`btn ${selectedAnalysis?.id === analysis.id ? 'btn-primary' : 'btn-outline-primary'} btn-sm flex-grow-1`}
+                            onClick={() => {
+                              setSelectedAnalysis(analysis);
+                              if (analysis.results) {
+                                // Process saved results the same way as fresh analysis results
+                                console.log('=== Loading Saved Analysis Results ===');
+                                console.log('Saved analysis data:', analysis.results);
                                 
-                                // Convert FeatureCollection to simple geometry for map
-                                if (mapGeometry.type === 'FeatureCollection' && mapGeometry.features && mapGeometry.features.length > 0) {
-                                  mapGeometry = mapGeometry.features[0].geometry;
-                                } else if (mapGeometry.type === 'Feature' && mapGeometry.geometry) {
-                                  mapGeometry = mapGeometry.geometry;
+                                // Set the results directly - they should have the same structure as fresh results
+                                setResults(analysis.results);
+                                setShowResults(true);
+                                
+                                // Create form data for proper transformation and form population
+                                const formData = {
+                                  analysisType: analysis.analysis_type,
+                                  satellite: analysis.satellite,
+                                  startDate: analysis.start_date,
+                                  endDate: analysis.end_date,
+                                  cloudCover: analysis.cloud_cover || 20,
+                                  cloudCoverValue: analysis.cloud_cover || 20, // Sync with cloudCover
+                                  coordinates: convertGeoJSONToWKT(analysis.geometry_data),
+                                  // Convert boolean fields to form format
+                                  enableCloudMasking: analysis.use_cloud_masking !== undefined ? analysis.use_cloud_masking : true,
+                                  maskingStrictness: analysis.strict_masking ? 'true' : 'false', // Form expects 'true'/'false' strings
+                                  polarization: analysis.polarization || 'VV',
+                                  // Add year fields if needed (extract from dates)
+                                  startYear: new Date(analysis.start_date).getFullYear(),
+                                  endYear: new Date(analysis.end_date).getFullYear()
+                                };
+                                
+                                // Set form data for dashboard transformation
+                                setLastFormData(formData);
+                                
+                                // Set initial data for the form to populate fields
+                                setFormInitialData(formData);
+                                
+                                // Set date range type to 'dates' since saved analyses use specific dates
+                                setInitialDateRangeType('dates');
+                                
+                                // Set success message
+                                setLoadedAnalysisMessage(`Loaded ${analysis.analysis_type.toUpperCase()} analysis from ${new Date(analysis.created_at).toLocaleDateString()}`);
+                                
+                                console.log('Set form data for saved analysis:', formData);
+                                
+                                // Update map geometry if available
+                                if (analysis.geometry_data) {
+                                  // Use the original GeoJSON for map display
+                                  let mapGeometry = analysis.geometry_data;
+                                  
+                                  // Convert FeatureCollection to simple geometry for map
+                                  if (mapGeometry.type === 'FeatureCollection' && mapGeometry.features && mapGeometry.features.length > 0) {
+                                    mapGeometry = mapGeometry.features[0].geometry;
+                                  } else if (mapGeometry.type === 'Feature' && mapGeometry.geometry) {
+                                    mapGeometry = mapGeometry.geometry;
+                                  }
+                                  
+                                  setGeometryForMap(mapGeometry);
                                 }
-                                
-                                setGeometryForMap(mapGeometry);
                               }
-                            }
-                          }}
-                        >
-                          {selectedAnalysis?.id === analysis.id ? 'Current' : 'Load Results'}
-                        </button>
+                            }}
+                          >
+                            {selectedAnalysis?.id === analysis.id ? 'Current' : 'Load Results'}
+                          </button>
+                          <button
+                            className="btn btn-outline-danger btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteAnalysis(analysis.id, `${analysis.analysis_type.toUpperCase()} (${new Date(analysis.created_at).toLocaleDateString()})`);
+                            }}
+                            title="Delete this analysis"
+                          >
+                            <i className="fas fa-trash"></i>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -692,8 +765,8 @@ const AnalysisPage: React.FC = () => {
               </div>
             )}
             {loadedAnalysisMessage && (
-              <div className="alert alert-success" role="alert">
-                <i className="fas fa-check-circle me-2"></i>
+              <div className={`alert ${loadedAnalysisMessage.includes('duplicate') || loadedAnalysisMessage.includes('existing') ? 'alert-warning' : 'alert-success'}`} role="alert">
+                <i className={`fas ${loadedAnalysisMessage.includes('duplicate') || loadedAnalysisMessage.includes('existing') ? 'fa-info-circle' : 'fa-check-circle'} me-2`}></i>
                 {loadedAnalysisMessage}
                 <button
                   type="button"

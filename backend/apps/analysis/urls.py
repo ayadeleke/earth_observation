@@ -1,6 +1,5 @@
 """
 URL patterns for the analysis app.
-These match the Flask app processing routes.
 All analysis endpoints now require authentication.
 """
 

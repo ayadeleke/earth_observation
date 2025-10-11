@@ -632,7 +632,7 @@ def finalize_analysis_response(request, data, analysis_results, analysis_type, f
             except AnalysisProject.DoesNotExist:
                 logger.warning(f"Project {data['project_id']} not found for user {request.user}")
         
-        analysis_id = save_analysis_to_database(
+        save_result = save_analysis_to_database(
             data,
             analysis_results,
             analysis_type,
@@ -640,9 +640,18 @@ def finalize_analysis_response(request, data, analysis_results, analysis_type, f
             project
         )
         
-        # Add analysis ID to response
-        if analysis_id:
-            analysis_results['analysis_id'] = analysis_id
+        # Handle save result
+        if save_result:
+            analysis_results['analysis_id'] = save_result['analysis_id']
+            if save_result.get('is_duplicate'):
+                analysis_results['is_duplicate'] = True
+                analysis_results['duplicate_message'] = save_result['message']
+                logger.info(f"Returning existing analysis: {save_result['message']}")
+            else:
+                analysis_results['is_duplicate'] = False
+                logger.info(f"Created new analysis: {save_result['message']}")
+        else:
+            logger.warning("Failed to save analysis to database")
 
         # Generate CSV and plot files if data exists
         if analysis_results.get('data'):
