@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import { Layout } from './components/layout';
 import LandingPage from './pages/LandingPage';
 import DemoPage from './pages/DemoPage';
@@ -85,19 +86,24 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => {
+    // Google OAuth Client ID - In production, this should be in environment variables
+    const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "7503931462-u4vjc2r8te3lcsa2ccmge0j6g2sabru0.apps.googleusercontent.com";
+    
     return (
-        <AuthProvider>
-            <Router
-                future={{
-                    v7_startTransition: true,
-                    v7_relativeSplatPath: true
-                }}
-            >
-                <div className="App">
-                    <AppContent />
-                </div>
-            </Router>
-        </AuthProvider>
+        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+            <AuthProvider>
+                <Router
+                    future={{
+                        v7_startTransition: true,
+                        v7_relativeSplatPath: true
+                    }}
+                >
+                    <div className="App">
+                        <AppContent />
+                    </div>
+                </Router>
+            </AuthProvider>
+        </GoogleOAuthProvider>
     );
 };
 

@@ -25,6 +25,7 @@ const AnalysisPage: React.FC = () => {
   const [formInitialData, setFormInitialData] = useState<any>({});
   const [loadedAnalysisMessage, setLoadedAnalysisMessage] = useState<string>('');
   const [initialDateRangeType, setInitialDateRangeType] = useState<string>('years');
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [mapDrawnCoordinates, setMapDrawnCoordinates] = useState<string>('');
 
   // Delete analysis function
@@ -258,7 +259,7 @@ const AnalysisPage: React.FC = () => {
         
         contentType = 'multipart/form-data';
       } else {
-        // Use JSON for regular requests - match Flask parameter structure
+        // Use JSON for regular requests
         const requestBody: any = {
           coordinates: formData.coordinates,
           analysis_type: formData.analysisType,
@@ -267,7 +268,7 @@ const AnalysisPage: React.FC = () => {
           date_range_type: dateRangeType
         };
 
-        // Add date parameters based on range type (match Flask behavior)
+        // Add date parameters based on range type
         if (dateRangeType === 'years') {
           requestBody.start_year = parseInt(formData.startYear?.toString() || new Date(formData.startDate).getFullYear().toString());
           requestBody.end_year = parseInt(formData.endYear?.toString() || new Date(formData.endDate).getFullYear().toString());
@@ -276,7 +277,7 @@ const AnalysisPage: React.FC = () => {
           requestBody.end_date = formData.endDate;
         }
 
-        // Add cloud cover and masking parameters for all optical satellites (match Flask field names)
+        // Add cloud cover and masking parameters for all optical satellites
         if (formData.satellite !== 'sentinel1' && ['ndvi', 'lst', 'comprehensive'].includes(formData.analysisType)) {
           requestBody.cloud_cover = parseInt(formData.cloudCover.toString());
           requestBody.use_cloud_masking = formData.enableCloudMasking;

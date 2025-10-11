@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Satellite, 
@@ -29,8 +29,25 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+
+    if (isUserMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [isUserMenuOpen]);
 
   // Navigation items that are always visible
   const publicNavigationItems = [
@@ -124,7 +141,7 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
           {/* User Menu */}
           <div className="navbar-nav">
             {user ? (
-              <div className="nav-item dropdown">
+              <div className="nav-item dropdown" ref={dropdownRef}>
                 <button
                   className="nav-link dropdown-toggle d-flex align-items-center border-0 bg-transparent"
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -171,7 +188,7 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
                 )}
               </div>
             ) : (
-              <div className="nav-item dropdown">
+              <div className="nav-item dropdown" ref={dropdownRef}>
                 <button
                   className="nav-link dropdown-toggle d-flex align-items-center border-0 bg-transparent text-light"
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}

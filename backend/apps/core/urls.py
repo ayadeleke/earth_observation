@@ -12,6 +12,7 @@ urlpatterns = [
     path("login/", views.LoginView.as_view(), name="login"),
     path("logout/", views.LogoutView.as_view(), name="logout"),
     path("profile/", views.UserProfileView.as_view(), name="profile"),
+    path("auth/google/", views.GoogleOAuthView.as_view(), name="google_oauth"),
     
     # JWT Token management
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),

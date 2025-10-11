@@ -1,10 +1,13 @@
 """
 Core views for the GeoAnalysis Django application.
-Provides Earth Engine authentication and basic endpoints that match the Flask app functionality.
+Provides Earth Engine authentication and basic endpoints for app functionality.
 """
 
 import logging
 from datetime import datetime
+import requests
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 from rest_framework import generics, status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -227,7 +230,7 @@ class FileUploadListCreateView(generics.ListCreateAPIView):
         serializer.save(user=self.request.user)
 
 
-# Earth Engine Authentication Views (matching Flask routes)
+# Earth Engine Authentication Views
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def authenticate_earth_engine(request):
@@ -273,8 +276,7 @@ def authenticate_earth_engine(request):
 @permission_classes([permissions.AllowAny])
 def check_earth_engine(request):
     """
-    Check Earth Engine initialization status.
-    Matches Flask /check_ee endpoint.
+    Check Earth Engine authentication status.
     """
     try:
         project_id = None
@@ -329,7 +331,6 @@ def check_earth_engine(request):
 def check_auth(request):
     """
     Check Earth Engine authentication status.
-    Matches Flask /auth/ee/check endpoint.
     """
     try:
         is_authenticated = request.session.get("ee_initialized", False)
@@ -348,7 +349,6 @@ def check_auth(request):
 def auth_status(request):
     """
     Get detailed authentication status.
-    Matches Flask /auth/ee/status endpoint.
     """
     try:
         is_authenticated = request.session.get("ee_initialized", False)
@@ -375,7 +375,6 @@ def auth_status(request):
 def clear_auth(request):
     """
     Clear Earth Engine authentication.
-    Matches Flask /auth/ee/clear endpoint.
     """
     try:
         # Clear session data
@@ -400,8 +399,7 @@ def clear_auth(request):
 @permission_classes([permissions.AllowAny])
 def get_analysis_capabilities(request):
     """
-    Get available analysis capabilities.
-    Matches Flask /get_analysis_capabilities endpoint.
+    Get available analysis capabilities from the endpoint.
     """
     return Response(
         {
@@ -458,7 +456,6 @@ def get_analysis_capabilities(request):
 def demo_endpoint(request):
     """
     Demo mode endpoint for testing without Earth Engine.
-    Matches Flask /demo endpoint.
     """
     try:
         # Default demo parameters
@@ -660,3 +657,96 @@ def get_project_analyses(request, project_id):
             {"error": f"Failed to retrieve project analyses: {str(e)}"}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class GoogleOAuthView(APIView):
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        """
+        Handle Google OAuth authentication
+        """
+        try:
+            access_token = request.data.get('access_token')
+            user_info = request.data.get('user_info')
+            
+            if not access_token or not user_info:
+                return Response(
+                    {"error": "Access token and user info are required"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify the access token with Google
+            google_response = requests.get(
+                f'https://www.googleapis.com/oauth2/v1/tokeninfo?access_token={access_token}'
+            )
+            
+            if google_response.status_code != 200:
+                return Response(
+                    {"error": "Invalid access token"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            token_info = google_response.json()
+            
+            # Extract user information
+            email = user_info.get('email')
+            name = user_info.get('name', '')
+            google_id = user_info.get('id')
+            
+            if not email:
+                return Response(
+                    {"error": "Email is required"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if user exists
+            try:
+                user = User.objects.get(email=email)
+                # Update user info if needed
+                if name and not user.first_name:
+                    name_parts = name.split(' ', 1)
+                    user.first_name = name_parts[0]
+                    if len(name_parts) > 1:
+                        user.last_name = name_parts[1]
+                    user.save()
+            except User.DoesNotExist:
+                # Create new user
+                name_parts = name.split(' ', 1) if name else ['', '']
+                user = User.objects.create_user(
+                    username=email,  # Use email as username
+                    email=email,
+                    first_name=name_parts[0] if name_parts else '',
+                    last_name=name_parts[1] if len(name_parts) > 1 else '',
+                    is_active=True
+                )
+                # Set an unusable password since they're using OAuth
+                user.set_unusable_password()
+                user.save()
+            
+            # Generate JWT tokens
+            refresh = RefreshToken.for_user(user)
+            
+            # Create user response data
+            user_data = {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+            }
+            
+            return Response({
+                'message': 'Google authentication successful',
+                'user': user_data,
+                'token': str(refresh.access_token),
+                'refresh': str(refresh),
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Google OAuth error: {str(e)}")
+            return Response(
+                {"error": "Authentication failed"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
