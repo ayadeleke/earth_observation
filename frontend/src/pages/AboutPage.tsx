@@ -11,8 +11,7 @@ import {
   Leaf,
   Eye,
   TrendingUp,
-  CheckCircle,
-  User
+  CheckCircle
 } from 'lucide-react';
 
 const AboutPage: React.FC = () => {

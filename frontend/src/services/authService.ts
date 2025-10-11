@@ -192,6 +192,41 @@ class AuthService {
   }
 
   /**
+   * Login with Google OAuth
+   */
+  async loginWithGoogle(accessToken: string): Promise<User> {
+    try {
+      // Get user info from Google
+      const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      
+      if (!userInfoResponse.ok) {
+        throw new Error('Failed to get user info from Google');
+      }
+      
+      const userInfo = await userInfoResponse.json();
+
+      // Send both access token and user info to backend
+      const response = await api.post('/auth/google/', { 
+        access_token: accessToken,
+        user_info: userInfo
+      });
+      const { user, access, refresh } = response.data;
+
+      this.saveTokensToStorage({ access, refresh });
+      this.saveUserToStorage(user);
+
+      return user;
+    } catch (error) {
+      console.error('Google login error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Logout user
    */
   async logout(): Promise<void> {

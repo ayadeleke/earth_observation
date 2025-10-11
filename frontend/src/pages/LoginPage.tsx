@@ -3,10 +3,11 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useGoogleLogin } from '@react-oauth/google';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -79,10 +80,29 @@ const LoginPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };  const handleGoogleLogin = () => {
-    // TODO: Implement Google OAuth
-    console.log('Google login clicked');
-    alert('Google OAuth login is not yet implemented. Please use email/password login or demo access.');
+  };
+
+  const googleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      try {
+        setLoading(true);
+        await loginWithGoogle(tokenResponse.access_token);
+        navigate('/dashboard');
+      } catch (error) {
+        console.error('Google login error:', error);
+        setErrors({ general: 'Google login failed. Please try again.' });
+      } finally {
+        setLoading(false);
+      }
+    },
+    onError: (error) => {
+      console.error('Google login error:', error);
+      setErrors({ general: 'Google login failed. Please try again.' });
+    },
+  });
+
+  const handleGoogleLogin = () => {
+    googleLogin();
   };
 
   const handleDemoLogin = () => {
@@ -134,9 +154,9 @@ const LoginPage: React.FC = () => {
               {/* Login Form */}
               <form onSubmit={handleSubmit}>
                 {/* Form-level errors */}
-                {errors.form && (
+                {(errors.form || errors.general) && (
                   <div className="alert alert-danger bg-danger bg-opacity-25 border-danger mb-3">
-                    <p className="text-danger small mb-0">{errors.form}</p>
+                    <p className="text-danger small mb-0">{errors.form || errors.general}</p>
                   </div>
                 )}
 

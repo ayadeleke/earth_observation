@@ -1,5 +1,15 @@
 /**
- * Authentication context for the Earth Observation application
+ * Authentication context for the Earth Observati    initializeAuth();
+  }, []);
+
+  // Debug effect to monitor user state changes
+  useEffect(() => {
+    console.log('AuthContext user state changed:', user);
+    console.log('AuthService isAuthenticated:', authService.isAuthenticated());
+    console.log('AuthService getCurrentUser:', authService.getCurrentUser());
+  }, [user]);
+
+  const login = async (email: string, password: string): Promise<void> => {pplication
  * Provides authentication state and methods throughout the app
  */
 
@@ -12,6 +22,7 @@ interface AuthContextType {
   isEarthEngineAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (accessToken: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
@@ -80,6 +91,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const loginWithGoogle = async (accessToken: string): Promise<void> => {
+    try {
+      setIsLoading(true);
+      const user = await authService.loginWithGoogle(accessToken);
+      setUser(user);
+    } catch (error) {
+      console.error('Google login error:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = async (): Promise<void> => {
     try {
       setIsLoading(true);
@@ -140,10 +164,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const value: AuthContextType = {
     user,
-    isAuthenticated: authService.isAuthenticated(),
+    isAuthenticated: !!user,
     isEarthEngineAuthenticated: authService.isEarthEngineAuthenticated(),
     isLoading,
     login,
+    loginWithGoogle,
     register,
     logout,
     updateProfile,
