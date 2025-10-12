@@ -1,6 +1,5 @@
 """
 Main URL configuration for GeoAnalysis project.
-Matches the Flask app URL structure for compatibility.
 """
 
 from django.contrib import admin

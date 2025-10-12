@@ -218,7 +218,7 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
                     except Exception as e:
                         logger.warning(f"Error extracting date from image ID: {e}")
 
-                # Final fallback - this should not happen with our improved metadata generation
+                # Final fallback
                 if not date_str:
                     logger.warning(f"No valid date found, skipping sample {valid_data_count}")
                     continue
@@ -283,8 +283,8 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
 
                 sample_data.append({
                     "date": date_str,
-                    "backscatter_vv": vv_value,  # Changed to match frontend expectation
-                    "backscatter_vh": vh_value,  # Changed to match frontend expectation
+                    "backscatter_vv": vv_value,  # match frontend expectation
+                    "backscatter_vh": vh_value,  # match frontend expectation
                     "vv_backscatter": vv_value,  # Keep for backward compatibility
                     "vh_backscatter": vh_value,  # Keep for backward compatibility
                     "vv_vh_ratio": round(vv_value / vh_value if vh_value != 0 else 0, 3),

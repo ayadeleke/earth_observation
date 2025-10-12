@@ -103,7 +103,7 @@ def filter_for_complete_coverage(collection, geometry):
         # Add coverage properties to all images
         collection_with_coverage = collection.map(check_coverage)
 
-        # Filter for images that completely cover the ROI (>99% coverage - stricter than Flask)
+        # Filter for images that completely cover the ROI (>99% coverage)
         complete_coverage = collection_with_coverage.filter(
             ee.Filter.And(
                 ee.Filter.eq('roi_covered', True),
@@ -626,7 +626,7 @@ def get_image_metadata(request):
                 "error": f"Unsupported satellite: {satellite}"
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Apply complete coverage filtering to match Flask behavior
+        # Apply complete coverage filtering
         logger.info(f"Total images before coverage filtering: {collection.size().getInfo()}")
         
         # Use more lenient filtering for Sentinel-1 SAR data

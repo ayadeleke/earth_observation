@@ -52,11 +52,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setUser(currentUser);
           } else {
             // Token is invalid, clear auth
-            await authService.logout();
+            console.log('Token verification failed, clearing auth');
+            authService.clearInvalidAuth();
           }
+        } else {
+          // No user or not authenticated, ensure clean state
+          authService.clearInvalidAuth();
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
+        // Clear auth on any error during initialization
+        authService.clearInvalidAuth();
       } finally {
         setIsLoading(false);
       }

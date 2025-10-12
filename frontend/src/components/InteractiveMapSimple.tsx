@@ -32,7 +32,7 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
     setError(null);
     
     try {
-      console.log('Creating interactive map with Flask-style approach...');
+      console.log('Creating interactive map...');
       console.log('Geometry received:', geometry);
       
       // Convert geometry to proper format for backend
@@ -52,7 +52,7 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
       
       console.log('Converted coordinates:', coordinates);
       
-      // Use the create_custom_map endpoint exactly like Flask
+      // Use the create_custom_map endpoint
       const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
       
       const requestBody = {
@@ -62,7 +62,7 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
         satellite: satellite,
         analysis_type: analysisType,
         cloud_cover: cloudCover,
-        selected_indices: 'first_last', // Always use first and last images like Flask
+        selected_indices: 'first_last', // Always use first and last images
         cloud_masking_level: enableCloudMasking ? (maskingStrictness === 'strict' ? 'strict' : 'recommended') : 'disabled'
       };
 

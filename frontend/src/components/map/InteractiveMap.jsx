@@ -336,7 +336,7 @@ export const InteractiveMap = ({
         map.addLayer(drawnItemsRef.current);
         console.log('Added drawn items layer');
 
-        // Add drawing controls - exactly like Flask implementation
+        // Add drawing controls
         drawControlRef.current = new L.Control.Draw({
           edit: {
             featureGroup: drawnItemsRef.current
@@ -354,7 +354,7 @@ export const InteractiveMap = ({
         map.addControl(drawControlRef.current);
         console.log('Drawing controls added successfully!');
 
-        // Handle drawn shapes - exactly like Flask implementation
+        // Handle drawn shapes
         map.on('draw:created', function(e) {
           let layer = e.layer;
           drawnItemsRef.current.addLayer(layer);
