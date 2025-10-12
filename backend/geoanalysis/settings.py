@@ -189,20 +189,6 @@ SIMPLE_JWT = {
     "TOKEN_TYPE_CLAIM": "token_type",
 }
 
-# Session Configuration
-SESSION_ENGINE = "django.contrib.sessions.backends.db"
-SESSION_COOKIE_AGE = 86400  # 24 hours
-SESSION_SAVE_EVERY_REQUEST = True
-SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-
-# CORS settings
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # React development server
-    "http://127.0.0.1:3000",
-]
-
-CORS_ALLOW_CREDENTIALS = True
-
 # API Documentation
 SPECTACULAR_SETTINGS = {
     "TITLE": "GeoAnalysis API",
@@ -391,3 +377,11 @@ AUTH_USER_MODEL = "core.User"
 # Create logs directory
 LOGS_DIR = BASE_DIR / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
+
+# AI Assistant Configuration
+GEMINI_API_KEY = env("GEMINI_API_KEY", default=None)
+AI_PROVIDER = env("AI_PROVIDER", default="gemini")  # gemini only
+AI_ASSISTANT_ENABLED = env.bool("AI_ASSISTANT_ENABLED", default=True)
+AI_ASSISTANT_MAX_TOKENS = env.int("AI_ASSISTANT_MAX_TOKENS", default=5000)
+AI_ASSISTANT_TEMPERATURE = env.float("AI_ASSISTANT_TEMPERATURE", default=0.7)
+AI_ASSISTANT_MODEL = env("AI_ASSISTANT_MODEL", default="gemini-2.5-flash")  # Gemini model

@@ -80,6 +80,14 @@ class AuthService {
   }
 
   /**
+   * Clear invalid authentication data from localStorage
+   */
+  clearInvalidAuth(): void {
+    console.log('Clearing invalid authentication data');
+    this.clearAuth();
+  }
+
+  /**
    * Save tokens to localStorage
    */
   private saveTokensToStorage(tokens: AuthTokens): void {
@@ -135,6 +143,14 @@ class AuthService {
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
 
+          // Check if this is a token refresh request failing - if so, don't retry
+          if (originalRequest.url?.includes('/token/refresh/')) {
+            console.warn('Token refresh failed, clearing auth');
+            this.clearAuth();
+            window.location.href = '/login';
+            return Promise.reject(error);
+          }
+
           try {
             await this.refreshToken();
             // Retry the original request with new token
@@ -144,6 +160,7 @@ class AuthService {
             }
           } catch (refreshError) {
             // Refresh failed, clear auth and redirect to login
+            console.warn('Token refresh failed, clearing auth');
             this.clearAuth();
             window.location.href = '/login';
             return Promise.reject(refreshError);

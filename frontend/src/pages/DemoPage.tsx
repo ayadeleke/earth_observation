@@ -192,7 +192,7 @@ const DemoPage: React.FC = () => {
     );
   };
 
-  // Generate mock data based on coordinates and analysis type (matching Flask demo_mode.py)
+  // Generate mock data based on coordinates and analysis type
   const generateMockData = (analysisType: string, coordinates: string): { data: MockDataPoint[], statistics: MockStatistics } => {
     // Parse coordinates to determine general climate/vegetation characteristics
     const getRegionCharacteristics = (coords: string) => {
@@ -254,16 +254,16 @@ const DemoPage: React.FC = () => {
     const startDate = new Date(dateRangeType === 'years' ? `${formData.startYear}-01-01` : formData.startDate);
     const endDate = new Date(dateRangeType === 'years' ? `${formData.endYear}-12-31` : formData.endDate);
     
-    // Calculate observations like Flask demo_mode.py
+    // Calculate observations
     const daysDiff = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
     const monthsDiff = Math.max(1, Math.floor(daysDiff / 30));
-    const observationsPerMonth = 2; // DEMO_OBSERVATIONS_PER_MONTH from Flask
+    const observationsPerMonth = 2; // DEMO_OBSERVATIONS_PER_MONTH
     const observations = Math.min(100, Math.max(10, monthsDiff * observationsPerMonth));
     
     const data: MockDataPoint[] = [];
     
     for (let i = 0; i < observations; i++) {
-      // Distribute dates evenly with randomness like Flask
+      // Distribute dates evenly with randomness
       const baseDays = Math.floor(i * daysDiff / observations);
       const randomOffset = Math.floor(Math.random() * 11) - 5; // -5 to +5
       const actualDays = Math.max(0, Math.min(daysDiff, baseDays + randomOffset));
@@ -272,7 +272,7 @@ const DemoPage: React.FC = () => {
       
       let ndvi, lst, backscatter;
       
-      // Generate data with seasonal variation like Flask
+      // Generate data with seasonal variation
       const seasonalFactor = 0.3 * Math.sin(2 * Math.PI * (doy - 100) / 365);
       
       if (analysisType === 'ndvi' || analysisType === 'comprehensive') {
@@ -319,7 +319,7 @@ const DemoPage: React.FC = () => {
           ndvi = Math.max(-0.5, Math.min(0.95, finalNdvi)); // Allow range from -0.5 to 0.95
         }
         
-        ndvi = Math.round(ndvi * 1000) / 1000; // Round to 3 decimals like Flask
+        ndvi = Math.round(ndvi * 1000) / 1000; // Round to 3 decimals
       }
       
       if (analysisType === 'lst' || analysisType === 'comprehensive') {
@@ -393,10 +393,10 @@ const DemoPage: React.FC = () => {
       });
     }
     
-    // Sort by date like Flask
+    // Sort by date
     data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
-    // Calculate statistics like Flask
+    // Calculate statistics
     const statistics: MockStatistics = {
       total_observations: observations
     };
@@ -560,7 +560,7 @@ const DemoPage: React.FC = () => {
     }));
   };
 
-  // Download mock CSV (matching Flask format)
+  // Download mock CSV
   const downloadMockCSV = () => {
     if (!results) return;
     

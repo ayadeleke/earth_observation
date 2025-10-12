@@ -126,19 +126,19 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
 
         pixel_count = pixel_count_result.get("LST", 0) if pixel_count_result else 0
 
-        # Get sample data points - use FLASK APPROACH for cloud masking
+        # Get sample data points
         sample_data = []
         try:
             from datetime import datetime
 
-            # Use Flask approach: Calculate LST and cloud info together for each image
-            logger.error(f"🔍 LST: Using Flask approach for cloud masking with use_cloud_masking={use_cloud_masking}")
+            # Calculate LST and cloud info together for each image
+            logger.error(f"🔍 LST: Cloud masking with use_cloud_masking={use_cloud_masking}")
 
             # Use harmonized collection (already processed above) to ensure we get proper thermal bands
             sorted_collection = harmonized_collection.sort('system:time_start').limit(100)
 
             def calculate_lst_with_cloud_info(image):
-                """Calculate LST and cloud cover info for each image (Flask approach for LST)"""
+                """Calculate LST and cloud cover info for each image in collection"""
                 # Get basic image info
                 original_cloud_cover = image.get('CLOUD_COVER')
                 image_id = image.get('system:id')
@@ -168,11 +168,11 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
 
                 return feature
 
-            # Apply to collection and get results (Flask approach)
+            # Apply to collection and get results
             lst_features = sorted_collection.map(calculate_lst_with_cloud_info)
             feature_data = lst_features.getInfo()
 
-            # Process results using Flask approach
+            # Process results
             if feature_data and feature_data.get('features'):
                 # Get center point for coordinates
                 center_point = geometry.centroid().getInfo()

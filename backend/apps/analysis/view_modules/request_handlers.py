@@ -310,14 +310,12 @@ def process_common_request_setup(request, analysis_type):
             logger.info(f"Coordinates data sample: {str(coord_data)[:200]}")
 
         # Map frontend field names to backend expected names
-        # Support both React-style (camelCase) and Flask-style (snake_case) field names
         field_mapping = {
             # Coordinates
             'coordinates': 'aoi_data',
-            # Dates (React style)
+            # Date parameters
             'startDate': 'start_date',
             'endDate': 'end_date',
-            # Dates (Flask style)
             'start_date': 'start_date',
             'end_date': 'end_date',
             'start_year': 'start_year',
@@ -326,12 +324,11 @@ def process_common_request_setup(request, analysis_type):
             'satellite': 'satellite',
             'analysisType': 'analysis_type',
             'analysis_type': 'analysis_type',
-            # Cloud parameters (React style)
+            # Cloud parameters
             'cloudCover': 'cloud_cover',
             'cloudCoverValue': 'cloud_cover',
             'enableCloudMasking': 'use_cloud_masking',
             'maskingStrictness': 'strict_masking',
-            # Cloud parameters (Flask style)
             'cloud_cover': 'cloud_cover',
             'use_cloud_masking': 'use_cloud_masking',
             'strict_masking': 'strict_masking',
@@ -551,7 +548,7 @@ def parse_aoi_data(aoi_data):
 def extract_common_parameters(data, analysis_type):
     """Extract common parameters from request data"""
     try:
-        # Handle both year-based and date-based ranges (matching Flask behavior)
+        # Handle both year-based and date-based ranges
         start_date = data.get('start_date')
         end_date = data.get('end_date')
 

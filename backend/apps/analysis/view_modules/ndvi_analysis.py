@@ -311,8 +311,8 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
         try:
             from datetime import datetime
 
-            # Using Flask approach: Calculate NDVI and cloud info together for each image
-            logger.info(f"🔍 Using Flask approach for cloud masking with use_cloud_masking={use_cloud_masking}")
+            # Calculate NDVI and cloud info together for each image
+            logger.info(f"🔍 Cloud masking with use_cloud_masking={use_cloud_masking}")
 
             if True:  # Always process
                 # Sample actual NDVI values from the collection using harmonized calculation
@@ -321,7 +321,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                     from .earth_engine import calculate_ndvi_landsat
                     return calculate_ndvi_landsat(image)
 
-                # Use Flask approach: Calculate NDVI and cloud info together for each image
+                # Calculate NDVI and cloud info together for each image
                 sorted_collection = original_collection.sort('system:time_start').limit(100)
 
                 def calculate_ndvi_with_cloud_info(image):

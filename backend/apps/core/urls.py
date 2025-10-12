@@ -5,6 +5,7 @@ URL patterns for the core app for authentication and basic functionality.
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from . import views
+from . import ai_views
 
 urlpatterns = [
     # Authentication endpoints
@@ -58,6 +59,9 @@ urlpatterns = [
     
     # Project-specific endpoints
     path("projects/<int:project_id>/analyses/", views.get_project_analyses, name="project_analyses"),
+    
+    # AI Assistant endpoints
+    path("ai/query/", ai_views.AIQueryView.as_view(), name="ai_query"),
     
     # Legacy authentication endpoints (for backward compatibility)
     path(
