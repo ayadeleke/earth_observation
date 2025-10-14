@@ -88,7 +88,20 @@ WSGI_APPLICATION = "geoanalysis.wsgi.application"
 # Database
 # Support both PostgreSQL and SQLite based on environment variables
 if env("DATABASE_URL", default="").startswith("postgres"):
-    # PostgreSQL configuration
+    # PostgreSQL configuration (supports both local and cloud with SSL)
+    db_options = {
+        "connect_timeout": 10,
+    }
+    
+    # Add SSL configuration for cloud databases (Aiven)
+    if "aivencloud.com" in env("DB_HOST", default="localhost"):
+        db_options.update({
+            "sslmode": "require",
+            "sslcert": None,
+            "sslkey": None,
+            "sslrootcert": None,
+        })
+    
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -97,9 +110,7 @@ if env("DATABASE_URL", default="").startswith("postgres"):
             "PASSWORD": env("DB_PASSWORD", default=""),
             "HOST": env("DB_HOST", default="localhost"),
             "PORT": env("DB_PORT", default="5432"),
-            "OPTIONS": {
-                "connect_timeout": 10,
-            },
+            "OPTIONS": db_options,
             "CONN_MAX_AGE": 600,  # Connection pooling
         }
     }
@@ -262,15 +273,48 @@ EARTH_ENGINE_USE_APP_DEFAULT = env("EARTH_ENGINE_USE_APP_DEFAULT", default=True)
 FILE_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024 * 1024  # 16MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024 * 1024  # 16MB
 
-# CORS Settings for React frontend
+# CORS configuration - properly handle credentials
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    "http://localhost:3000",   # React development server
+    "http://127.0.0.1:3000",   # Alternative localhost
+    "https://localhost:3000",  # HTTPS version if used
 ]
 
+# Important: Never use CORS_ALLOW_ALL_ORIGINS=True when using credentials
+CORS_ALLOW_ALL_ORIGINS = False
+
+# Allow credentials (cookies, authorization headers) in CORS requests
 CORS_ALLOW_CREDENTIALS = True
 
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development only
+# CORS headers that can be used during the actual request
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# Methods that are allowed for CORS requests
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+# Additional CORS settings for better debugging and security
+CORS_PREFLIGHT_MAX_AGE = 86400  # 24 hours
+CORS_EXPOSE_HEADERS = [
+    'Content-Type',
+    'Authorization',
+]
 
 # Redis Caching Configuration
 CACHES = {

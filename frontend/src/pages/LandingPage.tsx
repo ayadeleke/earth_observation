@@ -87,7 +87,7 @@ const LandingPage: React.FC = () => {
     if (isAuthenticated) {
       navigate('/dashboard');
     } else {
-      navigate('/register');
+      navigate('/login');
     }
   };
 

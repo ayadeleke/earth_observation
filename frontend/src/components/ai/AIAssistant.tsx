@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Send, Brain, Sparkles, X, Minimize2, Maximize2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import authService from '../../services/authService';
@@ -32,7 +32,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Get context-aware suggestions based on current page
-  const getContextualSuggestions = useCallback(() => {
+  const getContextualSuggestions = () => {
     const path = location.pathname;
     
     if (analysisData) {
@@ -81,10 +81,10 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
           "What can I do with this platform?"
         ];
     }
-  }, [location.pathname, analysisData]);
+  };
 
   // Get context-aware welcome message
-  const getWelcomeMessage = useCallback(() => {
+  const getWelcomeMessage = () => {
     const path = location.pathname;
     
     if (analysisData) {
@@ -103,7 +103,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
       default:
         return `Hello! I'm your AI assistant. I can help you with earth observation concepts, satellite data analysis, remote sensing questions, and much more. What would you like to know?`;
     }
-  }, [location.pathname, analysisData]);
+  };
 
   // Auto-scroll to bottom when new messages are added
   useEffect(() => {
@@ -122,33 +122,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
       };
       setMessages([welcomeMessage]);
     }
-  }, [getWelcomeMessage, getContextualSuggestions]);
-
-  // Update context when user navigates to different pages
-  useEffect(() => {
-    if (messages.length > 0 && isOpen) {
-      // Add a new contextual message when page changes
-      const newContextMessage: Message = {
-        id: `context-${Date.now()}`,
-        type: 'assistant',
-        content: `I notice you're now on the ${location.pathname.replace('/', '') || 'home'} page. ${getWelcomeMessage()}`,
-        timestamp: new Date(),
-        suggestions: getContextualSuggestions()
-      };
-      
-      // Only add context message if the last message isn't already a context message
-      setMessages(prev => {
-        const lastMessage = prev[prev.length - 1];
-        if (lastMessage?.id?.startsWith('context-')) {
-          // Replace the last context message instead of adding a new one
-          return [...prev.slice(0, -1), newContextMessage];
-        } else {
-          // Add new context message
-          return [...prev, newContextMessage];
-        }
-      });
-    }
-  }, [location.pathname, isOpen, getWelcomeMessage, getContextualSuggestions]);
+  }, [analysisData, messages.length, location.pathname, getWelcomeMessage, getContextualSuggestions]);
 
   const sendMessage = async () => {
     if (!inputMessage.trim()) return;

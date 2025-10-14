@@ -25,12 +25,17 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
         date_range_days = (end_date_obj - start_date_obj).days
         date_range_years = date_range_days / 365.25
 
-        # Warn about very long date ranges before processing
+        # Check date range and apply appropriate memory optimization strategy
         if date_range_years > 10:
             logger.warning(f"Very long date range detected: {date_range_years:.1f} years")
-            logger.warning("This may result in too many images. Consider using shorter periods for focused analysis.")
+            logger.warning("Applying maximum memory optimization with reduced temporal resolution")
         elif date_range_years > 3:
-            logger.info(f"Long date range: {date_range_years:.1f} years - this may result in many images")
+            logger.info(f"Long date range: {date_range_years:.1f} years - using memory optimization")
+        
+        # For very large date ranges (>3 years), immediately use optimized processing
+        if date_range_years > 3:
+            logger.info(f"Date range {date_range_years:.1f} years exceeds 3-year limit, using chunked processing")
+            return process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date, orbit_direction, date_range_years)
 
         # Check geometry size and simplify if needed to prevent memory issues
         area_km2 = geometry.area().divide(1000000).getInfo()
@@ -75,231 +80,157 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
 
         pixel_count = pixel_count_result.get("VV", 0) if pixel_count_result else 0
 
-        # Get sample data points with memory optimization
+        # Get real Sentinel-1 data points from the collection
         sample_data = []
         try:
-            # Get original collection size first
+            # Get the actual collection size
+            original_collection_size = collection.size().getInfo()
+            logger.info(f"Total Sentinel-1 images available: {original_collection_size}")
+
+            # For large collections, use an optimized approach instead of failing
+            if original_collection_size > 20:  # Reduced threshold for better memory safety
+                logger.warning(f"Large SAR collection detected ({original_collection_size} images) - using memory-optimized processing")
+                # Instead of failing, use temporal aggregation approach
+                return process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_direction, original_collection_size, scale, max_pixels)
+
+            if original_collection_size == 0:
+                logger.warning("No Sentinel-1 images found for the specified criteria")
+                return {
+                    "success": False,
+                    "error": "No Sentinel-1 data available",
+                    "message": "No Sentinel-1 images found for the specified area and date range. Try expanding the date range or checking the area coverage.",
+                    "analysis_type": "SAR"
+                }
+
+            # Use a more memory-efficient sampling approach for SAR data
+            max_samples = min(20, original_collection_size)  # Even more conservative for SAR
+            logger.warning(f"✅ Processing {max_samples} sampled Sentinel-1 images from {original_collection_size} total available")
+
+            # Use temporal sampling instead of trying to get all metadata at once
+            # This avoids the "User memory limit exceeded" error
             try:
-                original_collection_size = collection.size().getInfo()
-                logger.info(f"Total Sentinel-1 images available: {original_collection_size}")
-
-                # Check if there are too many images and suggest optimization
-                if original_collection_size > 200:
-                    # Return early with suggestion for optimization
-                    return {
-                        "success": False,
-                        "error": f"Too many Sentinel-1 images found ({original_collection_size} images)",
-                        "suggestion": "Please reduce your analysis scope for better results:",
-                        "recommendations": [
-                            "Reduce the date range (try 1-2 years instead of longer periods)",
-                            "Use a smaller area of interest",
-                            "Consider using monthly or seasonal analysis instead of daily"
-                        ],
-                        "analysis_type": "SAR",
-                        "message": f"Analysis scope too broad - {original_collection_size} images found. Please reduce date range or area coverage."
-                    }
-                elif original_collection_size > 150:
-                    logger.warning(f"Very high image availability: {original_collection_size} total images found")
-                    logger.warning("Consider reducing date range or area coverage for more focused analysis")
-
-                # Limit to 50 images max to prevent memory issues while showing more data
-                limited_collection = collection.limit(50)
-                collection_size = min(original_collection_size, 50)
-                logger.info(f"Using {collection_size} SAR images for analysis")
-
-                # Warn if very few images are available
-                if collection_size < 5:
-                    logger.warning(f"Only {collection_size} SAR images available - limited temporal coverage")
-                elif collection_size < 10:
-                    logger.info(f"Limited SAR image availability: {collection_size} images - consider expanding date range")
-                elif collection_size > 150:
-                    logger.warning(f"Very high image availability: {original_collection_size} total images found")
-                    logger.warning("Consider reducing date range or area coverage for more focused analysis")
-                elif collection_size > 75:
-                    logger.info(f"High image availability: {collection_size} images - consider shorter date range for focused analysis")
+                # Sample images across the time range instead of getting all metadata
+                sample_indices = []
+                if original_collection_size > 1:
+                    # Distribute samples evenly across the collection
+                    step = max(1, original_collection_size // max_samples)
+                    sample_indices = list(range(0, original_collection_size, step))[:max_samples]
                 else:
-                    logger.info(f"Good SAR temporal coverage: {collection_size} images available")
+                    sample_indices = [0]
+                
+                logger.info(f"Sampling {len(sample_indices)} images from collection at indices: {sample_indices}")
+                
+                # Process sampled images one by one to avoid memory issues
+                image_list = []
+                for i, idx in enumerate(sample_indices):
+                    try:
+                        # Get individual image to avoid loading entire collection metadata
+                        sampled_image = collection.toList(idx + 1, idx).get(0)
+                        image_info = sampled_image.getInfo()
+                        image_list.append(image_info)
+                        logger.debug(f"Successfully sampled image {i+1}/{len(sample_indices)} at index {idx}")
+                    except Exception as sample_error:
+                        logger.warning(f"Failed to sample image at index {idx}: {sample_error}")
+                        continue
+                        
+                logger.info(f"Successfully retrieved metadata for {len(image_list)} sampled Sentinel-1 images")
+                
+            except Exception as sampling_error:
+                logger.error(f"Error in SAR sampling approach: {sampling_error}")
+                # Try the temporal aggregation approach as final fallback
+                logger.info("Falling back to temporal aggregation method")
+                return process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_direction, original_collection_size, scale, max_pixels)
 
-                # Create representative metadata entries based on actual available images
-                metadata_list = []
-                # Use the actual number of available images instead of fixed 40
-                # This ensures the count represents real temporal observations
-                max_samples = collection_size  # Use actual image count, not synthetic 40
-                logger.info(f"Creating {max_samples} SAR sample points based on {collection_size} actual available images")
-
-                for i in range(max_samples):
-                    # Generate dates across the actual user-specified time period
-                    start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
-                    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
-                    total_days = (end_date_obj - start_date_obj).days
-
-                    if collection_size > 1:
-                        # Distribute dates evenly across the actual time period
-                        days_offset = (total_days * i) // (collection_size - 1) if collection_size > 1 else total_days // 2
-                    else:
-                        days_offset = total_days // 2
-
-                    image_date = start_date_obj + timedelta(days=days_offset)
-                    timestamp = int(image_date.timestamp() * 1000)  # Convert to milliseconds
-
-                    metadata_list.append({
-                        'properties': {
-                            'image_id': f'S1A_IW_GRDH_1SDV_{image_date.strftime("%Y%m%d")}T052943_001',
-                            'timestamp': timestamp,
-                            'orbit_direction': orbit_direction
-                        }
-                    })
-
-            except Exception as metadata_error:
-                logger.error(f"Error creating SAR metadata: {metadata_error}")
-                # Fallback based on actual availability
-                if collection_size > 0:
-                    # Use actual collection size for fallback
-                    metadata_list = []
-                    for i in range(min(collection_size, 5)):  # At least try a few samples
-                        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
-                        days_offset = i * 30  # 30-day intervals as fallback
-                        image_date = start_date_obj + timedelta(days=days_offset)
-                        metadata_list.append({
-                            'properties': {
-                                'image_id': f'S1A_fallback_{image_date.strftime("%Y%m%d")}T052943_001',
-                                'timestamp': int(image_date.timestamp() * 1000),
-                                'orbit_direction': orbit_direction
-                            }
-                        })
-                else:
-                    # Final fallback - create minimal synthetic data
-                    metadata_list = [{
-                        'properties': {
-                            'image_id': 'S1A_synthetic_20200101T052943_001',
-                            'timestamp': int(datetime(2020, 1, 1).timestamp() * 1000),
-                            'orbit_direction': orbit_direction
-                        }
-                    }]
-
-            # Get geometry center for consistent sampling
+            # Get geometry center for sampling
             center = geometry.centroid().coordinates().getInfo()
             center_lon, center_lat = center[0], center[1]
 
-            # Create sample data using statistics (avoid individual image sampling)
-            valid_data_count = 0
-            for i, metadata in enumerate(metadata_list):
-                if not metadata or 'properties' not in metadata:
-                    logger.warning(f"Invalid metadata structure at index {i}")
-                    continue
-
-                props = metadata['properties']
-                logger.debug(f"Processing metadata {i}: {props}")
-
-                # Extract date from timestamp (now always available)
-                date_str = None
-
-                if props.get('timestamp'):
-                    try:
-                        timestamp = props.get('timestamp')
-                        date_obj = datetime.fromtimestamp(timestamp / 1000)  # Convert from milliseconds
-                        date_str = date_obj.strftime('%Y-%m-%d')
-                        logger.debug(f"Extracted date {date_str} from timestamp")
-                    except Exception as e:
-                        logger.warning(f"Error converting timestamp {props.get('timestamp')}: {e}")
-
-                # Fallback to image ID extraction if timestamp fails
-                if not date_str and props.get('image_id'):
-                    try:
-                        image_id = str(props.get('image_id', ''))
-                        # Sentinel-1 image IDs format: S1A_IW_GRDH_1SDV_20180313T052943_...
-                        date_pattern = r'(\d{8})'  # YYYYMMDD pattern
-                        match = re.search(date_pattern, image_id)
-                        if match:
-                            date_part = match.group(1)
-                            year, month, day = date_part[:4], date_part[4:6], date_part[6:8]
-                            date_str = f"{year}-{month}-{day}"
-                            logger.debug(f"Extracted date {date_str} from image ID")
-                    except Exception as e:
-                        logger.warning(f"Error extracting date from image ID: {e}")
-
-                # Final fallback
-                if not date_str:
-                    logger.warning(f"No valid date found, skipping sample {valid_data_count}")
-                    continue
-
-                # Calculate actual backscatter values for this specific image
+            # Process each sampled Sentinel-1 image
+            for i, image_info in enumerate(image_list):
                 try:
-                    # For efficiency, use a sampled approach instead of individual image processing
-                    # This provides real variation while maintaining performance
+                    # Extract real image properties (handle both feature and direct image formats)
+                    if 'properties' in image_info:
+                        properties = image_info['properties']
+                    else:
+                        properties = image_info
+                    
+                    image_id = properties.get('system:id', f'S1_image_{i}')
+                    
+                    # Extract acquisition date
+                    system_time_start = properties.get('system:time_start')
+                    if system_time_start:
+                        # Convert from milliseconds since epoch
+                        date_obj = datetime.fromtimestamp(system_time_start / 1000)
+                        date_str = date_obj.strftime('%Y-%m-%d')
+                    else:
+                        logger.warning(f"No timestamp found for image {image_id}, skipping")
+                        continue
 
-                    # Extract image index from collection (for Earth Engine sampling)
-                    image_index = valid_data_count
-
-                    # Calculate temporal position (0 to 1) within the actual user-specified date range
+                    # Get the actual image from Earth Engine using the ID
+                    ee_image = ee.Image(image_id)
+                    
+                    # Calculate real backscatter values with memory-efficient approach
                     try:
-                        current_date = datetime.strptime(date_str, '%Y-%m-%d')
-                        start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
-                        end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
+                        image_stats = ee_image.select(['VV', 'VH']).reduceRegion(
+                            reducer=ee.Reducer.mean(),
+                            geometry=geometry,
+                            scale=scale,
+                            maxPixels=max_pixels // 4,  # Use even fewer pixels to avoid memory issues
+                            bestEffort=True
+                        ).getInfo()
+                    except Exception as reduce_error:
+                        logger.warning(f"Memory error in reduceRegion for {image_id}: {reduce_error}")
+                        # Skip this image if it causes memory issues
+                        continue
 
-                        # Calculate temporal position (0 to 1) within actual date range
-                        total_span = (end_date_obj - start_date_obj).days
-                        current_span = (current_date - start_date_obj).days
-                        temporal_position = current_span / total_span if total_span > 0 else 0.5
+                    # Extract real backscatter values
+                    vv_value = image_stats.get('VV')
+                    vh_value = image_stats.get('VH')
+                    
+                    if vv_value is None or vh_value is None:
+                        logger.warning(f"No backscatter data for image {image_id} on {date_str}, skipping")
+                        continue
 
-                    except BaseException:
-                        temporal_position = valid_data_count / len(metadata_list) if len(metadata_list) > 0 else 0.5
+                    # Convert to dB and round to reasonable precision
+                    vv_db = round(float(vv_value), 2)
+                    vh_db = round(float(vh_value), 2)
+                    
+                    # Calculate VV/VH ratio
+                    vv_vh_ratio = round(vv_db / vh_db if vh_db != 0 else 0, 3)
 
-                    # Get base statistics and add realistic temporal and spatial variation
-                    mean_vv = stats.get("VV", -12.0)
-                    mean_vh = stats.get("VH", -18.0)
+                    # Extract additional real properties
+                    orbit_direction_real = properties.get('orbitProperties_pass', orbit_direction)
+                    platform = properties.get('platform_number', 'Unknown')
+                    instrument_mode = properties.get('instrumentMode', 'IW')
+                    
+                    sample_data.append({
+                        "date": date_str,
+                        "backscatter_vv": vv_db,
+                        "backscatter_vh": vh_db,
+                        "vv_backscatter": vv_db,  # Backward compatibility
+                        "vh_backscatter": vh_db,  # Backward compatibility
+                        "vv_vh_ratio": vv_vh_ratio,
+                        "lat": round(center_lat, 6),
+                        "lon": round(center_lon, 6),
+                        "orbit_direction": orbit_direction_real,
+                        "image_id": image_id,
+                        "satellite": f"Sentinel-1{platform}",
+                        "instrument_mode": instrument_mode,
+                        "polarization": ['VV', 'VH'],
+                        "count": pixel_count if pixel_count > 0 else 1000
+                    })
 
-                    # Add realistic variations based on SAR characteristics:
-                    # 1. Seasonal variation (vegetation phenology affects backscatter)
-                    seasonal_variation_vv = 2.0 * math.sin(2 * math.pi * temporal_position)  # ±2 dB seasonal
-                    seasonal_variation_vh = 1.5 * math.sin(2 * math.pi * temporal_position + math.pi / 4)  # ±1.5 dB
+                    logger.debug(f"Processed real SAR image {date_str}: VV={vv_db}dB, VH={vh_db}dB from {image_id}")
 
-                    # 2. Random variation (atmospheric conditions, incidence angle variations)
-                    random.seed(hash(date_str) % 2**32)  # Consistent random based on date
-                    random_variation_vv = random.uniform(-1.5, 1.5)  # ±1.5 dB random
-                    random_variation_vh = random.uniform(-1.2, 1.2)  # ±1.2 dB random
+                except Exception as image_error:
+                    logger.warning(f"Error processing SAR image {i}: {image_error}")
+                    continue
 
-                    # 3. Calculate final backscatter values
-                    vv_value = round(mean_vv + seasonal_variation_vv + random_variation_vv, 2)
-                    vh_value = round(mean_vh + seasonal_variation_vh + random_variation_vh, 2)
-
-                    # Ensure realistic SAR backscatter ranges
-                    vv_value = max(min(vv_value, -5.0), -25.0)  # Clamp to realistic range
-                    vh_value = max(min(vh_value, -10.0), -30.0)  # Clamp to realistic range
-
-                    logger.debug(f"Calculated backscatter for {date_str}: VV={vv_value}dB, VH={vh_value}dB")
-
-                except Exception as calc_error:
-                    logger.warning(f"Error calculating backscatter for image {props.get('image_id')}: {calc_error}")
-                    # Simple fallback
-                    mean_vv = stats.get("VV", -12.0)
-                    mean_vh = stats.get("VH", -18.0)
-
-                    vv_variation = (valid_data_count % 10 - 5) * 0.6  # ±3 dB variation
-                    vh_variation = (valid_data_count % 10 - 5) * 0.6
-
-                    vv_value = round(mean_vv + vv_variation, 2)
-                    vh_value = round(mean_vh + vh_variation, 2)
-
-                sample_data.append({
-                    "date": date_str,
-                    "backscatter_vv": vv_value,  # match frontend expectation
-                    "backscatter_vh": vh_value,  # match frontend expectation
-                    "vv_backscatter": vv_value,  # Keep for backward compatibility
-                    "vh_backscatter": vh_value,  # Keep for backward compatibility
-                    "vv_vh_ratio": round(vv_value / vh_value if vh_value != 0 else 0, 3),
-                    "lat": round(center_lat, 6),
-                    "lon": round(center_lon, 6),
-                    "orbit_direction": props.get('orbit_direction', orbit_direction),
-                    "image_id": props.get('image_id', 'Unknown'),
-                    "satellite": "Sentinel-1",
-                    "polarization": ['VV', 'VH'],
-                    "count": pixel_count if pixel_count > 0 else 1000  # Add pixel count for frontend
-                })
-
-                valid_data_count += 1
-
-            logger.info(f"Generated {len(sample_data)} SAR sample points")
+            logger.warning(f"🎯 REAL DATA: Successfully processed {len(sample_data)} actual Sentinel-1 images")
+            if sample_data:
+                first_date = sample_data[0].get('date', 'unknown')
+                last_date = sample_data[-1].get('date', 'unknown') if len(sample_data) > 1 else 'same'
+                logger.warning(f"📊 Real data range: {first_date} to {last_date}")
 
         except Exception as sample_error:
             logger.error(f"Error getting SAR sample data: {sample_error}")
@@ -308,7 +239,11 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
         # Sort sample data chronologically by date
         if sample_data:
             sample_data.sort(key=lambda x: x.get('date', ''))
-            logger.info(f"Sorted {len(sample_data)} SAR data points chronologically")
+            logger.warning(f"🔄 Sorted {len(sample_data)} SAR data points chronologically")
+            if len(sample_data) > 1:
+                logger.warning(f"📈 Date range after sorting: {sample_data[0].get('date')} to {sample_data[-1].get('date')}")
+            else:
+                logger.error(f"❌ ONLY ONE DATA POINT: {sample_data[0].get('date') if sample_data else 'None'}")
 
         # Store collection info for message
         try:
@@ -316,36 +251,43 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
         except:
             total_available = "unknown"
 
-        # Create annual averages for time series
-        annual_time_series = create_annual_averages(sample_data, start_date, end_date)
+        # Always use individual sample data for time series to show multiple points
+        # This ensures users see temporal variation instead of single aggregated values
+        time_series_data = sample_data
+        logger.warning(f"📊 SENDING TO FRONTEND: {len(sample_data)} individual data points for time series")
+        logger.warning(f"📊 TIME SERIES DATA LENGTH: {len(time_series_data)}")
+        if time_series_data:
+            logger.warning(f"📊 FIRST POINT: {time_series_data[0].get('date')} - VV: {time_series_data[0].get('backscatter_vv')}dB")
+            if len(time_series_data) > 1:
+                logger.warning(f"📊 LAST POINT: {time_series_data[-1].get('date')} - VV: {time_series_data[-1].get('backscatter_vv')}dB")
 
         return {
             "success": True,
             "demo_mode": False,
             "analysis_type": "SAR",
-            "satellite": "Sentinel-1 (Real Data)",
+            "satellite": "Sentinel-1 (Authentic GEE Data)",
             "data": sample_data,  # Individual images for data table
-            "time_series_data": annual_time_series,  # Annual averages for time series visualization
+            "time_series_data": time_series_data,  # Use appropriate temporal resolution
             "statistics": {
-                "mean_vv": round(stats.get("VV", -12.0), 2) if stats else -12.0,
+                "mean_vv": round(np.mean([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else -12.0,
                 "min_vv": round(min([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else -15.0,
                 "max_vv": round(max([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else -8.0,
                 "std_vv": round(np.std([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else 2.0,
-                "mean_vh": round(stats.get("VH", -18.0), 2) if stats else -18.0,
+                "mean_vh": round(np.mean([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -18.0,
                 "min_vh": round(min([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -20.0,
                 "max_vh": round(max([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -15.0,
                 "std_vh": round(np.std([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else 2.0,
                 "area_km2": round(area_km2, 2),
                 "pixel_count": pixel_count,  # Keep for spatial reference
                 "total_individual_observations": len(sample_data),  # Total individual SAR acquisitions
-                "annual_observations": len(annual_time_series),  # Number of years with data
+                "annual_observations": len(time_series_data),  # Number of temporal observations
                 "date_range": f"{start_date} to {end_date}",
                 "orbit_direction": orbit_direction,
-                "data_type": "Annual Averages",
+                "data_type": "Time Series Data",
                 "num_images": len(sample_data),
-                "temporal_coverage": f"{len(annual_time_series)} annual averages from {len(sample_data)} acquisitions over {round((area_km2), 1)} km²"
+                "temporal_coverage": f"{len(time_series_data)} temporal observations from {len(sample_data)} SAR acquisitions over {round((area_km2), 1)} km²"
             },
-            "message": f"SAR analysis completed with {len(annual_time_series)} annual averages from {len(sample_data)} Sentinel-1 acquisitions (from {total_available} total available)",
+            "message": f"Real SAR analysis completed using {len(sample_data)} actual Sentinel-1 images (from {total_available} total available) with authentic backscatter measurements",
             "timestamp": datetime.now().isoformat(),
         }
 
@@ -359,7 +301,7 @@ def get_sentinel1_collection(geometry, start_date, end_date, orbit_direction="DE
     try:
         logger.info(f"Getting Sentinel-1 collection for {start_date} to {end_date}")
 
-        # Create Sentinel-1 collection with memory optimization
+        # Create Sentinel-1 collection to get real data
         collection = (
             ee.ImageCollection('COPERNICUS/S1_GRD')
             .filterBounds(geometry)
@@ -369,20 +311,19 @@ def get_sentinel1_collection(geometry, start_date, end_date, orbit_direction="DE
             .filter(ee.Filter.eq('instrumentMode', 'IW'))
             .filter(ee.Filter.eq('orbitProperties_pass', orbit_direction))
             .sort('system:time_start')
-            .limit(150)  # Limit to 150 images to prevent memory issues while providing good coverage
         )
 
-        # Apply speckle filtering (lighter filtering to reduce memory usage)
-        def apply_speckle_filter(image):
-            # Use lighter speckle filtering to reduce memory consumption
-            return image.focal_median(1.5).select(['VV', 'VH'])  # Only keep needed bands
+        # Apply minimal preprocessing to keep original data integrity
+        def preprocess_sar_image(image):
+            # Keep original backscatter values, just ensure we have the right bands
+            return image.select(['VV', 'VH'])
 
-        # Apply preprocessing
-        collection = collection.map(apply_speckle_filter)
+        # Apply minimal preprocessing to preserve real backscatter values
+        collection = collection.map(preprocess_sar_image)
 
-        # Log collection size
+        # Log collection size  
         collection_size = collection.size().getInfo()
-        logger.info(f"Found {collection_size} Sentinel-1 images (limited to 50 for memory optimization)")
+        logger.info(f"Found {collection_size} real Sentinel-1 images available for processing")
 
         if collection_size == 0:
             logger.warning("No Sentinel-1 images found for the specified criteria")
@@ -511,6 +452,438 @@ def create_annual_averages(sample_data, start_date, end_date):
     except Exception as e:
         logger.error(f"Error creating annual averages: {e}")
         return sample_data  # Fallback to original data
+
+
+def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_direction, total_images, scale, max_pixels):
+    """
+    Process SAR data using annual aggregation to avoid memory limits.
+    Creates annual mean composites instead of individual images, similar to LST analysis approach.
+    """
+    try:
+        logger.info(f"Using annual aggregation for {total_images} SAR images to avoid memory limits")
+        
+        # Parse dates
+        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
+        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+        
+        # Create annual periods instead of monthly
+        sample_data = []
+        start_year = start_date_obj.year
+        end_year = end_date_obj.year
+        
+        # Get geometry center
+        center = geometry.centroid().coordinates().getInfo()
+        center_lon, center_lat = center[0], center[1]
+        
+        for year in range(start_year, end_year + 1):
+            try:
+                # Define annual period boundaries
+                if year == start_year:
+                    year_start = start_date_obj.strftime('%Y-%m-%d')
+                else:
+                    year_start = f"{year}-01-01"
+                    
+                if year == end_year:
+                    year_end = end_date_obj.strftime('%Y-%m-%d')
+                else:
+                    year_end = f"{year}-12-31"
+                
+                logger.debug(f"Processing SAR annual composite for {year}: {year_start} to {year_end}")
+                
+                # Create collection for this year
+                annual_collection = (
+                    ee.ImageCollection('COPERNICUS/S1_GRD')
+                    .filterBounds(geometry)
+                    .filterDate(year_start, year_end)
+                    .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
+                    .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
+                    .filter(ee.Filter.eq('instrumentMode', 'IW'))
+                    .filter(ee.Filter.eq('orbitProperties_pass', orbit_direction))
+                )
+                
+                # Check if this year has data
+                annual_size = annual_collection.size().getInfo()
+                if annual_size == 0:
+                    logger.debug(f"No SAR data for year {year}")
+                    continue
+                
+                # Create mean composite for this year (annual mean)
+                annual_composite = annual_collection.mean()
+                
+                # Calculate backscatter values for this annual composite with additional memory safety
+                annual_stats = annual_composite.select(['VV', 'VH']).reduceRegion(
+                    reducer=ee.Reducer.mean(),
+                    geometry=geometry,
+                    scale=scale,
+                    maxPixels=max_pixels // 16,  # Use even fewer pixels for safety
+                    bestEffort=True,
+                    tileScale=4  # Use tiling to reduce memory usage
+                ).getInfo()
+                
+                vv_value = annual_stats.get('VV')
+                vh_value = annual_stats.get('VH')
+                
+                if vv_value is not None and vh_value is not None:
+                    # Use mid-year date for annual mean
+                    date_str = f"{year}-06-15"
+                    
+                    vv_db = round(float(vv_value), 2)
+                    vh_db = round(float(vh_value), 2)
+                    vv_vh_ratio = round(vv_db / vh_db if vh_db != 0 else 0, 3)
+                    
+                    sample_data.append({
+                        "date": date_str,
+                        "backscatter_vv": vv_db,
+                        "backscatter_vh": vh_db,
+                        "vv_backscatter": vv_db,
+                        "vh_backscatter": vh_db,
+                        "vv_vh_ratio": vv_vh_ratio,
+                        "lat": round(center_lat, 6),
+                        "lon": round(center_lon, 6),
+                        "orbit_direction": orbit_direction,
+                        "image_id": f"S1_Annual_Mean_{year}",
+                        "satellite": "Sentinel-1",
+                        "instrument_mode": "IW",
+                        "polarization": ['VV', 'VH'],
+                        "count": annual_size,  # Number of images in this annual composite
+                        "processing_method": "Annual Mean",
+                        "year": year,
+                        "acquisitions_count": annual_size
+                    })
+                    
+                    logger.info(f"Created annual SAR mean for {year}: VV={vv_db}dB, VH={vh_db}dB ({annual_size} images)")
+                    
+            except Exception as year_error:
+                logger.warning(f"Error processing year {year}: {year_error}")
+            
+        # Sort by date
+        sample_data.sort(key=lambda x: x.get('date', ''))
+        
+        logger.warning(f"🎯 ANNUAL AGGREGATION: Generated {len(sample_data)} annual SAR means from {total_images} total images")
+        
+        # Calculate area for statistics
+        area_km2 = geometry.area().divide(1000000).getInfo()
+        
+        # Calculate total acquisitions across all years
+        total_acquisitions = sum([d.get('acquisitions_count', 0) for d in sample_data])
+        
+        return {
+            "success": True,
+            "demo_mode": False,
+            "analysis_type": "SAR",
+            "satellite": "Sentinel-1 (Annual Means)",
+            "data": sample_data,
+            "time_series_data": sample_data,
+            "statistics": {
+                "mean_vv": round(np.mean([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else -12.0,
+                "min_vv": round(min([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else -15.0,
+                "max_vv": round(max([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else -8.0,
+                "std_vv": round(np.std([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else 2.0,
+                "mean_vh": round(np.mean([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -18.0,
+                "min_vh": round(min([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -20.0,
+                "max_vh": round(max([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -15.0,
+                "std_vh": round(np.std([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else 2.0,
+                "area_km2": round(area_km2, 2),
+                "pixel_count": 1000,
+                "total_individual_observations": total_acquisitions,  # Total SAR acquisitions used
+                "annual_observations": len(sample_data),  # Number of annual means
+                "date_range": f"{start_date} to {end_date}",
+                "orbit_direction": orbit_direction,
+                "data_type": "Annual Means",
+                "num_images": len(sample_data),
+                "temporal_coverage": f"{len(sample_data)} annual means from {total_acquisitions} SAR acquisitions over {round(area_km2, 1)} km²",
+                "processing_method": "Annual Aggregation"
+            },
+            "message": f"SAR analysis completed using annual aggregation: {len(sample_data)} annual means from {total_acquisitions} Sentinel-1 acquisitions (memory-optimized)",
+            "timestamp": datetime.now().isoformat(),
+        }
+        
+    except Exception as e:
+        logger.error(f"Temporal aggregation SAR analysis error: {str(e)}")
+        # Final fallback - suggest reducing scope
+        return {
+            "success": False,
+            "error": "SAR processing failed even with memory optimization",
+            "suggestion": "Please reduce analysis scope further:",
+            "recommendations": [
+                "Try a 6-month date range instead",
+                "Use a smaller area of interest",
+                "Consider seasonal analysis (4 time periods per year)"
+            ],
+            "analysis_type": "SAR",
+            "message": "SAR processing requires further scope reduction for this area/timeframe."
+        }
+
+
+def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date, orbit_direction, date_range_years):
+    """
+    Process very large date ranges using chunked temporal aggregation.
+    Breaks large periods into smaller chunks to avoid memory limits.
+    """
+    try:
+        logger.info(f"Using chunked processing for {date_range_years:.1f} year SAR analysis")
+        
+        # Parse dates
+        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
+        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+        
+        # Determine chunk size based on total range
+        if date_range_years > 10:
+            # For very large ranges, use 2-year chunks with biennial aggregation
+            chunk_years = 2
+            temporal_resolution = "biennial"  # Every 2 years
+        elif date_range_years > 3:
+            # For large ranges, use 1-year chunks with annual aggregation
+            chunk_years = 1
+            temporal_resolution = "annual"
+        else:
+            # This shouldn't happen as we only call this for >3 years, but safety fallback
+            chunk_years = 1
+            temporal_resolution = "annual"
+        
+        logger.info(f"Using {temporal_resolution} aggregation with {chunk_years}-year chunks")
+        
+        # Calculate area and geometry info once
+        area_km2 = geometry.area().divide(1000000).getInfo()
+        center = geometry.centroid().coordinates().getInfo()
+        center_lon, center_lat = center[0], center[1]
+        
+        # Determine processing scale based on area
+        if area_km2 > 2000:
+            scale = 200  # Very coarse resolution for huge areas
+            max_pixels = 1e6
+            logger.warning(f"Very large area ({area_km2:.1f} km²), using 200m resolution")
+        elif area_km2 > 500:
+            scale = 100
+            max_pixels = 5e6
+            logger.warning(f"Large area ({area_km2:.1f} km²), using 100m resolution")
+        else:
+            scale = 50
+            max_pixels = 1e7
+        
+        sample_data = []
+        total_acquisitions = 0
+        
+        # Process in chunks
+        current_date = start_date_obj
+        chunk_count = 0
+        
+        while current_date < end_date_obj:
+            chunk_count += 1
+            
+            # Calculate chunk end date
+            if chunk_years >= 1:
+                # For year-based chunks
+                chunk_end = datetime(current_date.year + int(chunk_years), current_date.month, current_date.day)
+            else:
+                # For sub-year chunks (6 months)
+                chunk_end = current_date + timedelta(days=int(365.25 * chunk_years))
+            
+            # Don't exceed the overall end date
+            if chunk_end > end_date_obj:
+                chunk_end = end_date_obj
+            
+            chunk_start_str = current_date.strftime('%Y-%m-%d')
+            chunk_end_str = chunk_end.strftime('%Y-%m-%d')
+            
+            logger.info(f"Processing chunk {chunk_count}: {chunk_start_str} to {chunk_end_str}")
+            
+            try:
+                # Create collection for this chunk with aggressive filtering
+                chunk_collection = (
+                    ee.ImageCollection('COPERNICUS/S1_GRD')
+                    .filterBounds(geometry)
+                    .filterDate(chunk_start_str, chunk_end_str)
+                    .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
+                    .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
+                    .filter(ee.Filter.eq('instrumentMode', 'IW'))
+                    .filter(ee.Filter.eq('orbitProperties_pass', orbit_direction))
+                )
+                
+                # Check collection size for this chunk
+                chunk_size = chunk_collection.size().getInfo()
+                
+                if chunk_size == 0:
+                    logger.debug(f"No SAR data in chunk {chunk_count}")
+                    current_date = chunk_end + timedelta(days=1)
+                    continue
+                
+                logger.debug(f"Chunk {chunk_count} has {chunk_size} images")
+                total_acquisitions += chunk_size
+                
+                # For temporal resolution, create appropriate composite
+                if temporal_resolution == "biennial" and chunk_years >= 2:
+                    # Create one data point per 2-year chunk
+                    chunk_composite = chunk_collection.mean()
+                    composite_date = current_date + timedelta(days=365)  # Mid-chunk date
+                    
+                elif temporal_resolution == "annual":
+                    # Create annual composites within the chunk
+                    for year in range(current_date.year, chunk_end.year + 1):
+                        year_start = max(current_date, datetime(year, 1, 1)).strftime('%Y-%m-%d')
+                        year_end = min(chunk_end, datetime(year, 12, 31)).strftime('%Y-%m-%d')
+                        
+                        if year_start >= year_end:
+                            continue
+                            
+                        year_collection = chunk_collection.filterDate(year_start, year_end)
+                        year_size = year_collection.size().getInfo()
+                        
+                        if year_size > 0:
+                            chunk_composite = year_collection.mean()
+                            composite_date = datetime(year, 6, 15)  # Mid-year
+                            
+                            # Process this annual composite with enhanced memory safety
+                            chunk_stats = chunk_composite.select(['VV', 'VH']).reduceRegion(
+                                reducer=ee.Reducer.mean(),
+                                geometry=geometry,
+                                scale=scale,
+                                maxPixels=max_pixels,
+                                bestEffort=True,
+                                tileScale=4  # Use tiling for memory safety
+                            ).getInfo()
+                            
+                            vv_value = chunk_stats.get('VV')
+                            vh_value = chunk_stats.get('VH')
+                            
+                            if vv_value is not None and vh_value is not None:
+                                vv_db = round(float(vv_value), 2)
+                                vh_db = round(float(vh_value), 2)
+                                vv_vh_ratio = round(vv_db / vh_db if vh_db != 0 else 0, 3)
+                                
+                                sample_data.append({
+                                    "date": composite_date.strftime('%Y-%m-%d'),
+                                    "backscatter_vv": vv_db,
+                                    "backscatter_vh": vh_db,
+                                    "vv_backscatter": vv_db,
+                                    "vh_backscatter": vh_db,
+                                    "vv_vh_ratio": vv_vh_ratio,
+                                    "lat": round(center_lat, 6),
+                                    "lon": round(center_lon, 6),
+                                    "orbit_direction": orbit_direction,
+                                    "image_id": f"S1_Annual_Mean_{year}",
+                                    "satellite": "Sentinel-1",
+                                    "polarization": ['VV', 'VH'],
+                                    "count": year_size,
+                                    "processing_method": f"Annual Chunked ({chunk_years}y chunks)",
+                                    "acquisitions_count": year_size
+                                })
+                                
+                                logger.debug(f"Annual composite {year}: VV={vv_db}dB, VH={vh_db}dB ({year_size} images)")
+                    
+                    current_date = chunk_end + timedelta(days=1)
+                    continue
+                
+                else:
+                    # Default: create one composite per chunk (for biennial case)
+                    chunk_composite = chunk_collection.mean()
+                    composite_date = current_date + timedelta(days=(chunk_end - current_date).days // 2)
+                
+                # Process the composite (for biennial cases)
+                if 'chunk_composite' in locals():
+                    chunk_stats = chunk_composite.select(['VV', 'VH']).reduceRegion(
+                        reducer=ee.Reducer.mean(),
+                        geometry=geometry,
+                        scale=scale,
+                        maxPixels=max_pixels,
+                        bestEffort=True,
+                        tileScale=8  # Even more aggressive tiling for biennial composites
+                    ).getInfo()
+                    
+                    vv_value = chunk_stats.get('VV')
+                    vh_value = chunk_stats.get('VH')
+                    
+                    if vv_value is not None and vh_value is not None:
+                        vv_db = round(float(vv_value), 2)
+                        vh_db = round(float(vh_value), 2)
+                        vv_vh_ratio = round(vv_db / vh_db if vh_db != 0 else 0, 3)
+                        
+                        sample_data.append({
+                            "date": composite_date.strftime('%Y-%m-%d'),
+                            "backscatter_vv": vv_db,
+                            "backscatter_vh": vh_db,
+                            "vv_backscatter": vv_db,
+                            "vh_backscatter": vh_db,
+                            "vv_vh_ratio": vv_vh_ratio,
+                            "lat": round(center_lat, 6),
+                            "lon": round(center_lon, 6),
+                            "orbit_direction": orbit_direction,
+                            "image_id": f"S1_{temporal_resolution}_Mean_{composite_date.strftime('%Y_%m')}",
+                            "satellite": "Sentinel-1",
+                            "polarization": ['VV', 'VH'],
+                            "count": chunk_size,
+                            "processing_method": f"{temporal_resolution.title()} Chunked",
+                            "acquisitions_count": chunk_size
+                        })
+                        
+                        logger.info(f"Chunk {chunk_count} composite: VV={vv_db}dB, VH={vh_db}dB ({chunk_size} images)")
+                
+            except Exception as chunk_error:
+                logger.warning(f"Error processing chunk {chunk_count} ({chunk_start_str} to {chunk_end_str}): {chunk_error}")
+            
+            # Move to next chunk
+            current_date = chunk_end + timedelta(days=1)
+        
+        # Sort by date
+        sample_data.sort(key=lambda x: x.get('date', ''))
+        
+        logger.warning(f"🎯 CHUNKED PROCESSING: Generated {len(sample_data)} {temporal_resolution} composites from {total_acquisitions} total SAR images")
+        
+        if not sample_data:
+            return {
+                "success": False,
+                "error": "No SAR data could be processed",
+                "message": f"No Sentinel-1 data available for {start_date} to {end_date}. Try a different area or date range.",
+                "analysis_type": "SAR"
+            }
+        
+        return {
+            "success": True,
+            "demo_mode": False,
+            "analysis_type": "SAR",
+            "satellite": f"Sentinel-1 ({temporal_resolution.title()} Composites)",
+            "data": sample_data,
+            "time_series_data": sample_data,
+            "statistics": {
+                "mean_vv": round(np.mean([d['backscatter_vv'] for d in sample_data]), 2),
+                "min_vv": round(min([d['backscatter_vv'] for d in sample_data]), 2),
+                "max_vv": round(max([d['backscatter_vv'] for d in sample_data]), 2),
+                "std_vv": round(np.std([d['backscatter_vv'] for d in sample_data]), 2),
+                "mean_vh": round(np.mean([d['backscatter_vh'] for d in sample_data]), 2),
+                "min_vh": round(min([d['backscatter_vh'] for d in sample_data]), 2),
+                "max_vh": round(max([d['backscatter_vh'] for d in sample_data]), 2),
+                "std_vh": round(np.std([d['backscatter_vh'] for d in sample_data]), 2),
+                "area_km2": round(area_km2, 2),
+                "pixel_count": 1000,
+                "total_individual_observations": total_acquisitions,
+                "temporal_observations": len(sample_data),
+                "date_range": f"{start_date} to {end_date}",
+                "orbit_direction": orbit_direction,
+                "data_type": f"{temporal_resolution.title()} Composites",
+                "num_images": len(sample_data),
+                "temporal_coverage": f"{len(sample_data)} {temporal_resolution} composites from {total_acquisitions} SAR acquisitions over {round(area_km2, 1)} km²",
+                "processing_method": f"Chunked {temporal_resolution.title()} Aggregation",
+                "temporal_resolution": temporal_resolution,
+                "chunk_years": chunk_years,
+                "total_chunks_processed": chunk_count
+            },
+            "message": f"SAR analysis completed using chunked {temporal_resolution} aggregation: {len(sample_data)} composites from {total_acquisitions} Sentinel-1 acquisitions (memory-optimized for {date_range_years:.1f} year range)",
+            "timestamp": datetime.now().isoformat(),
+        }
+        
+    except Exception as e:
+        logger.error(f"Chunked SAR processing error: {str(e)}")
+        return {
+            "success": False,
+            "error": f"Chunked SAR processing failed: {str(e)}",
+            "suggestion": "Consider further reducing the analysis scope",
+            "recommendations": [
+                "Try a smaller area of interest",
+                "Use a shorter date range (1-2 years maximum)", 
+                "Consider analyzing specific seasons instead of full years"
+            ],
+            "analysis_type": "SAR"
+        }
 
 
 def calculate_coherence(geometry, start_date, end_date, orbit_direction="DESCENDING"):
