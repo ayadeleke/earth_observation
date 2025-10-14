@@ -1,6 +1,5 @@
 """
 Main URL configuration for GeoAnalysis project.
-Matches the Flask app URL structure for compatibility.
 """
 
 from django.contrib import admin
@@ -19,11 +18,11 @@ urlpatterns = [
         SpectacularSwaggerView.as_view(url_name="schema"),
         name="swagger-ui",
     ),
-    # Core routes at root level
+    # Core routes at root level  
     path("", include("apps.core.urls")),
     path("", include("apps.analysis.urls")),
     # API endpoints with versioning
-    path("api/v1/auth/", include("apps.core.urls")),
+    path("api/v1/", include("apps.core.urls")),
     path("api/v1/analysis/", include("apps.analysis.urls")),
     path("api/v1/earth-engine/", include("apps.earth_engine.urls")),
     path("api/v1/visualization/", include("apps.visualization.urls")),

@@ -1,6 +1,6 @@
 """
 NDVI Analysis module for processing Normalized Difference Vegetation Index.
-Handles Landsat and Sentinel-2 NDVI calculations.
+Handles Landsat and Sentinel-2 NDVI calculations with caching support.
 """
 
 import logging
@@ -8,6 +8,7 @@ import ee
 from datetime import datetime
 from collections import defaultdict
 from .earth_engine import get_landsat_collection, get_sentinel2_collection
+from apps.core.caching import cache_analysis_result, cache_earth_engine_data, AnalysisCache, monitor_performance
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +181,8 @@ def calculate_annual_means(sample_data, value_key='ndvi'):
         return sample_data  # Return original data if calculation fails
 
 
+@cache_analysis_result(timeout=3600, key_prefix="ndvi_analysis")
+@monitor_performance
 def process_ndvi_analysis(geometry, start_date, end_date, satellite="landsat", cloud_cover=20, use_cloud_masking=False, strict_masking=False):
     """Process NDVI analysis using Earth Engine"""
     try:
@@ -194,9 +197,11 @@ def process_ndvi_analysis(geometry, start_date, end_date, satellite="landsat", c
         else:
             logger.info("❌ CLOUD MASKING DISABLED - Table will show 'No' values")
 
-        if satellite.lower() == "landsat":
+        # Normalize satellite name to handle both display and internal formats
+        satellite_normalized = satellite.lower()
+        if "landsat" in satellite_normalized:
             return process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover, use_cloud_masking, strict_masking)
-        elif satellite.lower() == "sentinel2" or satellite.lower() == "sentinel":
+        elif "sentinel2" in satellite_normalized or "sentinel-2" in satellite_normalized or satellite_normalized == "sentinel":
             return process_sentinel2_ndvi_analysis(geometry, start_date, end_date, cloud_cover, use_cloud_masking, strict_masking)
         else:
             logger.error(f"Unsupported satellite for NDVI: {satellite}")
@@ -209,6 +214,8 @@ def process_ndvi_analysis(geometry, start_date, end_date, satellite="landsat", c
         raise
 
 
+@cache_analysis_result(timeout=3600, key_prefix="landsat_ndvi")
+@monitor_performance
 def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20, use_cloud_masking=False, strict_masking=False):
     """Process Landsat NDVI analysis with correct Ghana coordinates"""
     try:
@@ -304,8 +311,8 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
         try:
             from datetime import datetime
 
-            # Using Flask approach: Calculate NDVI and cloud info together for each image
-            logger.info(f"🔍 Using Flask approach for cloud masking with use_cloud_masking={use_cloud_masking}")
+            # Calculate NDVI and cloud info together for each image
+            logger.info(f"🔍 Cloud masking with use_cloud_masking={use_cloud_masking}")
 
             if True:  # Always process
                 # Sample actual NDVI values from the collection using harmonized calculation
@@ -314,7 +321,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                     from .earth_engine import calculate_ndvi_landsat
                     return calculate_ndvi_landsat(image)
 
-                # Use Flask approach: Calculate NDVI and cloud info together for each image
+                # Calculate NDVI and cloud info together for each image
                 sorted_collection = original_collection.sort('system:time_start').limit(100)
 
                 def calculate_ndvi_with_cloud_info(image):

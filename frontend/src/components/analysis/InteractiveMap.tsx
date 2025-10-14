@@ -154,7 +154,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
 
       console.log('=== Creating Custom Map for Analysis ===');
-      console.log('Using first and last images only for analysis consistency with Flask');
+      console.log('Using first and last images only for analysis consistency with Django');
       console.log('Analysis type:', analysisType);
       console.log('Satellite:', satellite);
       console.log('Date range:', startDate, 'to', endDate);
@@ -214,8 +214,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
               🌍 Interactive Satellite Imagery Map
             </h2>
             <div className="text-sm text-gray-600 mt-1">
-              {mapMode === 'custom' 
-                ? 'Analysis map with AOI, first & last images, and calculated layers (like Flask)'
+              {mapMode === 'custom'
+                ? 'Analysis map with AOI, first & last images, and calculated layers'
                 : 'Interactive layer-based map with Earth Engine tiles'
               }
             </div>
