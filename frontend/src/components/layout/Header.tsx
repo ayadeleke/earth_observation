@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Satellite, 
@@ -10,9 +10,11 @@ import {
   Settings, 
   User,
   LogOut,
+  LogIn,
+  UserPlus,
   Layout as LayoutIcon,
   FolderOpen,
-  FileText
+  Info
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -27,17 +29,45 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
 
-  const navigationItems = [
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+
+    if (isUserMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [isUserMenuOpen]);
+
+  // Navigation items that are always visible
+  const publicNavigationItems = [
     { path: '/', label: 'Home', icon: Home },
-    { path: '/analysis', label: 'Analysis', icon: BarChart3 },
-    { path: '/demo', label: 'Demo', icon: Globe },
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutIcon },
-    { path: '/projects', label: 'Projects', icon: FolderOpen },
-    { path: '/results', label: 'Results', icon: FileText },
+    // Only show demo for non-authenticated users
+    ...(user ? [] : [{ path: '/demo', label: 'Demo', icon: Globe }]),
   ];
+
+  // Navigation items only visible to authenticated users
+  const authenticatedNavigationItems = [
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutIcon },
+    { path: '/analysis', label: 'Analysis', icon: BarChart3 },
+    { path: '/projects', label: 'Projects', icon: FolderOpen },
+    { path: '/about', label: 'About', icon: Info },
+  ];
+
+  // Combine navigation items based on authentication status
+  const navigationItems = user
+    ? [...publicNavigationItems, ...authenticatedNavigationItems]
+    : [...publicNavigationItems, { path: '/about', label: 'About', icon: Info }];
 
   const handleLogout = () => {
     if (onLogout) {
@@ -111,17 +141,17 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
           {/* User Menu */}
           <div className="navbar-nav">
             {user ? (
-              <div className="nav-item dropdown">
+              <div className="nav-item dropdown" ref={dropdownRef}>
                 <button
                   className="nav-link dropdown-toggle d-flex align-items-center border-0 bg-transparent"
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                 >
                   <div className="rounded-circle d-flex align-items-center justify-content-center me-2" 
-                       style={{ 
-                         width: '32px', 
-                         height: '32px', 
-                         background: 'linear-gradient(135deg, #60a5fa 0%, #a855f7 100%)' 
-                       }}>
+                        style={{ 
+                          width: '32px', 
+                          height: '32px', 
+                          background: 'linear-gradient(135deg, #60a5fa 0%, #a855f7 100%)' 
+                        }}>
                     {user.avatar ? (
                       <img src={user.avatar} alt={user.name} className="rounded-circle" style={{ width: '32px', height: '32px' }} />
                     ) : (
@@ -158,10 +188,28 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
                 )}
               </div>
             ) : (
-              <div className="d-flex align-items-center">
-                <Link to="/login" className="nav-link text-light opacity-75">
-                  Sign In
-                </Link>
+              <div className="nav-item dropdown" ref={dropdownRef}>
+                <button
+                  className="nav-link dropdown-toggle d-flex align-items-center border-0 bg-transparent text-light"
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                >
+                  <User style={{ width: '16px', height: '16px' }} className="me-2" />
+                  Account
+                </button>
+
+                {/* Account Dropdown Menu */}
+                {isUserMenuOpen && (
+                  <div className="dropdown-menu dropdown-menu-end show position-absolute bg-white border shadow-lg rounded" style={{ top: '100%', right: '0', minWidth: '160px' }}>
+                    <Link to="/login" className="dropdown-item d-flex align-items-center">
+                      <LogIn style={{ width: '16px', height: '16px' }} className="me-2" />
+                      Sign In
+                    </Link>
+                    <Link to="/register" className="dropdown-item d-flex align-items-center">
+                      <UserPlus style={{ width: '16px', height: '16px' }} className="me-2" />
+                      Sign Up
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -310,14 +310,12 @@ def process_common_request_setup(request, analysis_type):
             logger.info(f"Coordinates data sample: {str(coord_data)[:200]}")
 
         # Map frontend field names to backend expected names
-        # Support both React-style (camelCase) and Flask-style (snake_case) field names
         field_mapping = {
             # Coordinates
             'coordinates': 'aoi_data',
-            # Dates (React style)
+            # Date parameters
             'startDate': 'start_date',
             'endDate': 'end_date',
-            # Dates (Flask style)
             'start_date': 'start_date',
             'end_date': 'end_date',
             'start_year': 'start_year',
@@ -326,12 +324,11 @@ def process_common_request_setup(request, analysis_type):
             'satellite': 'satellite',
             'analysisType': 'analysis_type',
             'analysis_type': 'analysis_type',
-            # Cloud parameters (React style)
+            # Cloud parameters
             'cloudCover': 'cloud_cover',
             'cloudCoverValue': 'cloud_cover',
             'enableCloudMasking': 'use_cloud_masking',
             'maskingStrictness': 'strict_masking',
-            # Cloud parameters (Flask style)
             'cloud_cover': 'cloud_cover',
             'use_cloud_masking': 'use_cloud_masking',
             'strict_masking': 'strict_masking',
@@ -551,7 +548,7 @@ def parse_aoi_data(aoi_data):
 def extract_common_parameters(data, analysis_type):
     """Extract common parameters from request data"""
     try:
-        # Handle both year-based and date-based ranges (matching Flask behavior)
+        # Handle both year-based and date-based ranges
         start_date = data.get('start_date')
         end_date = data.get('end_date')
 
@@ -623,12 +620,35 @@ def finalize_analysis_response(request, data, analysis_results, analysis_type, f
         logger.info(f"Adding cloud masking settings to {analysis_type} response: enabled={use_cloud_masking}, strict={strict_masking}")
 
         # Save to database
-        save_analysis_to_database(
+        # Extract project from request data if provided
+        project = None
+        if data.get('project_id'):
+            try:
+                from apps.core.models import AnalysisProject
+                project = AnalysisProject.objects.get(id=data['project_id'], user=request.user)
+            except AnalysisProject.DoesNotExist:
+                logger.warning(f"Project {data['project_id']} not found for user {request.user}")
+        
+        save_result = save_analysis_to_database(
             data,
             analysis_results,
             analysis_type,
-            request.user if request.user.is_authenticated else None
+            request.user if request.user.is_authenticated else None,
+            project
         )
+        
+        # Handle save result
+        if save_result:
+            analysis_results['analysis_id'] = save_result['analysis_id']
+            if save_result.get('is_duplicate'):
+                analysis_results['is_duplicate'] = True
+                analysis_results['duplicate_message'] = save_result['message']
+                logger.info(f"Returning existing analysis: {save_result['message']}")
+            else:
+                analysis_results['is_duplicate'] = False
+                logger.info(f"Created new analysis: {save_result['message']}")
+        else:
+            logger.warning("Failed to save analysis to database")
 
         # Generate CSV and plot files if data exists
         if analysis_results.get('data'):

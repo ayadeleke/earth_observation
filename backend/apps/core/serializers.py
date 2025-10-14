@@ -19,6 +19,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             "password_confirm",
             "earth_engine_project_id",
         )
+        extra_kwargs = {
+            'username': {'required': False}  # Make username optional
+        }
 
     def validate(self, attrs):
         if attrs["password"] != attrs["password_confirm"]:
@@ -27,6 +30,21 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop("password_confirm")
+        
+        # Auto-generate username from email if not provided
+        if not validated_data.get('username'):
+            email = validated_data['email']
+            base_username = email.split('@')[0]
+            username = base_username
+            counter = 1
+            
+            # Ensure username is unique
+            while User.objects.filter(username=username).exists():
+                username = f"{base_username}{counter}"
+                counter += 1
+            
+            validated_data['username'] = username
+        
         user = User.objects.create_user(**validated_data)
         return user
 
@@ -76,6 +94,16 @@ class AnalysisProjectSerializer(serializers.ModelSerializer):
         model = AnalysisProject
         fields = ("id", "name", "description", "created_at", "updated_at")
         read_only_fields = ("id", "created_at", "updated_at")
+
+    def validate_name(self, value):
+        """Ensure project name is unique for the current user"""
+        user = self.context['request'].user
+        # Check if a project with this name already exists for this user
+        if AnalysisProject.objects.filter(name__iexact=value, user=user).exists():
+            raise serializers.ValidationError(
+                f"A project with the name '{value}' already exists. Please choose a different name."
+            )
+        return value
 
     def create(self, validated_data):
         validated_data["user"] = self.context["request"].user

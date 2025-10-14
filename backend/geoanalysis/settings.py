@@ -38,9 +38,11 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",  # Add token blacklisting
     "corsheaders",
     "django_filters",
     "drf_spectacular",
+    # "cachalot",  # Database query caching - disabled for development
 ]
 
 LOCAL_APPS = [
@@ -86,7 +88,20 @@ WSGI_APPLICATION = "geoanalysis.wsgi.application"
 # Database
 # Support both PostgreSQL and SQLite based on environment variables
 if env("DATABASE_URL", default="").startswith("postgres"):
-    # PostgreSQL configuration
+    # PostgreSQL configuration (supports both local and cloud with SSL)
+    db_options = {
+        "connect_timeout": 10,
+    }
+    
+    # Add SSL configuration for cloud databases (Aiven)
+    if "aivencloud.com" in env("DB_HOST", default="localhost"):
+        db_options.update({
+            "sslmode": "require",
+            "sslcert": None,
+            "sslkey": None,
+            "sslrootcert": None,
+        })
+    
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -95,9 +110,7 @@ if env("DATABASE_URL", default="").startswith("postgres"):
             "PASSWORD": env("DB_PASSWORD", default=""),
             "HOST": env("DB_HOST", default="localhost"),
             "PORT": env("DB_PORT", default="5432"),
-            "OPTIONS": {
-                "connect_timeout": 10,
-            },
+            "OPTIONS": db_options,
             "CONN_MAX_AGE": 600,  # Connection pooling
         }
     }
@@ -175,23 +188,17 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_TYPE_CLAIM": "token_type",
 }
-
-# Session Configuration
-SESSION_ENGINE = "django.contrib.sessions.backends.db"
-SESSION_COOKIE_AGE = 86400  # 24 hours
-SESSION_SAVE_EVERY_REQUEST = True
-SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-
-# CORS settings
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # React development server
-    "http://127.0.0.1:3000",
-    "http://localhost:3003",  # React frontend current port
-    "http://127.0.0.1:3003",
-]
-
-CORS_ALLOW_CREDENTIALS = True
 
 # API Documentation
 SPECTACULAR_SETTINGS = {
@@ -266,15 +273,105 @@ EARTH_ENGINE_USE_APP_DEFAULT = env("EARTH_ENGINE_USE_APP_DEFAULT", default=True)
 FILE_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024 * 1024  # 16MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024 * 1024  # 16MB
 
-# CORS Settings for React frontend
+# CORS configuration - properly handle credentials
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    "http://localhost:3000",   # React development server
+    "http://127.0.0.1:3000",   # Alternative localhost
+    "https://localhost:3000",  # HTTPS version if used
 ]
 
+# Important: Never use CORS_ALLOW_ALL_ORIGINS=True when using credentials
+CORS_ALLOW_ALL_ORIGINS = False
+
+# Allow credentials (cookies, authorization headers) in CORS requests
 CORS_ALLOW_CREDENTIALS = True
 
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development only
+# CORS headers that can be used during the actual request
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# Methods that are allowed for CORS requests
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+# Additional CORS settings for better debugging and security
+CORS_PREFLIGHT_MAX_AGE = 86400  # 24 hours
+CORS_EXPOSE_HEADERS = [
+    'Content-Type',
+    'Authorization',
+]
+
+# Redis Caching Configuration
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': 'redis://127.0.0.1:6379/1',
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {
+                'retry_on_timeout': True,
+                'socket_keepalive': True,
+                'socket_keepalive_options': {},
+            },
+            'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
+            'IGNORE_EXCEPTIONS': True,  # Graceful fallback if Redis is down
+        },
+        'TIMEOUT': 3600,  # 1 hour default timeout
+        'KEY_PREFIX': 'earth_obs',
+        'VERSION': 1,
+    },
+    'sessions': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': 'redis://127.0.0.1:6379/2',
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {
+                'retry_on_timeout': True,
+            },
+        },
+        'TIMEOUT': 86400,  # 24 hours for sessions
+        'KEY_PREFIX': 'earth_obs_session',
+    },
+    'analysis': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': 'redis://127.0.0.1:6379/3',
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {
+                'retry_on_timeout': True,
+            },
+        },
+        'TIMEOUT': 7200,  # 2 hours for analysis results
+        'KEY_PREFIX': 'earth_obs_analysis',
+    }
+}
+
+# Session configuration with Redis
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'sessions'
+SESSION_COOKIE_AGE = 86400  # 24 hours
+SESSION_SAVE_EVERY_REQUEST = False
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+# Cache middleware configuration
+CACHE_MIDDLEWARE_ALIAS = 'default'
+CACHE_MIDDLEWARE_SECONDS = 300  # 5 minutes
+CACHE_MIDDLEWARE_KEY_PREFIX = 'earth_obs_page'
 
 # Logging
 LOGGING = {
@@ -324,3 +421,11 @@ AUTH_USER_MODEL = "core.User"
 # Create logs directory
 LOGS_DIR = BASE_DIR / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
+
+# AI Assistant Configuration
+GEMINI_API_KEY = env("GEMINI_API_KEY", default=None)
+AI_PROVIDER = env("AI_PROVIDER", default="gemini")  # gemini only
+AI_ASSISTANT_ENABLED = env.bool("AI_ASSISTANT_ENABLED", default=True)
+AI_ASSISTANT_MAX_TOKENS = env.int("AI_ASSISTANT_MAX_TOKENS", default=5000)
+AI_ASSISTANT_TEMPERATURE = env.float("AI_ASSISTANT_TEMPERATURE", default=0.7)
+AI_ASSISTANT_MODEL = env("AI_ASSISTANT_MODEL", default="gemini-2.5-flash")  # Gemini model

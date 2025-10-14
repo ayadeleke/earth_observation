@@ -209,8 +209,8 @@ def calculate_sentinel2_ndvi(image, enable_cloud_masking=False, masking_strictne
 
 def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_date=None, satellite='landsat', cloud_cover=20, selected_images=None, cloud_masking_level='disabled'):
     """
-    Create an interactive map with calculated analysis layers - Django version of Flask functionality
-    
+    Create an interactive map with calculated analysis layers 
+
     Args:
         geometry: Earth Engine geometry for the area of interest
         analysis_type: Type of analysis ('ndvi', 'lst', 'backscatter')
@@ -1986,7 +1986,7 @@ def create_custom_map(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Create interactive map with calculated analysis layers (Flask-style functionality)
+        # Create interactive map with calculated analysis layers
         logger.info(f"Creating interactive map for {analysis_type} analysis using {satellite}")
         
         # Validate analysis type for satellite combination

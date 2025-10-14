@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { useGoogleLogin } from '@react-oauth/google';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const { login, loginWithGoogle } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -44,44 +47,24 @@ const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) return;
 
     setLoading(true);
     setErrors({});
-    
+
     try {
-      const response = await fetch('http://localhost:8000/login/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Store authentication tokens
-        localStorage.setItem('access_token', data.access);
-        localStorage.setItem('refresh_token', data.refresh);
-        localStorage.setItem('user_data', JSON.stringify(data.user));
-        
-        // Remember me functionality
-        if (formData.rememberMe) {
-          localStorage.setItem('remember_me', 'true');
-        }
-        
-        console.log('Login successful:', data);
-        alert('Login successful! Redirecting to dashboard...');
-        navigate('/dashboard');
-      } else {
-        // Handle validation errors
+      await login(formData.email, formData.password);
+      console.log('Login successful');
+      navigate('/dashboard');
+    } catch (error: any) {
+      console.error('Login error:', error);
+      
+      // Handle different types of errors
+      if (error.response?.data) {
+        const data = error.response.data;
         if (data.non_field_errors) {
-          setErrors({ form: data.non_field_errors[0] });
+          setErrors({ form: Array.isArray(data.non_field_errors) ? data.non_field_errors[0] : data.non_field_errors });
         } else if (data.email) {
           setErrors({ email: Array.isArray(data.email) ? data.email[0] : data.email });
         } else if (data.password) {
@@ -89,37 +72,42 @@ const LoginPage: React.FC = () => {
         } else {
           setErrors({ form: 'Login failed. Please check your credentials.' });
         }
+      } else if (error.message) {
+        setErrors({ form: error.message });
+      } else {
+        setErrors({ form: 'Network error. Please check your connection and try again.' });
       }
-    } catch (error) {
-      console.error('Login error:', error);
-      setErrors({ form: 'Network error. Please check your connection and try again.' });
     } finally {
       setLoading(false);
     }
   };
 
+  const googleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      try {
+        setLoading(true);
+        await loginWithGoogle(tokenResponse.access_token);
+        navigate('/dashboard');
+      } catch (error) {
+        console.error('Google login error:', error);
+        setErrors({ general: 'Google login failed. Please try again.' });
+      } finally {
+        setLoading(false);
+      }
+    },
+    onError: (error) => {
+      console.error('Google login error:', error);
+      setErrors({ general: 'Google login failed. Please try again.' });
+    },
+  });
+
   const handleGoogleLogin = () => {
-    // TODO: Implement Google OAuth
-    console.log('Google login clicked');
-    alert('Google OAuth login is not yet implemented. Please use email/password login or demo access.');
+    googleLogin();
   };
 
   const handleDemoLogin = () => {
-    // Set demo user data for limited access
-    const demoUser = {
-      id: 'demo',
-      email: 'demo@earthobservation.com',
-      username: 'demo_user',
-      first_name: 'Demo',
-      last_name: 'User'
-    };
-    
-    localStorage.setItem('demo_mode', 'true');
-    localStorage.setItem('user_data', JSON.stringify(demoUser));
-    
-    console.log('Demo login successful');
-    alert('Demo login successful! You now have limited access to the platform.');
-    navigate('/dashboard');
+    // Simply navigate to the demo page - no authentication required
+    navigate('/demo');
   };
 
   return (
@@ -166,9 +154,9 @@ const LoginPage: React.FC = () => {
               {/* Login Form */}
               <form onSubmit={handleSubmit}>
                 {/* Form-level errors */}
-                {errors.form && (
+                {(errors.form || errors.general) && (
                   <div className="alert alert-danger bg-danger bg-opacity-25 border-danger mb-3">
-                    <p className="text-danger small mb-0">{errors.form}</p>
+                    <p className="text-danger small mb-0">{errors.form || errors.general}</p>
                   </div>
                 )}
 
