@@ -1,7 +1,11 @@
 """
 Minimal views module that imports and exposes all endpoints from micro-modules.
-This file acts as the main entry point for all analysis endpoints.
+This file acts as the main entry point for all analysis endpoints with caching support.
 """
+
+# Import caching utilities
+from .cached_views import CachedAnalysisViewMixin, SmartCacheInvalidator
+from apps.core.caching import AnalysisCache
 
 # Import from basic endpoints module (NDVI, LST, SAR)
 from .view_modules.basic_endpoints import (
@@ -32,13 +36,18 @@ import tempfile
 import zipfile
 from rest_framework import status
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.authentication import SessionAuthentication
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
 
 # Import Earth Engine configuration
 from apps.earth_engine.ee_config import initialize_earth_engine
+from apps.core.permissions import IsOwnerOrReadOnly
+from apps.core.auth_decorators import require_authentication, owner_required
+from apps.core.models import AnalysisProject
 from django.utils import timezone
 
 try:
@@ -94,7 +103,7 @@ def filter_for_complete_coverage(collection, geometry):
         # Add coverage properties to all images
         collection_with_coverage = collection.map(check_coverage)
 
-        # Filter for images that completely cover the ROI (>99% coverage - stricter than Flask)
+        # Filter for images that completely cover the ROI (>99% coverage)
         complete_coverage = collection_with_coverage.filter(
             ee.Filter.And(
                 ee.Filter.eq('roi_covered', True),
@@ -617,7 +626,7 @@ def get_image_metadata(request):
                 "error": f"Unsupported satellite: {satellite}"
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Apply complete coverage filtering to match Flask behavior
+        # Apply complete coverage filtering
         logger.info(f"Total images before coverage filtering: {collection.size().getInfo()}")
         
         # Use more lenient filtering for Sentinel-1 SAR data
@@ -783,17 +792,20 @@ def get_image_metadata(request):
     }
 )
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@authentication_classes([JWTAuthentication, SessionAuthentication])
+@permission_classes([IsAuthenticated])
 def get_analysis_history_endpoint(request):
-    """Get analysis history endpoint wrapper"""
+    """Get analysis history for authenticated user"""
     try:
-        result = get_analysis_history()
+        # Get analysis history for the current user only
+        user = request.user
+        result = get_analysis_history(user_id=user.id)
         if result.get('success', False):
             return Response(result, status=status.HTTP_200_OK)
         else:
             return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     except Exception as e:
-        logger.error(f"Error getting analysis history: {str(e)}")
+        logger.error(f"Error getting analysis history for user {request.user.id}: {str(e)}")
         return Response({
             'status': 'error',
             'message': f"Failed to retrieve analysis history: {str(e)}"
@@ -810,17 +822,20 @@ def get_analysis_history_endpoint(request):
     }
 )
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@authentication_classes([JWTAuthentication, SessionAuthentication])
+@permission_classes([IsAuthenticated])
 def get_analysis_result_endpoint(request, analysis_id):
-    """Get analysis result endpoint wrapper"""
+    """Get analysis result for authenticated user"""
     try:
-        result = get_analysis_result_by_id(analysis_id)
+        # Verify user owns this analysis result
+        user = request.user
+        result = get_analysis_result_by_id(analysis_id, user_id=user.id)
         if result.get('success', False):
             return Response(result, status=status.HTTP_200_OK)
         else:
             return Response(result, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        logger.error(f"Error getting analysis result {analysis_id}: {str(e)}")
+        logger.error(f"Error getting analysis result {analysis_id} for user {request.user.id}: {str(e)}")
         return Response({
             'status': 'error',
             'message': f"Failed to retrieve analysis result: {str(e)}"
@@ -837,17 +852,20 @@ def get_analysis_result_endpoint(request, analysis_id):
     }
 )
 @api_view(["DELETE"])
-@permission_classes([AllowAny])
+@authentication_classes([JWTAuthentication, SessionAuthentication])
+@permission_classes([IsAuthenticated])
 def delete_analysis_result_endpoint(request, analysis_id):
-    """Delete analysis result endpoint wrapper"""
+    """Delete analysis result for authenticated user"""
     try:
-        result = delete_analysis_by_id(analysis_id)
+        # Verify user owns this analysis result before deletion
+        user = request.user
+        result = delete_analysis_by_id(analysis_id, user_id=user.id)
         if result.get('success', False):
             return Response(result, status=status.HTTP_200_OK)
         else:
             return Response(result, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        logger.error(f"Error deleting analysis result {analysis_id}: {str(e)}")
+        logger.error(f"Error deleting analysis result {analysis_id} for user {request.user.id}: {str(e)}")
         return Response({
             'status': 'error',
             'message': f"Failed to delete analysis result: {str(e)}"

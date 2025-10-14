@@ -21,16 +21,16 @@ export const Footer: React.FC = () => {
 
   const productLinks = [
     { href: '/analysis', label: 'NDVI Analysis', icon: BarChart3 },
-    { href: '/lst', label: 'LST Analysis', icon: Globe },
-    { href: '/sar', label: 'SAR Analysis', icon: BarChart3 },
+    { href: '/analysis', label: 'LST Analysis', icon: Globe },
+    { href: '/analysis', label: 'SAR Analysis', icon: BarChart3 },
     { href: '/demo', label: 'Demo', icon: Globe },
   ];
 
   const companyLinks = [
     { href: '/about', label: 'About Us' },
-    { href: '/contact', label: 'Contact' },
-    { href: '/careers', label: 'Careers' },
-    { href: '/blog', label: 'Blog' },
+    { href: '/#', label: 'Contact' },
+    { href: '/#', label: 'Careers' },
+    { href: '/#', label: 'Blog' },
   ];
 
   const resourceLinks = [
@@ -127,10 +127,10 @@ export const Footer: React.FC = () => {
           <div className="col-lg-2 col-md-6 col-sm-6">
             <h4 className="h5 fw-semibold mb-3 text-white">Products</h4>
             <ul className="list-unstyled">
-              {productLinks.map((link) => {
+              {productLinks.map((link, index) => {
                 const IconComponent = link.icon;
                 return (
-                  <li key={link.href} className="mb-2">
+                  <li key={`${link.href}-${link.label}-${index}`} className="mb-2">
                     <Link
                       to={link.href}
                       className="d-flex align-items-center text-light text-decoration-none opacity-75"
@@ -148,10 +148,10 @@ export const Footer: React.FC = () => {
           <div className="col-lg-2 col-md-6 col-sm-6">
             <h4 className="h5 fw-semibold mb-3 text-white">Resources</h4>
             <ul className="list-unstyled">
-              {resourceLinks.map((link) => {
+              {resourceLinks.map((link, index) => {
                 const IconComponent = link.icon;
                 return (
-                  <li key={link.href} className="mb-2">
+                  <li key={`${link.href}-${link.label}-${index}`} className="mb-2">
                     <Link
                       to={link.href}
                       className="d-flex align-items-center text-light text-decoration-none opacity-75"
@@ -171,8 +171,8 @@ export const Footer: React.FC = () => {
               <div className="col-6">
                 <h4 className="h5 fw-semibold mb-3 text-white">Company</h4>
                 <ul className="list-unstyled mb-4">
-                  {companyLinks.map((link) => (
-                    <li key={link.href} className="mb-2">
+                  {companyLinks.map((link, index) => (
+                    <li key={`${link.href}-${link.label}-${index}`} className="mb-2">
                       <Link
                         to={link.href}
                         className="text-light text-decoration-none opacity-75 small"
@@ -187,10 +187,10 @@ export const Footer: React.FC = () => {
               <div className="col-6">
                 <h4 className="h5 fw-semibold mb-3 text-white">Legal</h4>
                 <ul className="list-unstyled">
-                  {legalLinks.slice(0, 2).map((link) => {
+                  {legalLinks.slice(0, 2).map((link, index) => {
                     const IconComponent = link.icon;
                     return (
-                      <li key={link.href} className="mb-2">
+                      <li key={`${link.href}-${link.label}-${index}`} className="mb-2">
                         <Link
                           to={link.href}
                           className="d-flex align-items-center text-light text-decoration-none opacity-75"

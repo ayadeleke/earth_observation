@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { InteractiveMap } from '../components/map/InteractiveMap';
 import AnalysisDashboard from '../components/analysis/AnalysisDashboard';
 import { AnalysisForm } from '../components/analysis/AnalysisForm';
+import authService from '../services/authService';
 import '../styles/AnalysisPage.css';
 
 const AnalysisPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   
   const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -17,6 +19,162 @@ const AnalysisPage: React.FC = () => {
   const [clearShapefileLayers] = useState<boolean>(false);
   const [geometryForMap, setGeometryForMap] = useState<any>(null);
   const [lastFormData, setLastFormData] = useState<any>(null);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectAnalyses, setProjectAnalyses] = useState<any[]>([]);
+  const [selectedAnalysis, setSelectedAnalysis] = useState<any>(null);
+  const [formInitialData, setFormInitialData] = useState<any>({});
+  const [loadedAnalysisMessage, setLoadedAnalysisMessage] = useState<string>('');
+  const [initialDateRangeType, setInitialDateRangeType] = useState<string>('years');
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [mapDrawnCoordinates, setMapDrawnCoordinates] = useState<string>('');
+
+  // Delete analysis function
+  const deleteAnalysis = async (analysisId: number, analysisName: string) => {
+    if (!window.confirm(`Are you sure you want to delete the analysis "${analysisName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const token = authService.getAccessToken();
+      const response = await fetch(`http://localhost:8000/api/v1/analysis/delete/${analysisId}/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        // Remove the deleted analysis from the local state
+        setProjectAnalyses(prev => prev.filter(analysis => analysis.id !== analysisId));
+        
+        // Clear current selection if the deleted analysis was selected
+        if (selectedAnalysis?.id === analysisId) {
+          setSelectedAnalysis(null);
+          setFormInitialData({});
+          setResults(null);
+          setShowResults(false);
+          setGeometryForMap(null);
+          setLastFormData(null);
+          setLoadedAnalysisMessage('');
+          setInitialDateRangeType('years');
+        }
+        
+        setLoadedAnalysisMessage(`Analysis "${result.deleted_analysis?.name || analysisName}" deleted successfully`);
+        
+        // Clear the success message after 5 seconds
+        setTimeout(() => {
+          setLoadedAnalysisMessage('');
+        }, 5000);
+        
+      } else {
+        const errorData = await response.json();
+        setError(`Failed to delete analysis: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error deleting analysis:', err);
+      setError('Failed to delete analysis. Please try again.');
+    }
+  };
+
+  // Helper function to convert GeoJSON to WKT
+  const convertGeoJSONToWKT = (geoJson: any): string => {
+    try {
+      if (!geoJson) return '';
+      
+      // Handle FeatureCollection format
+      if (geoJson.type === 'FeatureCollection' && geoJson.features && geoJson.features.length > 0) {
+        const geometry = geoJson.features[0].geometry;
+        return convertGeometryToWKT(geometry);
+      }
+      
+      // Handle Feature format
+      if (geoJson.type === 'Feature' && geoJson.geometry) {
+        return convertGeometryToWKT(geoJson.geometry);
+      }
+      
+      // Handle direct geometry format
+      if (geoJson.type && geoJson.coordinates) {
+        return convertGeometryToWKT(geoJson);
+      }
+      
+      // If it's already a string (WKT), return as is
+      if (typeof geoJson === 'string') {
+        return geoJson;
+      }
+      
+      return '';
+    } catch (error) {
+      console.warn('Error converting GeoJSON to WKT:', error);
+      return '';
+    }
+  };
+
+  const convertGeometryToWKT = (geometry: any): string => {
+    if (!geometry || !geometry.coordinates) {
+      return '';
+    }
+    
+    switch (geometry.type) {
+      case 'Polygon':
+        const coords = geometry.coordinates[0]; // First ring of polygon
+        if (!coords || coords.length === 0) {
+          return '';
+        }
+        
+        // Ensure the polygon is closed (first point equals last point)
+        let polygonCoords = [...coords];
+        if (polygonCoords[0][0] !== polygonCoords[polygonCoords.length - 1][0] || 
+            polygonCoords[0][1] !== polygonCoords[polygonCoords.length - 1][1]) {
+          polygonCoords.push(polygonCoords[0]);
+        }
+        
+        const wktCoords = polygonCoords.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ');
+        return `POLYGON((${wktCoords}))`;
+      
+      case 'Point':
+        return `POINT(${geometry.coordinates[0]} ${geometry.coordinates[1]})`;
+      
+      default:
+        console.warn('Unsupported geometry type:', geometry.type);
+        return '';
+    }
+  };
+
+  // Get project ID from URL parameters
+  useEffect(() => {
+    const project = searchParams.get('project');
+    if (project) {
+      setProjectId(project);
+      loadProjectAnalyses(project);
+    }
+  }, [searchParams]);
+
+  // Load analyses for the current project
+  const loadProjectAnalyses = async (projectId: string) => {
+    try {
+      const api = authService.getAuthenticatedAPI();
+      const response = await api.get(`/projects/${projectId}/analyses/`);
+      
+      if (response.data.success) {
+        setProjectAnalyses(response.data.analyses);
+        
+        // If there are analyses, select the most recent one
+        if (response.data.analyses.length > 0) {
+          const mostRecent = response.data.analyses[0];
+          setSelectedAnalysis(mostRecent);
+          if (mostRecent.results) {
+            setResults(mostRecent.results);
+            setShowResults(true);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading project analyses:', error);
+    }
+  };
 
   // Handle area selection from map
   const handleAreaSelect = (coordinates: any, wkt: string = '', source: string = 'drawing', geometry: any = null) => {
@@ -34,6 +192,15 @@ const AnalysisPage: React.FC = () => {
       };
     }
     setGeometryForMap(mapGeometry);
+    
+    // Update coordinates drawn from map
+    setMapDrawnCoordinates(wkt);
+    
+    // Update form initial data with the new coordinates
+    setFormInitialData((prev: any) => ({
+      ...prev,
+      coordinates: wkt
+    }));
     
     // Clear uploaded shapefile when drawing on map (not when shapefile sets coordinates)
     if (wkt && uploadedShapefile && source === 'drawing') {
@@ -58,6 +225,8 @@ const AnalysisPage: React.FC = () => {
 
     setLoading(true);
     setError('');
+    setLoadedAnalysisMessage(''); // Clear any loaded analysis message
+    setInitialDateRangeType('years'); // Reset date range type when starting new analysis
 
     try {
       // Prepare the request data
@@ -82,21 +251,24 @@ const AnalysisPage: React.FC = () => {
         requestData.append('shapefile', uploadedShapefile);
         
         // Add additional fields
+        if (projectId) {
+          requestData.append('project_id', projectId);
+        }
         requestData.append('projectId', 'ee-ayotundenew');
         requestData.append('dateRangeType', dateRangeType);
         
         contentType = 'multipart/form-data';
       } else {
-        // Use JSON for regular requests - match Flask parameter structure
+        // Use JSON for regular requests
         const requestBody: any = {
           coordinates: formData.coordinates,
           analysis_type: formData.analysisType,
           satellite: formData.satellite === 'sentinel1' ? 'sentinel' : formData.satellite, // Backend expects 'sentinel' for SAR
-          project_id: 'ee-ayotundenew',
+          project_id: projectId || undefined, // Use actual project ID
           date_range_type: dateRangeType
         };
 
-        // Add date parameters based on range type (match Flask behavior)
+        // Add date parameters based on range type
         if (dateRangeType === 'years') {
           requestBody.start_year = parseInt(formData.startYear?.toString() || new Date(formData.startDate).getFullYear().toString());
           requestBody.end_year = parseInt(formData.endYear?.toString() || new Date(formData.endDate).getFullYear().toString());
@@ -105,7 +277,7 @@ const AnalysisPage: React.FC = () => {
           requestBody.end_date = formData.endDate;
         }
 
-        // Add cloud cover and masking parameters for all optical satellites (match Flask field names)
+        // Add cloud cover and masking parameters for all optical satellites
         if (formData.satellite !== 'sentinel1' && ['ndvi', 'lst', 'comprehensive'].includes(formData.analysisType)) {
           requestBody.cloud_cover = parseInt(formData.cloudCover.toString());
           requestBody.use_cloud_masking = formData.enableCloudMasking;
@@ -134,44 +306,40 @@ const AnalysisPage: React.FC = () => {
       console.log('Request body/data:', contentType === 'application/json' ? requestData : 'FormData (check network tab)');
       
       // Determine the correct endpoint based on analysis type
-      let endpoint = 'http://localhost:8000/';
+      let endpoint = '';
       switch (formData.analysisType) {
         case 'ndvi':
-          endpoint += 'process_ndvi/';
+          endpoint = '/analysis/process_ndvi/';
           break;
         case 'lst':
-          endpoint += 'process_lst/';
+          endpoint = '/analysis/process_lst/';
           break;
         case 'sar':
-          endpoint += 'process_sentinel/';
+          endpoint = '/analysis/process_sentinel/';
           break;
         case 'comprehensive':
-          endpoint += 'process_comprehensive/';
+          endpoint = '/analysis/process_comprehensive/';
           break;
         default:
-          endpoint += 'process_ndvi/'; // Default to NDVI
+          endpoint = '/analysis/process_ndvi/'; // Default to NDVI
       }
 
-      // Make the API call to Django backend
-      const headers: any = {};
-      if (contentType === 'application/json') {
-        headers['Content-Type'] = 'application/json';
-      }
-      // For FormData, let browser set Content-Type automatically
+      // Make the API call using authenticated service
+      const api = authService.getAuthenticatedAPI();
+      let response;
       
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: headers,
-        body: requestData
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Backend error response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}. Details: ${errorText}`);
+      if (contentType === 'application/json') {
+        response = await api.post(endpoint, JSON.parse(requestData as string));
+      } else {
+        // For FormData, use the axios instance directly
+        response = await api.post(endpoint, requestData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
       }
 
-      const result = await response.json();
+      const result = response.data;
       
       // Add comprehensive debugging for all analysis types
       console.log('=== Analysis Response ===');
@@ -203,16 +371,44 @@ const AnalysisPage: React.FC = () => {
         console.log('Original time_series_data sample:', result.time_series_data?.slice(0, 2));
         console.log('Original statistics:', result.statistics);
         
+        // Check if this is a duplicate analysis
+        if (result.is_duplicate) {
+          setLoadedAnalysisMessage(`${result.duplicate_message || 'Loaded existing analysis with same parameters'}`);
+          
+          // Set a timeout to clear the duplicate message after 7 seconds
+          setTimeout(() => {
+            setLoadedAnalysisMessage('');
+          }, 7000);
+        }
+        
         setResults(result);
         setShowResults(true);
         setError(''); // Clear any previous errors
+        
+        // Reload project analyses if we're in a project context
+        if (projectId) {
+          loadProjectAnalyses(projectId);
+        }
       } else {
         setError(result.message || 'Analysis failed');
       }
       
     } catch (error: any) {
       console.error('Analysis error:', error);
-      setError(error.message || 'An error occurred during analysis');
+      console.error('Error response:', error.response);
+      console.error('Error response data:', error.response?.data);
+      
+      let errorMessage = 'An error occurred during analysis';
+      
+      if (error.response?.status === 403) {
+        errorMessage = error.response?.data?.detail || error.response?.data?.message || 'You do not have permission to perform this analysis. Please ensure you are logged in with the correct account.';
+      } else if (error.response?.data) {
+        errorMessage = error.response.data.detail || error.response.data.message || error.response.data.error || errorMessage;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -432,6 +628,132 @@ const AnalysisPage: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      {/* Saved Analyses Panel */}
+      {projectId && projectAnalyses.length > 0 && (
+        <div className="container mb-4">
+          <div className="card border-0 shadow-sm">
+            <div className="card-header bg-light d-flex justify-content-between align-items-center">
+              <h5 className="mb-0">
+                <i className="fas fa-history me-2"></i>
+                Saved Analyses for this Project
+              </h5>
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => {
+                  setSelectedAnalysis(null);
+                  setFormInitialData({});
+                  setResults(null);
+                  setShowResults(false);
+                  setGeometryForMap(null);
+                  setLastFormData(null);
+                  setLoadedAnalysisMessage('');
+                  setInitialDateRangeType('years'); // Reset to default
+                }}
+                title="Clear loaded analysis and start fresh"
+              >
+                <i className="fas fa-times me-1"></i>New Analysis
+              </button>
+            </div>
+            <div className="card-body">
+              <div className="row">
+                {projectAnalyses.map((analysis) => (
+                  <div key={analysis.id} className="col-md-6 col-lg-4 mb-3">
+                    <div className={`card ${selectedAnalysis?.id === analysis.id ? 'border-primary' : 'border-light'}`}>
+                      <div className="card-body p-3">
+                        <h6 className="card-title">{analysis.analysis_type.toUpperCase()} Analysis</h6>
+                        <p className="card-text small text-muted mb-2">
+                          {new Date(analysis.created_at).toLocaleDateString()}
+                        </p>
+                        <p className="card-text small">
+                          <strong>Satellite:</strong> {analysis.satellite}<br/>
+                          <strong>Date Range:</strong> {analysis.start_date} to {analysis.end_date}
+                        </p>
+                        <div className="d-flex gap-2">
+                          <button
+                            className={`btn ${selectedAnalysis?.id === analysis.id ? 'btn-primary' : 'btn-outline-primary'} btn-sm flex-grow-1`}
+                            onClick={() => {
+                              setSelectedAnalysis(analysis);
+                              if (analysis.results) {
+                                // Process saved results the same way as fresh analysis results
+                                console.log('=== Loading Saved Analysis Results ===');
+                                console.log('Saved analysis data:', analysis.results);
+                                
+                                // Set the results directly - they should have the same structure as fresh results
+                                setResults(analysis.results);
+                                setShowResults(true);
+                                
+                                // Create form data for proper transformation and form population
+                                const formData = {
+                                  analysisType: analysis.analysis_type,
+                                  satellite: analysis.satellite,
+                                  startDate: analysis.start_date,
+                                  endDate: analysis.end_date,
+                                  cloudCover: analysis.cloud_cover || 20,
+                                  cloudCoverValue: analysis.cloud_cover || 20, // Sync with cloudCover
+                                  coordinates: convertGeoJSONToWKT(analysis.geometry_data),
+                                  // Convert boolean fields to form format
+                                  enableCloudMasking: analysis.use_cloud_masking !== undefined ? analysis.use_cloud_masking : true,
+                                  maskingStrictness: analysis.strict_masking ? 'true' : 'false', // Form expects 'true'/'false' strings
+                                  polarization: analysis.polarization || 'VV',
+                                  // Add year fields if needed (extract from dates)
+                                  startYear: new Date(analysis.start_date).getFullYear(),
+                                  endYear: new Date(analysis.end_date).getFullYear()
+                                };
+                                
+                                // Set form data for dashboard transformation
+                                setLastFormData(formData);
+                                
+                                // Set initial data for the form to populate fields
+                                setFormInitialData(formData);
+                                
+                                // Set date range type to 'dates' since saved analyses use specific dates
+                                setInitialDateRangeType('dates');
+                                
+                                // Set success message
+                                setLoadedAnalysisMessage(`Loaded ${analysis.analysis_type.toUpperCase()} analysis from ${new Date(analysis.created_at).toLocaleDateString()}`);
+                                
+                                console.log('Set form data for saved analysis:', formData);
+                                
+                                // Update map geometry if available
+                                if (analysis.geometry_data) {
+                                  // Use the original GeoJSON for map display
+                                  let mapGeometry = analysis.geometry_data;
+                                  
+                                  // Convert FeatureCollection to simple geometry for map
+                                  if (mapGeometry.type === 'FeatureCollection' && mapGeometry.features && mapGeometry.features.length > 0) {
+                                    mapGeometry = mapGeometry.features[0].geometry;
+                                  } else if (mapGeometry.type === 'Feature' && mapGeometry.geometry) {
+                                    mapGeometry = mapGeometry.geometry;
+                                  }
+                                  
+                                  setGeometryForMap(mapGeometry);
+                                }
+                              }
+                            }}
+                          >
+                            {selectedAnalysis?.id === analysis.id ? 'Current' : 'Load Results'}
+                          </button>
+                          <button
+                            className="btn btn-outline-danger btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteAnalysis(analysis.id, `${analysis.analysis_type.toUpperCase()} (${new Date(analysis.created_at).toLocaleDateString()})`);
+                            }}
+                            title="Delete this analysis"
+                          >
+                            <i className="fas fa-trash"></i>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="container">
         {/* Error Alert */}
@@ -441,6 +763,18 @@ const AnalysisPage: React.FC = () => {
               <div className="alert alert-danger" role="alert">
                 <i className="fas fa-exclamation-triangle me-2"></i>
                 {error}
+              </div>
+            )}
+            {loadedAnalysisMessage && (
+              <div className={`alert ${loadedAnalysisMessage.includes('duplicate') || loadedAnalysisMessage.includes('existing') ? 'alert-warning' : 'alert-success'}`} role="alert">
+                <i className={`fas ${loadedAnalysisMessage.includes('duplicate') || loadedAnalysisMessage.includes('existing') ? 'fa-info-circle' : 'fa-check-circle'} me-2`}></i>
+                {loadedAnalysisMessage}
+                <button
+                  type="button"
+                  className="btn-close float-end"
+                  onClick={() => setLoadedAnalysisMessage('')}
+                  aria-label="Close"
+                ></button>
               </div>
             )}
           </div>
@@ -455,6 +789,8 @@ const AnalysisPage: React.FC = () => {
               onAreaSelect={handleAreaSelect}
               loading={loading}
               error={error}
+              initialData={formInitialData}
+              initialDateRangeType={initialDateRangeType}
             />
           </div>
           

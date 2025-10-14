@@ -25,7 +25,9 @@ class AnalysisProject(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["-updated_at"]  # Order by last updated instead of created
+        # Ensure unique project names per user
+        unique_together = [['name', 'user']]
 
     def __str__(self):
         return f"{self.name} - {self.user.username}"

@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, User, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
+  const { register } = useAuth();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -72,50 +74,42 @@ const RegisterPage: React.FC = () => {
     setLoading(true);
     
     try {
-      // Prepare data for backend API
+      // Prepare data for registration
       const registrationData = {
         email: formData.email,
-        username: formData.email, // Use email as username
+        // username will be auto-generated from email by backend
         password: formData.password,
         password_confirm: formData.confirmPassword,
         earth_engine_project_id: '' // Optional field, can be left empty
       };
 
-      const response = await fetch('http://localhost:8000/register/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(registrationData)
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        alert('Registration successful! You can now log in.');
-        // Redirect to login page
-        navigate('/login');
-      } else {
-        // Handle API errors
+      await register(registrationData);
+      alert('Registration successful! You can now log in.');
+      navigate('/login');
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      
+      // Handle different types of errors
+      if (error.response?.data) {
+        const data = error.response.data;
         if (data.email) {
-          setErrors(prev => ({ ...prev, email: data.email[0] }));
+          setErrors(prev => ({ ...prev, email: Array.isArray(data.email) ? data.email[0] : data.email }));
         }
         if (data.username) {
-          setErrors(prev => ({ ...prev, email: data.username[0] }));
+          setErrors(prev => ({ ...prev, email: Array.isArray(data.username) ? data.username[0] : data.username }));
         }
         if (data.password) {
-          setErrors(prev => ({ ...prev, password: data.password[0] }));
+          setErrors(prev => ({ ...prev, password: Array.isArray(data.password) ? data.password[0] : data.password }));
         }
         if (data.password_confirm) {
-          setErrors(prev => ({ ...prev, confirmPassword: data.password_confirm[0] }));
+          setErrors(prev => ({ ...prev, confirmPassword: Array.isArray(data.password_confirm) ? data.password_confirm[0] : data.password_confirm }));
         }
         if (data.non_field_errors) {
-          alert('Registration failed: ' + data.non_field_errors[0]);
+          alert('Registration failed: ' + (Array.isArray(data.non_field_errors) ? data.non_field_errors[0] : data.non_field_errors));
         }
+      } else {
+        alert('Registration failed. Please try again.');
       }
-    } catch (error) {
-      console.error('Registration error:', error);
-      alert('Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }

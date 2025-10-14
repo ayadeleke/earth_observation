@@ -1,6 +1,6 @@
 """
 Earth Engine utilities for Earth observation analysis.
-Handles Earth Engine geometry operations and data collection.
+Handles Earth Engine geometry operations and data collection with caching.
 """
 
 import json
@@ -8,6 +8,7 @@ import logging
 import ee
 from datetime import datetime
 from apps.earth_engine.ee_config import initialize_earth_engine
+from apps.core.caching import cache_earth_engine_data, monitor_performance
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,8 @@ def validate_image_coverage(image, geometry, min_coverage_percent=70):
         return ee.Number(1)  # Default to include image if validation fails
 
 
+@cache_earth_engine_data(timeout=7200, key_prefix="landsat_collection")
+@monitor_performance
 def get_landsat_collection(geometry, start_date, end_date, cloud_cover=20):
     """
     Get a consistent Landsat collection for use across multiple analysis types.
@@ -256,6 +259,8 @@ def get_landsat_collection(geometry, start_date, end_date, cloud_cover=20):
         raise
 
 
+@cache_earth_engine_data(timeout=7200, key_prefix="sentinel2_collection")
+@monitor_performance
 def get_sentinel2_collection(geometry, start_date, end_date, cloud_cover=20):
     """
     Get Sentinel-2 collection for analysis.

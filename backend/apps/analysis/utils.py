@@ -1,6 +1,5 @@
 """
 Analysis utilities for file generation and download functionality.
-Implements Flask-style file downloads for Django backend.
 """
 
 from django.core.files.storage import default_storage
@@ -464,7 +463,7 @@ def create_response_with_downloads(
     data, statistics, analysis_type="ndvi", title="Analysis", metadata=None
 ):
     """
-    Create Flask-style response with download URLs.
+    Create response with download URLs.
 
     Args:
         data (list): Analysis data
