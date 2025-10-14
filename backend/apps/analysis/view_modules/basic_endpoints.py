@@ -1,14 +1,20 @@
 """
 API endpoints for basic analysis operations.
 Contains Django REST Framework views for NDVI, LST, and SAR analysis.
+All endpoints require authentication and Earth Engine access.
 """
 
 import logging
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.authentication import SessionAuthentication
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 
+from apps.core.permissions import CanPerformAnalysis
+from apps.core.auth_decorators import require_earth_engine_auth, log_user_action, demo_or_authenticated
 from .request_handlers import (
     process_common_request_setup,
     parse_aoi_data,
@@ -92,7 +98,10 @@ logger = logging.getLogger(__name__)
     }
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
+@csrf_exempt
+@authentication_classes([JWTAuthentication, SessionAuthentication])
+@permission_classes([CanPerformAnalysis])
+@log_user_action("NDVI Analysis")
 def process_ndvi(request):
     """Process NDVI analysis with simplified, working approach"""
     try:
@@ -161,7 +170,10 @@ def process_ndvi(request):
     }
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
+@csrf_exempt
+@authentication_classes([JWTAuthentication, SessionAuthentication])
+@permission_classes([CanPerformAnalysis])
+@log_user_action("LST Analysis")
 def process_lst(request):
     """Process Land Surface Temperature analysis"""
     try:
@@ -229,7 +241,10 @@ def process_lst(request):
     }
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
+@csrf_exempt
+@authentication_classes([JWTAuthentication, SessionAuthentication])
+@permission_classes([CanPerformAnalysis])
+@log_user_action("SAR Analysis")
 def process_sentinel(request):
     """Process SAR analysis using Sentinel-1 data"""
     try:
@@ -273,7 +288,7 @@ def process_sentinel(request):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([AllowAny])  # Keep health check public
 def health_check(request):
     """Health check endpoint"""
     return create_health_check_response()
@@ -281,14 +296,15 @@ def health_check(request):
 
 # Legacy compatibility endpoints
 @api_view(["POST"])
-@permission_classes([AllowAny])
+@authentication_classes([JWTAuthentication, SessionAuthentication])
+@permission_classes([CanPerformAnalysis])
 def process_lst_request(request):
     """Legacy LST endpoint - redirects to process_lst"""
     return process_lst(request)
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([AllowAny])  # Keep deprecated endpoint info public
 def process_analysis_generic(request, analysis_type):
     """Generic analysis endpoint for backward compatibility"""
     return create_deprecated_response(
@@ -302,7 +318,8 @@ def process_analysis_generic(request, analysis_type):
 
 
 @api_view(["POST"])
-@permission_classes([AllowAny])
+@authentication_classes([JWTAuthentication, SessionAuthentication])
+@permission_classes([IsAuthenticated])
 def get_image_metadata(request):
     """Get metadata for satellite images"""
     return create_not_implemented_response("Image metadata")
@@ -310,7 +327,7 @@ def get_image_metadata(request):
 
 # Additional utility endpoints that could be implemented
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([AllowAny])  # Keep info endpoints public
 def list_available_satellites(request):
     """List available satellites and their capabilities"""
     return {

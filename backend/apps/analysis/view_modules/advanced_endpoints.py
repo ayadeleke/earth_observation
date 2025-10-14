@@ -1,14 +1,20 @@
 """
 API endpoints for advanced analysis operations.
 Contains Django REST Framework views for comprehensive, trend, and composite analysis.
+All endpoints require authentication and Earth Engine access.
 """
 
 import logging
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.authentication import SessionAuthentication
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
 
+from apps.core.permissions import CanPerformAnalysis
+from apps.core.auth_decorators import log_user_action
 from .request_handlers import (
     process_common_request_setup,
     parse_aoi_data,
@@ -54,7 +60,10 @@ logger = logging.getLogger(__name__)
     }
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
+@csrf_exempt
+@authentication_classes([JWTAuthentication, SessionAuthentication])
+@permission_classes([CanPerformAnalysis])
+@log_user_action("Comprehensive Analysis")
 def process_comprehensive(request):
     """Process comprehensive analysis combining multiple indicators"""
     try:
@@ -126,7 +135,9 @@ def process_comprehensive(request):
     }
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
+@authentication_classes([JWTAuthentication, SessionAuthentication])
+@permission_classes([CanPerformAnalysis])
+@log_user_action("Trend Analysis")
 def analyze_trends(request):
     """Process trend analysis over time"""
     try:
@@ -196,7 +207,9 @@ def analyze_trends(request):
     }
 )
 @api_view(["POST"])
-@permission_classes([AllowAny])
+@authentication_classes([JWTAuthentication, SessionAuthentication])
+@permission_classes([CanPerformAnalysis])
+@log_user_action("Composite Analysis")
 def process_composite(request):
     """Process composite analysis"""
     try:

@@ -1,6 +1,5 @@
 """
 Django-adapted NDVI processing and analysis functions
-Migrated from the original Flask modules
 """
 
 import ee

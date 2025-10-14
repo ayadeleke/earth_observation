@@ -1,17 +1,28 @@
 """
 Core views for the GeoAnalysis Django application.
-Provides Earth Engine authentication and basic endpoints that match the Flask app functionality.
+Provides Earth Engine authentication and basic endpoints for app functionality.
 """
 
 import logging
 from datetime import datetime
+import requests
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 from rest_framework import generics, status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.views import APIView
+from django.contrib.auth import logout
+from django.contrib.auth.hashers import check_password
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 
 from django.conf import settings
 from .models import User, AnalysisProject, GeometryInput, FileUpload
+from .permissions import IsOwnerOrReadOnly, IsProjectOwner, CanPerformAnalysis
+from .auth_decorators import require_authentication, log_user_action
 from .serializers import (
     UserRegistrationSerializer,
     UserSerializer,
@@ -25,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 # Authentication Views
+@method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserRegistrationSerializer
@@ -48,6 +60,7 @@ class RegisterView(generics.CreateAPIView):
         )
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class LoginView(generics.GenericAPIView):
     serializer_class = LoginSerializer
     permission_classes = [permissions.AllowAny]
@@ -69,12 +82,110 @@ class LoginView(generics.GenericAPIView):
         )
 
 
-class UserProfileView(generics.RetrieveUpdateAPIView):
+class UserProfileView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
         return self.request.user
+
+    def perform_destroy(self, instance):
+        """Custom delete behavior - ensure we're deleting the current user"""
+        if instance != self.request.user:
+            raise PermissionDenied("You can only delete your own account")
+        instance.delete()
+
+
+class LogoutView(APIView):
+    """Logout view that blacklists the refresh token"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        try:
+            refresh_token = request.data.get("refresh")
+            if refresh_token:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            
+            # Also perform Django logout for session-based auth
+            logout(request)
+            
+            return Response(
+                {"message": "Successfully logged out"},
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {"error": "Invalid token or logout failed"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class ChangePasswordView(APIView):
+    """Change password view"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        old_password = request.data.get('old_password')
+        new_password = request.data.get('new_password')
+        
+        if not old_password or not new_password:
+            return Response(
+                {"error": "Both old and new passwords are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not check_password(old_password, user.password):
+            return Response(
+                {"error": "Invalid old password"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if len(new_password) < 8:
+            return Response(
+                {"error": "New password must be at least 8 characters long"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        user.set_password(new_password)
+        user.save()
+        
+        return Response(
+            {"message": "Password changed successfully"},
+            status=status.HTTP_200_OK
+        )
+
+
+class CurrentUserView(generics.RetrieveAPIView):
+    """Get current user information"""
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+
+
+class UserProjectsView(generics.ListAPIView):
+    """Get current user's projects"""
+    serializer_class = AnalysisProjectSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return AnalysisProject.objects.filter(user=self.request.user).order_by('-updated_at')
+
+
+class UserAnalysesView(APIView):
+    """Get current user's analysis history"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        # This would integrate with the analysis history from the analysis app
+        return Response({
+            "message": "User analysis history endpoint",
+            "user_id": request.user.id,
+            # Add actual analysis history query here
+        })
 
 
 # Project Management Views
@@ -83,15 +194,18 @@ class AnalysisProjectListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return AnalysisProject.objects.filter(user=self.request.user)
+        return AnalysisProject.objects.filter(user=self.request.user).order_by('-updated_at')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 
 class AnalysisProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AnalysisProjectSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsProjectOwner]
 
     def get_queryset(self):
-        return AnalysisProject.objects.filter(user=self.request.user)
+        return AnalysisProject.objects.filter(user=self.request.user).order_by('-updated_at')
 
 
 class GeometryInputListCreateView(generics.ListCreateAPIView):
@@ -101,6 +215,9 @@ class GeometryInputListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         return GeometryInput.objects.filter(user=self.request.user)
 
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
 
 class FileUploadListCreateView(generics.ListCreateAPIView):
     serializer_class = FileUploadSerializer
@@ -109,14 +226,57 @@ class FileUploadListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         return FileUpload.objects.filter(user=self.request.user)
 
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
-# Earth Engine Authentication Views (matching Flask routes)
+
+# Earth Engine Authentication Views
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def authenticate_earth_engine(request):
+    """
+    Authenticate user with Earth Engine.
+    """
+    try:
+        project_id = request.data.get('project_id')
+        service_account_key = request.data.get('service_account_key')
+        
+        if not project_id:
+            return Response(
+                {"error": "Project ID is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update user's Earth Engine authentication
+        user = request.user
+        user.earth_engine_project_id = project_id
+        user.is_earth_engine_authenticated = True
+        user.save()
+        
+        # Store in session as well
+        request.session['ee_project_id'] = project_id
+        request.session['ee_initialized'] = True
+        request.session['ee_auth_time'] = datetime.now().isoformat()
+        
+        return Response({
+            "status": "authenticated",
+            "project_id": project_id,
+            "message": "Earth Engine authentication successful"
+        })
+        
+    except Exception as e:
+        logger.error(f"Earth Engine authentication error: {str(e)}")
+        return Response(
+            {"error": "Earth Engine authentication failed", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
 @api_view(["GET", "POST"])
 @permission_classes([permissions.AllowAny])
 def check_earth_engine(request):
     """
-    Check Earth Engine initialization status.
-    Matches Flask /check_ee endpoint.
+    Check Earth Engine authentication status.
     """
     try:
         project_id = None
@@ -171,7 +331,6 @@ def check_earth_engine(request):
 def check_auth(request):
     """
     Check Earth Engine authentication status.
-    Matches Flask /auth/ee/check endpoint.
     """
     try:
         is_authenticated = request.session.get("ee_initialized", False)
@@ -190,7 +349,6 @@ def check_auth(request):
 def auth_status(request):
     """
     Get detailed authentication status.
-    Matches Flask /auth/ee/status endpoint.
     """
     try:
         is_authenticated = request.session.get("ee_initialized", False)
@@ -217,7 +375,6 @@ def auth_status(request):
 def clear_auth(request):
     """
     Clear Earth Engine authentication.
-    Matches Flask /auth/ee/clear endpoint.
     """
     try:
         # Clear session data
@@ -242,8 +399,7 @@ def clear_auth(request):
 @permission_classes([permissions.AllowAny])
 def get_analysis_capabilities(request):
     """
-    Get available analysis capabilities.
-    Matches Flask /get_analysis_capabilities endpoint.
+    Get available analysis capabilities from the endpoint.
     """
     return Response(
         {
@@ -300,7 +456,6 @@ def get_analysis_capabilities(request):
 def demo_endpoint(request):
     """
     Demo mode endpoint for testing without Earth Engine.
-    Matches Flask /demo endpoint.
     """
     try:
         # Default demo parameters
@@ -429,3 +584,169 @@ def check_earth_engine_auth(request):
             "project_id": user.earth_engine_project_id,
         }
     )
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def get_project_analyses(request, project_id):
+    """Get all analyses for a specific project"""
+    try:
+        # Verify project ownership
+        project = AnalysisProject.objects.get(id=project_id, user=request.user)
+        
+        # Import AnalysisRequest model
+        from apps.analysis.models import AnalysisRequest
+        
+        # Get all analyses for this project
+        analyses = AnalysisRequest.objects.filter(project=project).order_by('-created_at')
+        
+        analyses_data = []
+        for analysis in analyses:
+            analysis_data = {
+                "id": analysis.id,
+                "name": analysis.name,
+                "analysis_type": analysis.analysis_type,
+                "satellite": analysis.satellite,
+                "status": analysis.status,
+                "created_at": analysis.created_at.isoformat(),
+                "start_date": analysis.start_date.isoformat() if analysis.start_date else None,
+                "end_date": analysis.end_date.isoformat() if analysis.end_date else None,
+                "cloud_cover": analysis.cloud_cover,
+                "geometry_data": analysis.geometry_data
+            }
+            
+            # Add result data if available
+            if hasattr(analysis, 'result') and analysis.result:
+                # The analysis.result.data contains the complete response structure
+                saved_response = analysis.result.data
+                
+                # Return the complete response structure so frontend can process it normally
+                analysis_data['results'] = saved_response
+                
+                # Also extract specific fields for backward compatibility
+                if isinstance(saved_response, dict):
+                    analysis_data['statistics'] = saved_response.get('statistics')
+                    analysis_data['data'] = saved_response.get('data', [])
+                    analysis_data['time_series_data'] = saved_response.get('time_series_data', [])
+                    analysis_data['geometry'] = saved_response.get('geometry')
+                    analysis_data['analysis_type'] = saved_response.get('analysis_type')
+                    analysis_data['satellite'] = saved_response.get('satellite')
+                
+                analysis_data['total_observations'] = analysis.result.total_observations
+            
+            analyses_data.append(analysis_data)
+        
+        return Response({
+            "success": True,
+            "project": {
+                "id": project.id,
+                "name": project.name,
+                "description": project.description
+            },
+            "analyses": analyses_data,
+            "count": len(analyses_data)
+        })
+        
+    except AnalysisProject.DoesNotExist:
+        return Response(
+            {"error": "Project not found or access denied"}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        return Response(
+            {"error": f"Failed to retrieve project analyses: {str(e)}"}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class GoogleOAuthView(APIView):
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        """
+        Handle Google OAuth authentication
+        """
+        try:
+            access_token = request.data.get('access_token')
+            user_info = request.data.get('user_info')
+            
+            if not access_token or not user_info:
+                return Response(
+                    {"error": "Access token and user info are required"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify the access token with Google
+            google_response = requests.get(
+                f'https://www.googleapis.com/oauth2/v1/tokeninfo?access_token={access_token}'
+            )
+            
+            if google_response.status_code != 200:
+                return Response(
+                    {"error": "Invalid access token"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            token_info = google_response.json()
+            
+            # Extract user information
+            email = user_info.get('email')
+            name = user_info.get('name', '')
+            google_id = user_info.get('id')
+            
+            if not email:
+                return Response(
+                    {"error": "Email is required"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if user exists
+            try:
+                user = User.objects.get(email=email)
+                # Update user info if needed
+                if name and not user.first_name:
+                    name_parts = name.split(' ', 1)
+                    user.first_name = name_parts[0]
+                    if len(name_parts) > 1:
+                        user.last_name = name_parts[1]
+                    user.save()
+            except User.DoesNotExist:
+                # Create new user
+                name_parts = name.split(' ', 1) if name else ['', '']
+                user = User.objects.create_user(
+                    username=email,  # Use email as username
+                    email=email,
+                    first_name=name_parts[0] if name_parts else '',
+                    last_name=name_parts[1] if len(name_parts) > 1 else '',
+                    is_active=True
+                )
+                # Set an unusable password since they're using OAuth
+                user.set_unusable_password()
+                user.save()
+            
+            # Generate JWT tokens
+            refresh = RefreshToken.for_user(user)
+            
+            # Create user response data
+            user_data = {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+            }
+            
+            return Response({
+                'message': 'Google authentication successful',
+                'user': user_data,
+                'token': str(refresh.access_token),
+                'refresh': str(refresh),
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Google OAuth error: {str(e)}")
+            return Response(
+                {"error": "Authentication failed"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

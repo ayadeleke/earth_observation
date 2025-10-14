@@ -1,6 +1,8 @@
 import React from 'react';
 import Header from './Header';
 import Footer from './Footer';
+import AIAssistant from '../ai/AIAssistant';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -21,6 +23,8 @@ export const Layout: React.FC<LayoutProps> = ({
   showFooter = true,
   className = "" 
 }) => {
+  const { isAuthenticated } = useAuth();
+
   return (
     <div className={`min-vh-100 d-flex flex-column bg-light ${className}`}>
       <Header user={user} onLogout={onLogout} />
@@ -30,6 +34,14 @@ export const Layout: React.FC<LayoutProps> = ({
       </main>
       
       {showFooter && <Footer />}
+      
+      {/* Global AI Assistant - only show for authenticated users */}
+      {isAuthenticated && (
+        <AIAssistant 
+          analysisData={null} 
+          className="global-ai-assistant"
+        />
+      )}
     </div>
   );
 };
