@@ -143,7 +143,7 @@ const LoginPage: React.FC = () => {
             >
               {/* Welcome Message */}
               <div className="text-center mb-4">
-                <div className="bg-primary rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" 
+                <div className="bg-success rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" 
                      style={{ width: '64px', height: '64px' }}>
                   <LogIn style={{ width: '32px', height: '32px', color: 'white' }} />
                 </div>
@@ -250,12 +250,7 @@ const LoginPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="btn w-100 py-3 fw-semibold"
-                  style={{
-                    background: 'linear-gradient(135deg, #2563eb 0%, #16a34a 100%)',
-                    border: 'none',
-                    color: 'white'
-                  }}
+                  className="btn btn-primary w-100 py-3 fw-semibold"
                 >
                   {loading ? (
                     <div className="d-flex align-items-center justify-content-center">
@@ -298,7 +293,7 @@ const LoginPage: React.FC = () => {
                   onClick={handleDemoLogin}
                   className="btn btn-warning py-3 fw-semibold"
                 >
-                  🚀 Quick Demo Access
+                  Quick Demo Access
                 </button>
               </div>
 
@@ -306,7 +301,7 @@ const LoginPage: React.FC = () => {
               <div className="mt-4 text-center">
                 <p className="text-light opacity-75">
                   Don't have an account?{' '}
-                  <Link to="/register" className="text-info text-decoration-none fw-semibold">
+                  <Link to="/register" className="text-info text-decoration-outline fw-semibold">
                     Create one here
                   </Link>
                 </p>

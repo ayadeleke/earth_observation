@@ -119,7 +119,7 @@ const DashboardPage: React.FC = () => {
             <div className="card border-0 shadow-sm h-100" style={{ borderRadius: '1rem' }}>
               <div className="card-header bg-white border-0" style={{ padding: '1.5rem 1.5rem 0 1.5rem' }}>
                 <h3 className="card-title mb-0 fw-bold">
-                  <i className="fas fa-bolt text-warning me-2"></i>
+                  <i className="fas fa-bolt text-success me-2"></i>
                   Quick Actions
                 </h3>
               </div>
@@ -134,7 +134,7 @@ const DashboardPage: React.FC = () => {
                     New Project
                   </button>
                   <button
-                    className="btn btn-outline-secondary btn-lg"
+                    className="btn btn-outline-primary btn-lg"
                     onClick={() => navigate('/projects')}
                     style={{ borderRadius: '0.75rem' }}
                   >
@@ -142,7 +142,7 @@ const DashboardPage: React.FC = () => {
                     View Projects
                   </button>
                   <button
-                    className="btn btn-outline-info btn-lg"
+                    className="btn btn-outline-primary btn-lg"
                     onClick={() => navigate('/analysis')}
                     style={{ borderRadius: '0.75rem' }}
                   >

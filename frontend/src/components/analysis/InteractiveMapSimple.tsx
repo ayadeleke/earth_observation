@@ -156,7 +156,7 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
   }
 
   return (
-    <div className="interactive-map-container">
+    <div className="interactive-map-container mb-2 mt-4">
       <div className="d-flex justify-content-between align-items-center mb-2">
         <h5 className="mb-0">
           <i className="fas fa-map me-2"></i>
@@ -198,8 +198,7 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
       </div>
       
       <div className="mt-2">
-        <small className="text-muted">
-          <i className="fas fa-info-circle me-1"></i>
+        <small className="text-muted fst-italic">
           Map shows {analysisType.toUpperCase()} analysis using {satellite} satellite data
           from {startDate} to {endDate} with first and last images.
         </small>

@@ -1,4 +1,4 @@
-/* Custom styles for Bootstrap project */
+/* Custom styles */
 html {
   scroll-behavior: smooth;
 }
@@ -72,10 +72,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #0ea5e9;
+  background: #10804d !important;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #0284c7;
+  background: #10602d !important;
 }

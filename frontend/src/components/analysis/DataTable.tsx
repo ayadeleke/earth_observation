@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { ArrowDownWideNarrow } from 'lucide-react';
 
 interface DataRow {
   date: string;
@@ -128,7 +129,9 @@ export const DataTable: React.FC<DataTableProps> = ({
 
   const SortIcon = ({ column }: { column: string }) => {
     if (!sortConfig || sortConfig.key !== column) {
-      return <span className="text-muted">↕️</span>;
+      return (
+    <ArrowDownWideNarrow />
+  );
     }
     return (
       <span className="text-primary">
@@ -138,9 +141,9 @@ export const DataTable: React.FC<DataTableProps> = ({
   };
 
   return (
-    <div className="card border-0 shadow-sm">
+    <div className="card border-0 shadow-sm mb-2 mt-4">
       <div className="card-header bg-white">
-        <h3 className="h5 fw-semibold text-dark mb-1">📋 {analysisType.toUpperCase()} Data Table</h3>
+        <h3 className="h5 fw-semibold text-dark mb-1">{analysisType.toUpperCase()} Data Table</h3>
         <div className="small text-muted">
           Showing {paginatedData.length} of {data.length} observations
         </div>

@@ -4,14 +4,11 @@ import {
   Globe, 
   Users, 
   Target, 
-  Award, 
   Zap,
   Shield,
   BarChart3,
-  Leaf,
   Eye,
   TrendingUp,
-  CheckCircle
 } from 'lucide-react';
 
 const AboutPage: React.FC = () => {
@@ -49,17 +46,17 @@ const AboutPage: React.FC = () => {
   ];
 
   const stats = [
-    { number: '40+', label: 'Years of Satellite Data', icon: Satellite },
-    { number: '100K+', label: 'Images Processed', icon: Eye },
-    { number: '50+', label: 'Countries Covered', icon: Globe },
-    { number: '99.9%', label: 'Uptime Reliability', icon: CheckCircle }
+    { number: '40+', label: 'Years of Satellite Data' },
+    { number: '100K+', label: 'Images Processed' },
+    { number: '50+', label: 'Countries Covered' },
+    { number: '99.9%', label: 'Uptime Reliability' }
   ];
 
   return (
     <div className="min-vh-100">
       {/* Hero Section */}
       <div className="position-relative overflow-hidden" style={{
-        background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #3730a3 100%)',
+        background: 'linear-gradient(135deg, #141917 0%, #073317 50%, #064e3b 100%)',
         minHeight: '60vh'
       }}>
         <div className="container py-5">
@@ -79,15 +76,12 @@ const AboutPage: React.FC = () => {
               </p>
               <div className="d-flex justify-content-center gap-3 flex-wrap">
                 <span className="badge bg-light text-dark px-3 py-2 fs-6">
-                  <Leaf className="me-2" style={{ width: '16px', height: '16px' }} />
                   Environmental Monitoring
                 </span>
                 <span className="badge bg-light text-dark px-3 py-2 fs-6">
-                  <Globe className="me-2" style={{ width: '16px', height: '16px' }} />
                   Global Coverage
                 </span>
                 <span className="badge bg-light text-dark px-3 py-2 fs-6">
-                  <Award className="me-2" style={{ width: '16px', height: '16px' }} />
                   Research Grade
                 </span>
               </div>
@@ -146,12 +140,10 @@ const AboutPage: React.FC = () => {
         <div className="container">
           <div className="row g-4 text-center">
             {stats.map((stat, index) => {
-              const IconComponent = stat.icon;
               return (
                 <div key={index} className="col-lg-3 col-md-6">
                   <div className="card border-0 h-100 shadow-sm">
                     <div className="card-body p-4">
-                      <IconComponent className="text-primary mb-3" style={{ width: '40px', height: '40px' }} />
                       <h3 className="display-6 fw-bold text-primary mb-2">{stat.number}</h3>
                       <p className="text-muted mb-0">{stat.label}</p>
                     </div>
@@ -207,7 +199,6 @@ const AboutPage: React.FC = () => {
               <div className="row g-3">
                 <div className="col-md-6">
                   <div className="d-flex align-items-start">
-                    <CheckCircle className="text-success me-3 mt-1" style={{ width: '20px', height: '20px' }} />
                     <div>
                       <h6 className="fw-bold mb-1">Landsat Archive</h6>
                       <small className="opacity-75">40+ years of data</small>
@@ -216,7 +207,6 @@ const AboutPage: React.FC = () => {
                 </div>
                 <div className="col-md-6">
                   <div className="d-flex align-items-start">
-                    <CheckCircle className="text-success me-3 mt-1" style={{ width: '20px', height: '20px' }} />
                     <div>
                       <h6 className="fw-bold mb-1">Sentinel Data</h6>
                       <small className="opacity-75">High-resolution monitoring</small>
@@ -225,7 +215,6 @@ const AboutPage: React.FC = () => {
                 </div>
                 <div className="col-md-6">
                   <div className="d-flex align-items-start">
-                    <CheckCircle className="text-success me-3 mt-1" style={{ width: '20px', height: '20px' }} />
                     <div>
                       <h6 className="fw-bold mb-1">Cloud Computing</h6>
                       <small className="opacity-75">Scalable processing</small>
@@ -234,7 +223,6 @@ const AboutPage: React.FC = () => {
                 </div>
                 <div className="col-md-6">
                   <div className="d-flex align-items-start">
-                    <CheckCircle className="text-success me-3 mt-1" style={{ width: '20px', height: '20px' }} />
                     <div>
                       <h6 className="fw-bold mb-1">Real-time Analysis</h6>
                       <small className="opacity-75">Instant results</small>
@@ -258,21 +246,21 @@ const AboutPage: React.FC = () => {
       </div>
 
       {/* Contact CTA */}
-      <div className="py-5 bg-primary">
+      <div className="py-5 bg-light">
         <div className="container">
           <div className="row">
             <div className="col-lg-8 mx-auto text-center">
-              <h2 className="display-5 fw-bold text-white mb-4">
+              <h2 className="display-5 fw-bold text-primary mb-4">
                 Ready to Explore Earth from Space?
               </h2>
-              <p className="lead text-light opacity-90 mb-4">
+              <p className="lead text-muted opacity-90 mb-4">
                 Join researchers and organizations worldwide using our platform for environmental monitoring and analysis.
               </p>
               <div className="d-flex justify-content-center gap-3 flex-wrap">
-                <a href="/register" className="btn btn-light btn-lg px-4 fw-semibold">
+                <a href="/register" className="btn btn-primary btn-lg px-4 fw-semibold">
                   Get Started Free
                 </a>
-                <a href="/demo" className="btn btn-outline-light btn-lg px-4 fw-semibold">
+                <a href="/demo" className="btn btn-outline-secondary btn-lg px-4 fw-semibold">
                   Try Demo
                 </a>
               </div>
