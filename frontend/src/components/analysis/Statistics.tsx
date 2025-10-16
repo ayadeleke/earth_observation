@@ -96,7 +96,7 @@ export const Statistics: React.FC<StatisticsProps> = ({
     <div className="bg-white rounded shadow-sm overflow-hidden">
       <div className="border-bottom p-4">
         <h2 className="fs-5 fw-semibold text-dark d-flex align-items-center">
-          📊 Statistics
+          Statistics
         </h2>
         <div className="small text-muted mt-1">
           Summary statistics for {analysisType.toUpperCase()} analysis

@@ -1,9 +1,42 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Brain, Sparkles, X, Minimize2, Maximize2 } from 'lucide-react';
+import { Send, Sparkles, X, Minimize2, Maximize2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import authService from '../../services/authService';
 import { useLocation } from 'react-router-dom';
+
+// Add CSS animations
+const aiButtonStyles = `
+  @keyframes floatPulse {
+    0%, 100% { 
+      transform: translateY(0px) scale(1);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+    50% { 
+      transform: translateY(-8px) scale(1.02);
+      box-shadow: 0 8px 25px rgba(58, 170, 99, 0.3);
+    }
+  }
+  
+  @keyframes glowEffect {
+    0% { 
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), 0 0 0 0 rgba(58, 170, 99, 0.4);
+    }
+    100% { 
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), 0 0 20px 4px rgba(58, 170, 99, 0.2);
+    }
+  }
+`;
+
+// Inject styles
+if (typeof document !== 'undefined') {
+  const styleElement = document.getElementById('ai-button-styles') || document.createElement('style');
+  styleElement.id = 'ai-button-styles';
+  styleElement.textContent = aiButtonStyles;
+  if (!document.getElementById('ai-button-styles')) {
+    document.head.appendChild(styleElement);
+  }
+}
 
 interface Message {
   id: string;
@@ -207,12 +240,22 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
           borderRadius: '50px',
           padding: '12px 20px',
           zIndex: 1000,
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          border: 'none'
+          background: 'linear-gradient(135deg, #348e55 0%, #40a97f 100%)',
+          border: 'none',
+          animation: 'floatPulse 1s ease-in-out infinite, glowEffect 2s ease-in-out infinite alternate',
+          transform: 'translateY(0)',
+          transition: 'all 0.3s ease'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateY(-5px) scale(1.05)';
+          e.currentTarget.style.boxShadow = '0 8px 25px rgba(58, 170, 99, 0.4)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateY(0) scale(1)';
+          e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.2)';
         }}
       >
-        <Brain size={20} />
-        <span className="fw-semibold">AI Assistant</span>
+        <span className="fw-semibold text-dark">AI Assistant</span>
         <Sparkles size={16} className="text-warning" />
       </button>
     );
@@ -237,7 +280,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
       <div 
         className="d-flex align-items-center justify-content-between p-3 border-bottom"
         style={{ 
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          background: 'linear-gradient(135deg, #0b411f 0%, #064e3b 100%)',
           color: 'white',
           flexShrink: 0,
           minHeight: '60px',
@@ -246,9 +289,8 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
         }}
       >
         <div className="d-flex align-items-center gap-2">
-          <Brain size={20} />
           <span className="fw-semibold">Earth Observation Assistant</span>
-          <Sparkles size={14} className="text-warning" />
+          <Sparkles size={18} className="text-warning" />
         </div>
         <div className="d-flex gap-2">
           <button
@@ -313,13 +355,16 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
                 <div
                   className={`d-inline-block p-3 rounded-3 ${
                     message.type === 'user'
-                      ? 'bg-primary text-white'
+                      ? 'text-white'
                       : 'bg-light text-dark border'
                   }`}
                   style={{ 
                     maxWidth: '85%',
                     wordWrap: 'break-word',
-                    overflowWrap: 'break-word'
+                    overflowWrap: 'break-word',
+                    ...(message.type === 'user' ? {
+                      background: 'linear-gradient(135deg, #348e55 0%, #40a97f 100%)'
+                    } : {})
                   }}
                 >
                   <div className="mb-1">
@@ -335,13 +380,13 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
                           components={{
                             // Style strong/bold text with better color
                             strong: ({children}) => (
-                              <strong className="fw-bold" style={{color: '#0d6efd'}}>{children}</strong>
+                              <strong className="fw-bold" style={{color: '#064e3b'}}>{children}</strong>
                             ),
                             // Style emphasis/italic text  
                             em: ({children}) => <em className="fst-italic">{children}</em>,
                             // Style headings with better spacing
                             h1: ({children}) => (
-                              <h5 className="fw-bold mb-2 mt-2" style={{color: '#0d6efd'}}>{children}</h5>
+                              <h5 className="fw-bold mb-2 mt-2" style={{color: '#064e3b'}}>{children}</h5>
                             ),
                             h2: ({children}) => (
                               <h6 className="fw-bold mb-2 mt-2" style={{color: '#6c757d'}}>{children}</h6>
@@ -380,18 +425,18 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
                             // Style code with better appearance
                             code: ({children}) => (
                               <code style={{
-                                backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                                color: '#0d6efd',
+                                backgroundColor: 'rgba(15, 192, 98, 0.1)',
+                                color: '#064e3b',
                                 padding: '0.2rem 0.4rem',
                                 borderRadius: '0.25rem',
                                 fontSize: '0.9em',
-                                border: '1px solid rgba(13, 110, 253, 0.2)'
+                                border: '1px solid rgba(13, 253, 105, 0.2)'
                               }}>{children}</code>
                             ),
                             // Style blockquotes
                             blockquote: ({children}) => (
                               <div style={{
-                                borderLeft: '3px solid #0d6efd',
+                                borderLeft: '3px solid #0dfd89',
                                 paddingLeft: '1rem',
                                 marginLeft: '0.5rem',
                                 fontStyle: 'italic',

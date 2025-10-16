@@ -111,7 +111,7 @@ export const NDVITimeSeries: React.FC<NDVITimeSeriesProps> = ({
     <div className="bg-white rounded shadow-sm overflow-hidden">
       <div className="border-bottom p-3 p-md-4">
         <h2 className="fs-6 fs-md-5 fw-semibold text-dark mb-2">
-          📈 {analysisType.toUpperCase()} Time Series (Annual Means)
+          {analysisType.toUpperCase()} Time Series (Annual Means)
         </h2>
         <div className="small text-muted lh-sm">
           <div>{dateRange}</div>
@@ -127,7 +127,7 @@ export const NDVITimeSeries: React.FC<NDVITimeSeriesProps> = ({
       <div className="p-2 p-md-4">
         <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 300 : 400}>
           <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <CartesianGrid strokeDasharray="4 4" stroke="#f0f0f0" />
             <XAxis 
               dataKey="date" 
               tick={{ fontSize: window.innerWidth < 768 ? 10 : 12 }}
@@ -192,7 +192,7 @@ export const NDVITimeSeries: React.FC<NDVITimeSeriesProps> = ({
       
       <div className="bg-light px-3 px-md-4 py-2 py-md-3">
         <div className="small text-muted text-center text-md-start">
-          📊 {window.innerWidth < 768 ? 'Tap points for values' : 'Hover over points for detailed values • Zoom and pan enabled'}
+          <strong>Tip:</strong> {window.innerWidth < 768 ? 'Tap points for values' : 'Hover over points for detailed values • Zoom and pan enabled'}
         </div>
       </div>
     </div>

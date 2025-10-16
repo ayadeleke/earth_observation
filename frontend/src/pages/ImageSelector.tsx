@@ -68,10 +68,19 @@ const ImageSelector: React.FC = () => {
   useEffect(() => {
     setDefaultDates();
     
-    // Add small delay to ensure DOM is ready
+    // Add delay to ensure DOM is ready and has proper dimensions
     const timer = setTimeout(() => {
-      initializeMap();
-    }, 100);
+      // Double-check that the container exists and has dimensions
+      const mapContainer = document.getElementById('map');
+      if (mapContainer && mapContainer.offsetWidth > 0 && mapContainer.offsetHeight > 0) {
+        initializeMap();
+      } else {
+        console.warn('Map container not ready, retrying in 500ms...');
+        setTimeout(() => {
+          initializeMap();
+        }, 500);
+      }
+    }, 200);
     
     // Cleanup function to prevent memory leaks
     return () => {
@@ -130,6 +139,13 @@ const ImageSelector: React.FC = () => {
         return;
       }
       
+      // Ensure container has dimensions before initializing
+      if (mapContainer.offsetWidth === 0 || mapContainer.offsetHeight === 0) {
+        console.warn('Map container has no dimensions, retrying...');
+        setTimeout(() => initializeMap(), 200);
+        return;
+      }
+      
       // Clean up any existing map instance first
       if (mapInstance) {
         console.log('Cleaning up existing map instance');
@@ -159,7 +175,9 @@ const ImageSelector: React.FC = () => {
         boxZoom: true,
         keyboard: true,
         dragging: true,
-        touchZoom: true
+        touchZoom: true,
+        preferCanvas: false,
+        renderer: L.svg()
       }).setView([40.7128, -74.0060], 10);
       
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -170,13 +188,13 @@ const ImageSelector: React.FC = () => {
       // Force map to resize and redraw with error handling
       setTimeout(() => {
         try {
-          if (map && map.getContainer()) {
-            map.invalidateSize();
+          if (map && map.getContainer() && map.getContainer().offsetWidth > 0) {
+            map.invalidateSize(true);
           }
         } catch (error) {
           console.warn('Error invalidating map size:', error);
         }
-      }, 100);
+      }, 200);
 
       // Try to get user's current location with error handling
       if (navigator.geolocation) {
@@ -206,40 +224,44 @@ const ImageSelector: React.FC = () => {
       const drawnItemsLayer = new L.FeatureGroup();
       map.addLayer(drawnItemsLayer);
 
-      // Add drawing controls
-      const drawControl = new L.Control.Draw({
-        edit: {
-          featureGroup: drawnItemsLayer
-        },
-        draw: {
-          polygon: {},
-          rectangle: {},
-          circle: false,
-          marker: false,
-          polyline: false,
-          circlemarker: false
-        }
-      });
-      map.addControl(drawControl);
+      // Add drawing controls with error handling
+      try {
+        const drawControl = new L.Control.Draw({
+          edit: {
+            featureGroup: drawnItemsLayer
+          },
+          draw: {
+            polygon: {},
+            rectangle: {},
+            circle: false,
+            marker: false,
+            polyline: false,
+            circlemarker: false
+          }
+        });
+        map.addControl(drawControl);
 
-      // Handle drawn shapes with error handling
-      map.on('draw:created', (e: any) => {
-        try {
-          const layer = e.layer;
-          drawnItemsLayer.clearLayers();
-          drawnItemsLayer.addLayer(layer);
-          
-          // Convert to WKT format
-          const coordinates = layer.getLatLngs()[0].map((point: any) => 
-            `${point.lng} ${point.lat}`
-          ).join(', ');
-          const wkt = `POLYGON((${coordinates}, ${layer.getLatLngs()[0][0].lng} ${layer.getLatLngs()[0][0].lat}))`;
-          
-          setFormData(prev => ({ ...prev, coordinates: wkt }));
-        } catch (error) {
-          console.error('Error handling drawn shape:', error);
-        }
-      });
+        // Handle drawn shapes with error handling
+        map.on('draw:created', (e: any) => {
+          try {
+            const layer = e.layer;
+            drawnItemsLayer.clearLayers();
+            drawnItemsLayer.addLayer(layer);
+            
+            // Convert to WKT format
+            const coordinates = layer.getLatLngs()[0].map((point: any) => 
+              `${point.lng} ${point.lat}`
+            ).join(', ');
+            const wkt = `POLYGON((${coordinates}, ${layer.getLatLngs()[0][0].lng} ${layer.getLatLngs()[0][0].lat}))`;
+            
+            setFormData(prev => ({ ...prev, coordinates: wkt }));
+          } catch (error) {
+            console.error('Error handling drawn shape:', error);
+          }
+        });
+      } catch (error) {
+        console.error('Error adding draw controls:', error);
+      }
 
       // Store map reference for cleanup
       setMapInstance(map);
@@ -513,11 +535,11 @@ const ImageSelector: React.FC = () => {
             <ol className="breadcrumb">
               <li className="breadcrumb-item">
                 <a href="/analysis" className="text-decoration-none">
-                  <i className="fas fa-chart-line me-1"></i>Analysis
+                  Analysis
                 </a>
               </li>
               <li className="breadcrumb-item active" aria-current="page">
-                <i className="fas fa-microscope me-1"></i>Advanced Image Analysis
+                Advanced Image Analysis
               </li>
             </ol>
           </nav>
@@ -548,14 +570,14 @@ const ImageSelector: React.FC = () => {
         <div className="col-lg-6">
           <div className="card">
             <div className="card-header">
-              <h5><i className="fas fa-cog"></i> Analysis Configuration</h5>
+              <h5><i className="fas fa-cogs me-2"></i> Analysis Configuration</h5>
             </div>
             <div className="card-body">
               {/* Landsat Mission Coverage Info */}
               {formData.satellite === 'landsat' && (
-                <div className="alert alert-info mb-4" style={{fontSize: '0.9em'}}>
+                <div className="alert alert-success mb-4" style={{fontSize: '0.9em'}}>
                   <h6 className="alert-heading">
-                    <i className="fas fa-satellite me-2"></i>Landsat Mission Coverage
+                    Landsat Mission Coverage
                   </h6>
                   <div className="row">
                     <div className="col-md-6">
@@ -579,9 +601,9 @@ const ImageSelector: React.FC = () => {
 
               {/* Sentinel-2 Mission Coverage Info */}
               {formData.satellite === 'sentinel2' && (
-                <div className="alert alert-info mb-4" style={{fontSize: '0.9em'}}>
+                <div className="alert alert-success mb-4" style={{fontSize: '0.9em'}}>
                   <h6 className="alert-heading">
-                    <i className="fas fa-satellite me-2"></i>Sentinel-2 Mission Coverage
+                    Sentinel-2 Mission Coverage
                   </h6>
                   <div className="row">
                     <div className="col-md-6">
@@ -602,7 +624,31 @@ const ImageSelector: React.FC = () => {
                   <small><strong>Note:</strong> Sentinel-2 provides high-resolution NDVI analysis with frequent revisits. No thermal bands available (LST not supported).</small>
                 </div>
               )}
-              
+
+              {/* Sentinel-1 Mission Coverage Info */}
+              {formData.satellite === 'sentinel1' && (
+                <div className="alert alert-success mb-4" style={{fontSize: '0.9em'}}>
+                  <h6 className="alert-heading">
+                    Sentinel-1 Mission Coverage
+                  </h6>
+                  <div className="row">
+                    <div className="col-md-6">
+                      <strong>Constellation:</strong>
+                      <ul className="mb-2">
+                        <li><strong>Sentinel-1A:</strong> 2015-present (C-band)</li>
+                      </ul>
+                    </div>
+                    <div className="col-md-6">
+                      <strong>Capabilities:</strong>
+                      <ul className="mb-2">
+                        <li><strong>Revisit Time:</strong> 5 days (combined constellation)</li>
+                        <li><strong>Resolution:</strong> 10m (NDVI bands), 20m/60m (other bands)</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <small><strong>Note:</strong> Sentinel-1 provides high-resolution SAR backscatter analysis with frequent revisits. No thermal bands available (LST not supported).</small>
+                </div>
+              )}
               <form>
                 <div className="row">
                   <div className="col-md-6">
@@ -677,26 +723,11 @@ const ImageSelector: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="row mt-3">
-                  <div className="col-12">
-                    <label htmlFor="coordinates" className="form-label">Coordinates (WKT Polygon) *</label>
-                    <textarea 
-                      className="form-control" 
-                      name="coordinates"
-                      value={formData.coordinates}
-                      onChange={handleInputChange}
-                      rows={3} 
-                      required
-                      readOnly={formData.inputMethod === 'map'}
-                      placeholder="Draw on the map or enter coordinates manually"
-                    />
-                    <div className="form-text">Draw a polygon on the map or enter coordinates manually when using text input mode.</div>
-                  </div>
-                </div>
-                
-                <div className="card-footer">
+                {/* Area of Interest Input Method Selection */}
+                <div className="mt-4">
+                  <label className="form-label">Area of Interest *</label>
                   <div className="btn-group w-100" role="group">
-                    <input 
+                    <input
                       type="radio" 
                       className="btn-check" 
                       name="inputMethod" 
@@ -705,7 +736,7 @@ const ImageSelector: React.FC = () => {
                       checked={formData.inputMethod === 'map'}
                       onChange={handleInputChange}
                     />
-                    <label className="btn btn-outline-primary btn-sm" htmlFor="mapInput">
+                    <label className="btn btn-outline-success btn-sm" htmlFor="mapInput">
                       <i className="fas fa-mouse-pointer"></i> Draw on Map
                     </label>
                     
@@ -718,7 +749,7 @@ const ImageSelector: React.FC = () => {
                       checked={formData.inputMethod === 'text'}
                       onChange={handleInputChange}
                     />
-                    <label className="btn btn-outline-primary btn-sm" htmlFor="textInput">
+                    <label className="btn btn-outline-success btn-sm" htmlFor="textInput">
                       <i className="fas fa-edit"></i> Enter Manually
                     </label>
                     
@@ -731,10 +762,11 @@ const ImageSelector: React.FC = () => {
                       checked={formData.inputMethod === 'shapefile'}
                       onChange={handleInputChange}
                     />
-                    <label className="btn btn-outline-primary btn-sm" htmlFor="shapefileInput">
+                    <label className="btn btn-outline-success btn-sm" htmlFor="shapefileInput">
                       <i className="fas fa-upload"></i> Upload Shapefile
                     </label>
                   </div>
+                    <div className="form-text">Draw a polygon on the map or enter coordinates manually when using text input mode.</div>
                 </div>
                 
                 {/* Shapefile Upload Section */}
@@ -748,24 +780,39 @@ const ImageSelector: React.FC = () => {
                         accept=".zip,.shp" 
                         onChange={handleShapefileUpload}
                       />
-                      <div className="form-text">
-                        <i className="fas fa-info-circle"></i>
+                      <div className="form-text fst-italic">
                         Upload a .zip file containing your shapefile (.shp, .shx, .dbf, .prj) or a single .shp file.
                       </div>
                       {shapefile && (
                         <div className="alert alert-success mt-2">
-                          <i className="fas fa-check-circle"></i> File selected: <strong>{shapefile.name}</strong>
+                          <i className="fas fa-check-circle"></i> File uploaded: <strong>{shapefile.name}</strong>
                         </div>
                       )}
                     </div>
                   </div>
                 )}
 
+                {/* Manual Coordinate Input */}
+                <div className="row mt-3 mb-3">
+                  <div className="col-12">
+                    <label htmlFor="coordinates" className="form-label">Coordinates (WKT Polygon) *</label>
+                    <textarea 
+                      className="form-control" 
+                      name="coordinates"
+                      value={formData.coordinates}
+                      onChange={handleInputChange}
+                      rows={3} 
+                      required
+                      readOnly={formData.inputMethod === 'map'}
+                      placeholder="Draw on the map or enter coordinates manually"
+                    />
+                  </div>
+                </div>
+
                 {/* Cloud Masking Options (for Landsat and Sentinel-2) */}
                 {(formData.satellite === 'landsat' || formData.satellite === 'sentinel2') && (
                   <div className="mb-4">
                     <label className="form-label">
-                      <i className="fas fa-eye-slash me-2"></i>
                       Cloud Masking Level
                     </label>
                     
@@ -808,10 +855,21 @@ const ImageSelector: React.FC = () => {
           <div className="card">
             <div className="card-header">
               <h5><i className="fas fa-map"></i> Interactive Map</h5>
-              <small className="text-muted">Draw a polygon or rectangle to select your area</small>
+              <small className="text-muted">Draw a polygon or rectangle to select your area of interest</small>
             </div>
             <div className="card-body p-0">
-              <div id="map" style={{ height: '450px', width: '100%', borderRadius: '1rem', overflow: 'hidden', position: 'relative' }}></div>
+              <div 
+                id="map" 
+                style={{ 
+                  height: '450px', 
+                  width: '100%', 
+                  borderRadius: '1rem', 
+                  overflow: 'hidden', 
+                  position: 'relative',
+                  minHeight: '450px',
+                  minWidth: '300px'
+                }}
+              ></div>
             </div>
           </div>
         </div>
@@ -949,7 +1007,7 @@ const ImageSelector: React.FC = () => {
             <h5><i className="fas fa-list-check"></i> Selection Summary</h5>
             
             {shapefile && (
-              <div className="alert alert-info">
+              <div className="alert alert-success">
                 <i className="fas fa-scissors me-2"></i>
                 <strong>AOI Clipping Enabled:</strong> Analysis results will be clipped to the uploaded shapefile area.
               </div>
@@ -972,7 +1030,7 @@ const ImageSelector: React.FC = () => {
                     {selectedIndices.map(index => {
                       const img = availableImages[index];
                       return img ? (
-                        <span key={index} className="badge bg-primary me-1 mb-1">
+                        <span key={index} className="badge bg-success me-1 mb-1">
                           {img.date} ({img.cloud_cover}%)
                         </span>
                       ) : null;
@@ -985,7 +1043,7 @@ const ImageSelector: React.FC = () => {
             <div className="col-md-6">
               <button 
                 type="button" 
-                className="btn btn-success mt-3" 
+                className="btn btn-primary mt-3" 
                 onClick={createCustomMap}
                 disabled={selectedIndices.length === 0 || loading}
               >
@@ -998,7 +1056,7 @@ const ImageSelector: React.FC = () => {
 
       {/* Generated Map */}
       {mapUrl && (
-        <div className="row mt-4">
+        <div className="row mt-4 mb-4">
           <div className="col-12">
             <div className="card">
               <div className="card-header">
@@ -1007,13 +1065,12 @@ const ImageSelector: React.FC = () => {
               <div className="card-body p-0">
                 <iframe 
                   src={`http://localhost:8000${mapUrl}`}
-                  style={{ width: '100%', height: '600px', border: 'none' }}
+                  style={{ width: '100%', height: '800px', border: 'none' }}
                   title="Advanced Satellite Analysis Map"
                 />
               </div>
               <div className="card-footer">
-                <small className="text-muted">
-                  <i className="fas fa-info-circle"></i>
+                <small className="text-muted fst-italic">
                   Use the layer control to toggle between different visualizations and time periods.
                 </small>
               </div>

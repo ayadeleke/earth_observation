@@ -53,10 +53,10 @@ const DemoPage: React.FC = () => {
   
   const [formData, setFormData] = useState<MockFormData>({
     coordinates: '',
-    startYear: 2023,
-    endYear: 2025,
-    startDate: '2023-01-01',
-    endDate: '2025-12-31',
+    startYear: 2020,
+    endYear: 2024,
+    startDate: '2020-01-01',
+    endDate: '2024-12-31',
     analysisType: 'ndvi',
     satellite: 'landsat',
     cloudCover: 20,
@@ -703,7 +703,7 @@ const DemoPage: React.FC = () => {
           <div className="col-lg-5">
             <div className="form-section">
               <h3 className="mb-4">
-                <i className="fas fa-cogs feature-icon"></i>
+                <i className="fas fa-cogs  feature-icon"></i>
                 Analysis Parameters
               </h3>
               
@@ -711,7 +711,6 @@ const DemoPage: React.FC = () => {
                 {/* Area of Interest Section */}
                 <div className="mb-3">
                   <label className="form-label">
-                    <i className="fas fa-map-marker-alt me-2"></i>
                     Area of Interest
                   </label>
                   
@@ -726,7 +725,7 @@ const DemoPage: React.FC = () => {
                         checked={activeTab === 'coordinates'}
                         onChange={() => setActiveTab('coordinates')}
                       />
-                      <label className="btn btn-outline-primary" htmlFor="manual-input">
+                      <label className="btn btn-outline-success" htmlFor="manual-input">
                         <i className="fas fa-edit me-2"></i>
                         Manual Input
                       </label>
@@ -739,7 +738,7 @@ const DemoPage: React.FC = () => {
                         checked={activeTab === 'shapefile'}
                         onChange={() => setActiveTab('shapefile')}
                       />
-                      <label className="btn btn-outline-primary" htmlFor="upload-shapefile">
+                      <label className="btn btn-outline-success" htmlFor="upload-shapefile">
                         <i className="fas fa-upload me-2"></i>
                         Upload Shapefile
                       </label>
@@ -774,7 +773,7 @@ const DemoPage: React.FC = () => {
                                borderStyle: 'dashed', 
                                backgroundColor: '#f8f9fa',
                                borderRadius: '1rem',
-                               border: '3px dashed #667eea',
+                               border: '3px dashed #064e3b',
                                transition: 'all 0.3s ease',
                                cursor: 'pointer',
                                padding: '1.5rem'
@@ -791,7 +790,7 @@ const DemoPage: React.FC = () => {
                           />
                           <button 
                             type="button" 
-                            className="btn btn-outline-primary" 
+                            className="btn btn-outline-success" 
                             onClick={() => {
                               const element = document.getElementById('shapefileInput');
                               if (element) element.click();
@@ -840,7 +839,6 @@ const DemoPage: React.FC = () => {
                 {/* Date Selection Options */}
                 <div className="mb-3">
                   <label className="form-label">
-                    <i className="fas fa-calendar-range me-2"></i>
                     Date Range Selection
                   </label>
                   
@@ -950,7 +948,6 @@ const DemoPage: React.FC = () => {
                 {/* Analysis Type Selection */}
                 <div className="mb-4">
                   <label className="form-label">
-                    <i className="fas fa-chart-line me-2"></i>
                     Analysis Type
                   </label>
                   <select 
@@ -964,8 +961,7 @@ const DemoPage: React.FC = () => {
                     <option value="sar">SAR Backscatter (Sentinel-1)</option>
                     <option value="comprehensive">Comprehensive Analysis (All)</option>
                   </select>
-                  <div className="form-text">
-                    <i className="fas fa-info-circle me-1"></i>
+                  <div className="form-text fst-italic">
                     Choose the type of analysis to perform on the selected area. Comprehensive includes NDVI, LST, and SAR data.
                   </div>
                 </div>
@@ -973,7 +969,6 @@ const DemoPage: React.FC = () => {
                 {/* Satellite Mission */}
                 <div className="mb-4">
                   <label className="form-label">
-                    <i className="fas fa-satellite-dish me-2"></i>
                     Satellite Mission
                   </label>
                   <select 
@@ -986,8 +981,7 @@ const DemoPage: React.FC = () => {
                     <option value="sentinel2">Sentinel-2 (10m resolution)</option>
                     <option value="modis">MODIS (500m resolution)</option>
                   </select>
-                  <div className="form-text">
-                    <i className="fas fa-info-circle me-1"></i>
+                  <div className="form-text fst-italic">
                     <span>{getSatelliteDescription()}</span>
                   </div>
                 </div>
@@ -995,7 +989,6 @@ const DemoPage: React.FC = () => {
                 {/* Cloud Cover Filter */}
                 <div className="mb-4">
                   <label htmlFor="cloudCover" className="form-label">
-                    <i className="fas fa-cloud me-2"></i>
                     Maximum Cloud Cover (%)
                   </label>
                   <div className="row align-items-center">
@@ -1027,8 +1020,7 @@ const DemoPage: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="form-text">
-                    <i className="fas fa-info-circle me-1"></i>
+                  <div className="form-text fst-italic">
                     Filter images with cloud cover below this threshold.
                   </div>
                 </div>
@@ -1036,7 +1028,6 @@ const DemoPage: React.FC = () => {
                 {/* Cloud Masking Options */}
                 <div className="mb-4">
                   <label className="form-label">
-                    <i className="fas fa-eye-slash me-2"></i>
                     Cloud Masking Options
                   </label>
                   
@@ -1114,7 +1105,7 @@ const DemoPage: React.FC = () => {
               transition={{ delay: 0.2 }}
             >
               <div className="card shadow-sm">
-                <div className="card-header bg-primary text-white">
+                <div className="card-header bg-primary text-success">
                   <h4 className="mb-0">
                     <i className="fas fa-map me-2"></i>
                     Interactive Map
@@ -1128,9 +1119,8 @@ const DemoPage: React.FC = () => {
                   <div className="row align-items-center">
                     <div className="col-md-8">
                       <div className="d-flex align-items-center">
-                        <i className="fas fa-info-circle text-primary me-2"></i>
                         <small className="text-muted">
-                          Use the drawing tools above to select your area of interest. 
+                          Use the drawing tools above to select your area of interest. <br />
                           {formData.coordinates ? 'Area selected! ' : 'No area selected yet. '}
                         </small>
                       </div>
@@ -1152,8 +1142,6 @@ const DemoPage: React.FC = () => {
                         </div>
                       ) : (
                         <span className="badge bg-secondary">
-                          <i className="fas fa-draw-polygon me-1"></i>
-                          Draw Area
                         </span>
                       )}
                     </div>
@@ -1170,7 +1158,7 @@ const DemoPage: React.FC = () => {
             <div className="card">
               <div className="card-header bg-light">
                 <h5 className="card-title mb-0">
-                  <i className="fas fa-info-circle feature-icon"></i>
+                  <i className="fas fa-info-circle text-primary me-2 feature-icon"></i>
                   Demo Information
                 </h5>
               </div>
@@ -1178,22 +1166,22 @@ const DemoPage: React.FC = () => {
                 <div className="row">
                   <div className="col-md-6 mb-4">
                     <h6><i className="fas fa-check-circle text-success me-2"></i>Demo Features</h6>
-                    <ul className="list-unstyled">
-                      <li><i className="fas fa-satellite text-primary me-2"></i>Simulated satellite data</li>
-                      <li><i className="fas fa-chart-line text-primary me-2"></i>NDVI, LST, and SAR analysis</li>
-                      <li><i className="fas fa-download text-primary me-2"></i>CSV data export</li>
-                      <li><i className="fas fa-map text-primary me-2"></i>Multiple regions available</li>
-                      <li><i className="fas fa-clock text-primary me-2"></i>Instant results</li>
+                    <ul className="mb-1">
+                      <li><i className=""></i>Simulated satellite data</li>
+                      <li><i className=""></i>NDVI, LST, and SAR analysis</li>
+                      <li><i className=""></i>CSV data export</li>
+                      <li><i className=""></i>Multiple regions available</li>
+                      <li><i className=""></i>Instant results</li>
                     </ul>
                   </div>
                   <div className="col-md-6">
                     <h6><i className="fas fa-crown text-warning me-2"></i>Full Version Benefits</h6>
-                    <ul className="list-unstyled">
-                      <li><i className="fas fa-globe text-success me-2"></i>Real Google Earth Engine data</li>
-                      <li><i className="fas fa-map-marked-alt text-success me-2"></i>Custom area selection</li>
-                      <li><i className="fas fa-upload text-success me-2"></i>Shapefile upload</li>
-                      <li><i className="fas fa-images text-success me-2"></i>Full satellite image collections</li>
-                      <li><i className="fas fa-chart-bar text-success me-2"></i>Advanced analytics</li>
+                    <ul className="mb-1">
+                      <li><i></i>Real Google Earth Engine data</li>
+                      <li><i></i>Custom area selection</li>
+                      <li><i></i>Shapefile upload</li>
+                      <li><i></i>Full satellite image collections</li>
+                      <li><i></i>Advanced analytics</li>
                     </ul>
                     <button 
                       className="btn btn-success btn-sm mt-2"
@@ -1222,7 +1210,6 @@ const DemoPage: React.FC = () => {
               <div className="card result-container">
                 <div className="card-header bg-light d-flex justify-content-between align-items-center">
                   <h3 className="card-title mb-0">
-                    <i className="fas fa-chart-line feature-icon"></i>
                     Demo Analysis Results
                   </h3>
                   <button 
@@ -1246,7 +1233,7 @@ const DemoPage: React.FC = () => {
                         </div>
                         <div className="col-md-3">
                           <div className="bg-info bg-opacity-10 p-3 rounded text-center">
-                            <h4 className="text-info mb-1">{results.statistics.std_ndvi ? results.statistics.std_ndvi.toFixed(3) : '0.000'}</h4>
+                            <h4 className="text-secondary mb-1">{results.statistics.std_ndvi ? results.statistics.std_ndvi.toFixed(3) : '0.000'}</h4>
                             <small className="text-muted">Std Dev</small>
                           </div>
                         </div>
@@ -1267,26 +1254,26 @@ const DemoPage: React.FC = () => {
                     {formData.analysisType === 'lst' && results.statistics.mean_lst && (
                       <>
                         <div className="col-md-3">
-                          <div className="bg-danger bg-opacity-10 p-3 rounded text-center">
-                            <h4 className="text-danger mb-1">{results.statistics.mean_lst.toFixed(1)}°C</h4>
+                          <div className="bg-warning bg-opacity-10 p-3 rounded text-center">
+                            <h4 className="text-warning mb-1">{results.statistics.mean_lst.toFixed(1)}°C</h4>
                             <small className="text-muted">Mean LST</small>
                           </div>
                         </div>
                         <div className="col-md-3">
                           <div className="bg-info bg-opacity-10 p-3 rounded text-center">
-                            <h4 className="text-info mb-1">{results.statistics.std_lst ? results.statistics.std_lst.toFixed(1) : '0.0'}°C</h4>
+                            <h4 className="text-secondary mb-1">{results.statistics.std_lst ? results.statistics.std_lst.toFixed(1) : '0.0'}°C</h4>
                             <small className="text-muted">Std Dev</small>
                           </div>
                         </div>
                         <div className="col-md-3">
-                          <div className="bg-warning bg-opacity-10 p-3 rounded text-center">
-                            <h4 className="text-warning mb-1">{results.statistics.min_lst ? results.statistics.min_lst.toFixed(1) : '0.0'}°C</h4>
+                          <div className="bg-success bg-opacity-10 p-3 rounded text-center">
+                            <h4 className="text-success mb-1">{results.statistics.min_lst ? results.statistics.min_lst.toFixed(1) : '0.0'}°C</h4>
                             <small className="text-muted">Min LST</small>
                           </div>
                         </div>
                         <div className="col-md-3">
-                          <div className="bg-success bg-opacity-10 p-3 rounded text-center">
-                            <h4 className="text-success mb-1">{results.statistics.max_lst ? results.statistics.max_lst.toFixed(1) : '0.0'}°C</h4>
+                          <div className="bg-danger bg-opacity-10 p-3 rounded text-center">
+                            <h4 className="text-danger mb-1">{results.statistics.max_lst ? results.statistics.max_lst.toFixed(1) : '0.0'}°C</h4>
                             <small className="text-muted">Max LST</small>
                           </div>
                         </div>
@@ -1295,7 +1282,7 @@ const DemoPage: React.FC = () => {
                     {formData.analysisType === 'sar' && (
                       <div className="col-md-12">
                         <div className="bg-info bg-opacity-10 p-3 rounded text-center">
-                          <h4 className="text-info mb-1">{results.statistics.total_observations}</h4>
+                          <h4 className="text-secondary mb-1">{results.statistics.total_observations}</h4>
                           <small className="text-muted">SAR Observations from {results.metadata.date_range}</small>
                         </div>
                       </div>
@@ -1308,7 +1295,6 @@ const DemoPage: React.FC = () => {
                       <div className="card">
                         <div className="card-header">
                           <h5 className="mb-0">
-                            <i className="fas fa-chart-line me-2"></i>
                             Time Series Visualization
                           </h5>
                         </div>
@@ -1406,7 +1392,7 @@ const DemoPage: React.FC = () => {
                             {(formData.analysisType === 'lst' || formData.analysisType === 'comprehensive') && 
                               <td className="text-danger fw-bold">{item.lst ? item.lst.toFixed(1) : '-'}</td>}
                             {(formData.analysisType === 'sar' || formData.analysisType === 'comprehensive') && 
-                              <td className="text-info fw-bold">{item.backscatter ? item.backscatter.toFixed(1) : '-'}</td>}
+                              <td className="text-secondary fw-bold">{item.backscatter ? item.backscatter.toFixed(1) : '-'}</td>}
                             <td className="text-muted">{item.effective_cloud_cover ? item.effective_cloud_cover.toFixed(1) : '0.0'}</td>
                           </tr>
                         ))}

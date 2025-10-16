@@ -254,7 +254,7 @@ export const ShapefileUpload = ({ onFileUpload, onCoordinatesExtracted }) => {
                   </p>
                   <button 
                     type="button" 
-                    className="btn btn-outline-primary"
+                    className="btn btn-shapefile"
                     onClick={(e) => {
                       e.stopPropagation();
                       open();
@@ -271,7 +271,7 @@ export const ShapefileUpload = ({ onFileUpload, onCoordinatesExtracted }) => {
 
       {/* Requirements Information */}
       <div className="mt-3">
-        <div className="small text-dark fw-medium mb-2">📋 How It Works:</div>
+        <div className="small text-dark fw-medium mb-2">How It Works:</div>
         <ul className="small text-muted mb-0 ps-3">
           <li><strong>Upload:</strong> ZIP file containing .shp, .shx, .dbf files</li>
           <li><strong>Display:</strong> Area will be shown on the interactive map</li>
@@ -284,16 +284,6 @@ export const ShapefileUpload = ({ onFileUpload, onCoordinatesExtracted }) => {
             Single .shp files cannot be uploaded as they require companion files that browsers cannot upload together.
           </small>
         </div>
-        
-        {/* Debug info for development */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-2">
-            <small className="text-info">
-              <i className="fas fa-bug me-1"></i>
-              Debug: Component ready | isDragActive: {isDragActive.toString()} | Click or drag ZIP files
-            </small>
-          </div>
-        )}
       </div>
 
       {uploadedFile && (

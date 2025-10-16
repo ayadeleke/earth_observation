@@ -140,7 +140,7 @@ const LandingPage: React.FC = () => {
       {/* Main content container */}
       <div className="position-relative d-flex flex-column min-vh-100" style={{ zIndex: 2 }}>
         {/* Hero content */}
-        <div className="flex-grow-1 d-flex align-items-center justify-content-center py-5">
+        <div className="flex-grow-1 d-flex align-items-center justify-content-center mt-5">
           <div className="container">
             <div className="row justify-content-center">
               <div className="col-12 col-lg-10 col-xl-8 text-center">
@@ -151,7 +151,7 @@ const LandingPage: React.FC = () => {
                   transition={{ duration: 1, delay: 0.2 }}
                   className="display-1 fw-bold text-white mb-4"
                   style={{ 
-                    fontSize: 'clamp(2.5rem, 6vw, 5rem)',
+                    fontSize: 'clamp(2rem, 5vw, 3.5rem)',
                     textShadow: '3px 3px 6px rgba(0,0,0,0.7)',
                     lineHeight: '1.1'
                   }}
@@ -178,7 +178,7 @@ const LandingPage: React.FC = () => {
                   transition={{ duration: 1, delay: 0.4 }}
                   className="lead text-light mb-4"
                   style={{ 
-                    fontSize: 'clamp(1.1rem, 2vw, 1.4rem)',
+                    fontSize: 'clamp(1rem, 1.5vw, 1.2rem)',
                     textShadow: '2px 2px 4px rgba(0,0,0,0.7)',
                     lineHeight: '1.6',
                     maxWidth: '700px',
@@ -244,7 +244,7 @@ const LandingPage: React.FC = () => {
                     className="btn btn-success fw-semibold py-3 px-5 rounded-pill shadow-lg"
                     style={{ 
                       minWidth: '180px',
-                      fontSize: 'clamp(1rem, 1.2vw, 1.1rem)'
+                      fontSize: 'clamp(1rem, 1.2vw, 1rem)'
                     }}
                   >
                     Get Started
@@ -257,7 +257,7 @@ const LandingPage: React.FC = () => {
                     className="btn btn-outline-light fw-semibold py-3 px-5 rounded-pill"
                     style={{ 
                       minWidth: '180px',
-                      fontSize: 'clamp(1rem, 1.2vw, 1.1rem)',
+                      fontSize: 'clamp(1rem, 1.2vw, 1rem)',
                       borderWidth: '2px'
                     }}
                   >
@@ -284,8 +284,8 @@ const LandingPage: React.FC = () => {
                       : 'bg-white bg-opacity-50'
                   }`}
                   style={{ 
-                    width: '14px', 
-                    height: '14px',
+                    width: '12px', 
+                    height: '12px',
                     transition: 'all 0.3s ease',
                     opacity: index === currentImageIndex ? 1 : 0.7,
                     transform: index === currentImageIndex ? 'scale(1.2)' : 'scale(1)'

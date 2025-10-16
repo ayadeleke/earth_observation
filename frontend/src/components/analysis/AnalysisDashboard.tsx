@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { NDVITimeSeries } from './NDVITimeSeries';
+import { NDVITimeSeries } from './TimeSeries';
 import { Statistics } from './Statistics';
-import InteractiveMapSimple from '../InteractiveMapSimple';
+import InteractiveMapSimple from './InteractiveMapSimple';
 import { DataTable } from './DataTable';
 import { DownloadButtons } from './DownloadButtons';
 
@@ -86,12 +86,12 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
   }
 
   return (
-    <div className="p-4 bg-light min-vh-100">
+    <div className="container-fluid p-2 p-md-4 bg-light min-vh-100">
       {/* Analysis Results Header */}
-      <div className="bg-white rounded shadow-sm p-4">
+      <div className="bg-white rounded shadow-sm p-4 mb-3">
         <div className="d-flex justify-content-between align-items-center">
           <div>
-            <h1 className="fs-2 fw-bold text-dark">📊 Analysis Results</h1>
+            <h1 className="fs-2 fw-bold text-dark">Analysis Results</h1>
             <div className="small text-muted mt-1">
               {currentData.analysisType?.toUpperCase()} Analysis • {currentData.satellite?.toUpperCase()} • 
               {currentData.startDate} to {currentData.endDate}
