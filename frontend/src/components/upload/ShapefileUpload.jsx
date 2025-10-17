@@ -40,8 +40,7 @@ export const ShapefileUpload = ({ onFileUpload, onCoordinatesExtracted }) => {
       const zipContents = await zip.loadAsync(file);
       
       const allFiles = Object.keys(zipContents.files);
-      console.log('ZIP contents:', allFiles);
-      
+
       // Find the .shp file
       const shpFile = allFiles.find(name => 
         name.toLowerCase().endsWith('.shp') && !name.endsWith('/')
@@ -56,8 +55,7 @@ export const ShapefileUpload = ({ onFileUpload, onCoordinatesExtracted }) => {
       
       // Parse the shapefile
       const geojson = await shapefile.read(shpData);
-      console.log('Parsed shapefile:', geojson);
-      
+
       if (!geojson.features || geojson.features.length === 0) {
         throw new Error('No features found in shapefile');
       }
@@ -73,23 +71,13 @@ export const ShapefileUpload = ({ onFileUpload, onCoordinatesExtracted }) => {
         coordinates = coords.map(coord => [coord[1], coord[0]]); // [lat, lng]
         const wktCoords = coords.map(coord => `${coord[0]} ${coord[1]}`).join(', ');
         wkt = `POLYGON((${wktCoords}))`;
-        
-        console.log('Polygon processed:', {
-          originalCoords: coords.slice(0, 3),
-          convertedCoords: coordinates.slice(0, 3),
-          wkt: wkt.substring(0, 100) + '...'
-        });
+
       } else if (firstFeature.geometry.type === 'MultiPolygon') {
         const coords = firstFeature.geometry.coordinates[0][0];
         coordinates = coords.map(coord => [coord[1], coord[0]]); // [lat, lng]
         const wktCoords = coords.map(coord => `${coord[0]} ${coord[1]}`).join(', ');
         wkt = `POLYGON((${wktCoords}))`;
-        
-        console.log('MultiPolygon processed:', {
-          originalCoords: coords.slice(0, 3),
-          convertedCoords: coordinates.slice(0, 3),
-          wkt: wkt.substring(0, 100) + '...'
-        });
+
       } else {
         throw new Error(`Unsupported geometry type: ${firstFeature.geometry.type}. Please use Polygon or MultiPolygon shapefiles.`);
       }
@@ -116,26 +104,22 @@ export const ShapefileUpload = ({ onFileUpload, onCoordinatesExtracted }) => {
   }, [onCoordinatesExtracted]);
 
   const onDrop = useCallback(async (acceptedFiles, rejectedFiles) => {
-    console.log('=== File Drop Debug ===');
-    console.log('Accepted files:', acceptedFiles);
-    console.log('Rejected files:', rejectedFiles);
-    
+
     if (rejectedFiles && rejectedFiles.length > 0) {
-      console.log('File rejection reasons:', rejectedFiles.map(f => f.errors));
+
       alert(`File rejected: ${rejectedFiles[0].errors.map(e => e.message).join(', ')}`);
       return;
     }
     
     if (acceptedFiles.length === 0) {
-      console.log('No files accepted');
+
       return;
     }
     
     setIsProcessing(true);
     
     const file = acceptedFiles[0];
-    console.log('Processing file:', file.name, 'Type:', file.type, 'Size:', file.size);
-    
+
     // Check if it's a zip file (preferred method)
     const isZipFile = file.name.toLowerCase().endsWith('.zip');
     
@@ -254,7 +238,7 @@ export const ShapefileUpload = ({ onFileUpload, onCoordinatesExtracted }) => {
                   </p>
                   <button 
                     type="button" 
-                    className="btn btn-outline-primary"
+                    className="btn btn-shapefile"
                     onClick={(e) => {
                       e.stopPropagation();
                       open();
@@ -271,7 +255,7 @@ export const ShapefileUpload = ({ onFileUpload, onCoordinatesExtracted }) => {
 
       {/* Requirements Information */}
       <div className="mt-3">
-        <div className="small text-dark fw-medium mb-2">📋 How It Works:</div>
+        <div className="small text-dark fw-medium mb-2">How It Works:</div>
         <ul className="small text-muted mb-0 ps-3">
           <li><strong>Upload:</strong> ZIP file containing .shp, .shx, .dbf files</li>
           <li><strong>Display:</strong> Area will be shown on the interactive map</li>
@@ -284,16 +268,6 @@ export const ShapefileUpload = ({ onFileUpload, onCoordinatesExtracted }) => {
             Single .shp files cannot be uploaded as they require companion files that browsers cannot upload together.
           </small>
         </div>
-        
-        {/* Debug info for development */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-2">
-            <small className="text-info">
-              <i className="fas fa-bug me-1"></i>
-              Debug: Component ready | isDragActive: {isDragActive.toString()} | Click or drag ZIP files
-            </small>
-          </div>
-        )}
       </div>
 
       {uploadedFile && (

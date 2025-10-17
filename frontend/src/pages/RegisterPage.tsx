@@ -360,12 +360,7 @@ const RegisterPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="btn w-100 py-3 fw-semibold"
-                  style={{
-                    background: 'linear-gradient(135deg, #16a34a 0%, #2563eb 100%)',
-                    border: 'none',
-                    color: 'white'
-                  }}
+                  className="btn btn-primary w-100 py-3 fw-semibold"
                 >
                   {loading ? (
                     <div className="d-flex align-items-center justify-content-center">
@@ -384,7 +379,7 @@ const RegisterPage: React.FC = () => {
               <div className="mt-4 text-center">
                 <p className="text-light opacity-75">
                   Already have an account?{' '}
-                  <Link to="/login" className="text-info text-decoration-none fw-semibold">
+                  <Link to="/login" className="text-info text-decoration-underline fw-semibold">
                     Login here
                   </Link>
                 </p>

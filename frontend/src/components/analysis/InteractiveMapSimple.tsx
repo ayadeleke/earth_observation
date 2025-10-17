@@ -10,6 +10,7 @@ interface InteractiveMapSimpleProps {
   cloudCover?: number;
   enableCloudMasking?: boolean;
   maskingStrictness?: string;
+  polarization?: string;
 }
 
 const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
@@ -21,7 +22,8 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
   analysisType = 'ndvi',
   cloudCover = 20,
   enableCloudMasking = true,
-  maskingStrictness = 'false'
+  maskingStrictness = 'false',
+  polarization = 'VV'
 }) => {
   const [mapUrl, setMapUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -32,9 +34,7 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
     setError(null);
     
     try {
-      console.log('Creating interactive map...');
-      console.log('Geometry received:', geometry);
-      
+
       // Convert geometry to proper format for backend
       let coordinates;
       if (typeof geometry === 'string') {
@@ -49,9 +49,7 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
       } else {
         throw new Error('Invalid geometry format. Expected WKT string, GeoJSON Polygon, or coordinate array');
       }
-      
-      console.log('Converted coordinates:', coordinates);
-      
+
       // Use the create_custom_map endpoint
       const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
       
@@ -63,15 +61,10 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
         analysis_type: analysisType,
         cloud_cover: cloudCover,
         selected_indices: 'first_last', // Always use first and last images
-        cloud_masking_level: enableCloudMasking ? (maskingStrictness === 'strict' ? 'strict' : 'recommended') : 'disabled'
+        cloud_masking_level: enableCloudMasking ? (maskingStrictness === 'strict' ? 'strict' : 'recommended') : 'disabled',
+        polarization: polarization // Include SAR polarization (VV or VH)
       };
 
-      console.log('=== InteractiveMapSimple Request Debug ===');
-      console.log('enableCloudMasking:', enableCloudMasking);
-      console.log('maskingStrictness:', maskingStrictness);
-      console.log('Calculated cloud_masking_level:', requestBody.cloud_masking_level);
-      console.log('Full request body:', requestBody);
-      
       const response = await fetch(`${API_BASE_URL}/visualization/create_custom_map/`, {
         method: 'POST',
         headers: {
@@ -83,8 +76,7 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
       const result = await response.json();
       
       if (result.success && result.map_url) {
-        console.log('Map created successfully:', result.map_url);
-        
+
         // Construct full URL to Django backend static files
         let fullMapUrl = result.map_url;
         if (fullMapUrl.startsWith('/static/')) {
@@ -92,8 +84,7 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
           const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
           fullMapUrl = `${backendUrl}${result.map_url}`;
         }
-        
-        console.log('Full map URL:', fullMapUrl);
+
         setMapUrl(fullMapUrl);
       } else {
         throw new Error(result.error || 'Failed to create interactive map');
@@ -104,7 +95,7 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [geometry, startDate, endDate, satellite, analysisType, cloudCover, enableCloudMasking, maskingStrictness]);
+  }, [geometry, startDate, endDate, satellite, analysisType, cloudCover, enableCloudMasking, maskingStrictness, polarization]);
 
   useEffect(() => {
     if (analysisData && geometry && startDate && endDate) {
@@ -156,7 +147,7 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
   }
 
   return (
-    <div className="interactive-map-container">
+    <div className="interactive-map-container mb-2 mt-4">
       <div className="d-flex justify-content-between align-items-center mb-2">
         <h5 className="mb-0">
           <i className="fas fa-map me-2"></i>
@@ -192,14 +183,15 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
           }}
           title="Interactive Analysis Map"
           loading="lazy"
-          onLoad={() => console.log('Map iframe loaded successfully')}
+          onLoad={() => {
+            // Map loaded successfully
+          }}
           onError={() => console.error('Map iframe failed to load')}
         />
       </div>
       
       <div className="mt-2">
-        <small className="text-muted">
-          <i className="fas fa-info-circle me-1"></i>
+        <small className="text-muted fst-italic">
           Map shows {analysisType.toUpperCase()} analysis using {satellite} satellite data
           from {startDate} to {endDate} with first and last images.
         </small>

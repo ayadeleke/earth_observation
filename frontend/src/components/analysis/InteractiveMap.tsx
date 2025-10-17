@@ -74,7 +74,7 @@ const AOILayer: React.FC<{ geometry?: any }> = ({ geometry }) => {
         map.fitBounds(bounds, { padding: [20, 20] });
       }
     } catch (error) {
-      console.warn('Could not add AOI layer:', error);
+
     }
 
     return () => {
@@ -130,7 +130,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         setMapCenter([centerLat, centerLon]);
         setMapZoom(10);
       } catch (error) {
-        console.warn('Could not calculate map center from geometry:', error);
+
       }
     }
   }, [geometry]);
@@ -138,7 +138,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   // Create custom comprehensive map using ImageSelector approach
   const createCustomMap = async () => {
     if (!geometry || !hasAnalysisResults) {
-      console.log('Cannot create custom map: missing geometry or results');
+
       return;
     }
 
@@ -152,12 +152,6 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         const coordString = coords.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(', ');
         coordinates = `POLYGON((${coordString}))`;
       }
-
-      console.log('=== Creating Custom Map for Analysis ===');
-      console.log('Using first and last images only for analysis consistency with Django');
-      console.log('Analysis type:', analysisType);
-      console.log('Satellite:', satellite);
-      console.log('Date range:', startDate, 'to', endDate);
 
       // Convert cloud masking parameters to backend format
       let cloudMaskingLevel = 'disabled';

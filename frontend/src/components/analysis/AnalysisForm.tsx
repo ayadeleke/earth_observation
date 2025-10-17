@@ -14,6 +14,7 @@ interface FormData {
   enableCloudMasking: boolean;
   maskingStrictness: string;
   polarization: string;
+  orbitDirection: string;
 }
 
 interface AnalysisFormProps {
@@ -46,11 +47,12 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
     enableCloudMasking: false,
     maskingStrictness: 'false',
     polarization: 'VV',
+    orbitDirection: 'DESCENDING',
     ...initialData
   });
 
   const [activeTab, setActiveTab] = useState<string>('coordinates');
-  const [dateRangeType, setDateRangeType] = useState<string>(initialDateRangeType);
+  const dateRangeType = 'dates'; // Always use exact dates
   const [eeStatus, setEeStatus] = useState<any>(null);
 
   // Check Earth Engine status on component mount
@@ -63,7 +65,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
           setEeStatus(status);
         }
       } catch (error) {
-        console.log('Could not fetch EE status:', error);
+
         // Set default status if backend is not available
         setEeStatus({
           authenticated: false,
@@ -85,11 +87,6 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
       }));
     }
   }, [initialData]);
-
-  // Update date range type when initialDateRangeType changes
-  useEffect(() => {
-    setDateRangeType(initialDateRangeType);
-  }, [initialDateRangeType]);
 
   // Handle input changes
   const handleInputChange = (e: any) => {
@@ -173,7 +170,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
     }}>
       <div className="card-header bg-transparent border-0 pb-0" style={{ padding: '2rem 2rem 0 2rem' }}>
         <div className="d-flex align-items-center mb-3">
-          <div className="bg-primary bg-opacity-10 rounded-3 p-2 me-3">
+          <div className="bg-success bg-opacity-10 rounded-3 p-2 me-3">
             <i className="fas fa-cogs text-primary" style={{ fontSize: '1.5rem' }}></i>
           </div>
           <h3 className="mb-0 fw-bold text-dark">Analysis Parameters</h3>
@@ -186,9 +183,6 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
           {/* Area of Interest Section */}
           <div className="mb-4">
             <div className="d-flex align-items-center mb-3">
-              <div className="bg-info bg-opacity-10 rounded-2 p-2 me-3">
-                <i className="fas fa-map-marker-alt text-info"></i>
-              </div>
               <div>
                 <label className="form-label mb-0 fw-semibold text-dark">Area of Interest</label>
                 <p className="text-muted small mb-0">Define the geographical area for analysis</p>
@@ -205,7 +199,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                   style={{
                     borderRadius: '0.5rem',
                     fontWeight: '500',
-                    backgroundColor: activeTab === 'coordinates' ? '#667eea' : 'transparent',
+                    backgroundColor: activeTab === 'coordinates' ? '#064e3b' : 'transparent',
                     color: activeTab === 'coordinates' ? 'white' : '#6c757d',
                     transition: 'all 0.3s ease'
                   }}
@@ -233,7 +227,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                   style={{
                     borderRadius: '0.5rem',
                     fontWeight: '500',
-                    backgroundColor: activeTab === 'shapefile' ? '#667eea' : 'transparent',
+                    backgroundColor: activeTab === 'shapefile' ? '#064e3b' : 'transparent',
                     color: activeTab === 'shapefile' ? 'white' : '#6c757d',
                     transition: 'all 0.3s ease'
                   }}
@@ -276,8 +270,8 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                       fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace'
                     }}
                     onFocus={(e) => {
-                      (e.target as HTMLTextAreaElement).style.borderColor = '#667eea';
-                      (e.target as HTMLTextAreaElement).style.boxShadow = '0 0 0 0.2rem rgba(102, 126, 234, 0.25)';
+                      (e.target as HTMLTextAreaElement).style.borderColor = '#064e3b';
+                      (e.target as HTMLTextAreaElement).style.boxShadow = '0 0 0 0.2rem rgba(6, 78, 59, 0.25)';
                     }}
                     onBlur={(e) => {
                       (e.target as HTMLTextAreaElement).style.borderColor = '#e9ecef';
@@ -295,14 +289,14 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                 <div className="tab-pane fade show active">
                   <ShapefileUpload 
                     onFileUpload={(result: any) => {
-                      console.log('Shapefile uploaded:', result);
+
                       if (result.bounds) {
                         const coords = result.bounds;
                         handleAreaSelect(coords, result.wkt || '', 'shapefile');
                       }
                     }}
                     onCoordinatesExtracted={(bounds: any, wkt: string, source: string, geometry: any) => {
-                      console.log('Coordinates extracted from shapefile:', bounds, geometry);
+
                       handleAreaSelect(bounds, wkt || '', source, geometry);
                     }}
                   />
@@ -311,157 +305,83 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
             </div>
           </div>
           
-          {/* Date Selection Options */}
+          {/* Date Selection */}
           <div className="mb-4">
             <div className="d-flex align-items-center mb-3">
-              <div className="bg-warning bg-opacity-10 rounded-2 p-2 me-3">
-                <i className="fas fa-calendar-range text-warning"></i>
-              </div>
               <div>
-                <label className="form-label mb-0 fw-semibold text-dark">Date Range Selection</label>
+                <label className="form-label mb-0 fw-semibold text-dark">Date Range</label>
                 <p className="text-muted small mb-0">Choose your temporal analysis period</p>
               </div>
             </div>
             
-            {/* Date Range Type Selection */}
-            <div className="mb-3">
-              <div className="form-check form-check-inline">
-                <input 
-                  className="form-check-input" 
-                  type="radio" 
-                  name="dateRangeType" 
-                  value="years" 
-                  checked={dateRangeType === 'years'}
-                  onChange={(e) => setDateRangeType(e.target.value)}
-                />
-                <label className="form-check-label">
-                  <i className="fas fa-calendar-alt me-1"></i>Year Range
-                </label>
-              </div>
-              <div className="form-check form-check-inline">
-                <input 
-                  className="form-check-input" 
-                  type="radio" 
-                  name="dateRangeType" 
-                  value="dates"
-                  checked={dateRangeType === 'dates'}
-                  onChange={(e) => setDateRangeType(e.target.value)}
-                />
-                <label className="form-check-label">
-                  <i className="fas fa-calendar-day me-1"></i>Exact Dates
-                </label>
+            {/* Exact Date Selection */}
+            <div>
+              <div className="row">
+                <div className="col-md-6">
+                  <div className="mb-3">
+                    <label htmlFor="startDate" className="form-label">Start Date</label>
+                    <input 
+                      type="date" 
+                      className="form-control form-control-lg" 
+                      name="startDate"
+                      value={formData.startDate}
+                      onChange={handleInputChange}
+                      min="1988-01-01" 
+                      max="2025-12-31"
+                      style={{
+                        borderRadius: '0.75rem',
+                        border: '2px solid #e9ecef',
+                        padding: '0.75rem 1rem',
+                        fontSize: '1rem',
+                        transition: 'all 0.3s ease'
+                      }}
+                      onFocus={(e) => {
+                        (e.target as HTMLInputElement).style.borderColor = '#2ec799';
+                        (e.target as HTMLInputElement).style.boxShadow = '0 0 0 0.2rem rgba(102, 126, 234, 0.25)';
+                      }}
+                      onBlur={(e) => {
+                        (e.target as HTMLInputElement).style.borderColor = '#e9ecef';
+                        (e.target as HTMLInputElement).style.boxShadow = 'none';
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  <div className="mb-3">
+                    <label htmlFor="endDate" className="form-label">End Date</label>
+                    <input 
+                      type="date" 
+                      className="form-control form-control-lg" 
+                      name="endDate"
+                      value={formData.endDate}
+                      onChange={handleInputChange}
+                      min="1988-01-01" 
+                      max="2025-12-31"
+                      style={{
+                        borderRadius: '0.75rem',
+                        border: '2px solid #e9ecef',
+                        padding: '0.75rem 1rem',
+                        fontSize: '1rem',
+                        transition: 'all 0.3s ease'
+                      }}
+                      onFocus={(e) => {
+                        (e.target as HTMLInputElement).style.borderColor = '#667eea';
+                        (e.target as HTMLInputElement).style.boxShadow = '0 0 0 0.2rem rgba(102, 126, 234, 0.25)';
+                      }}
+                      onBlur={(e) => {
+                        (e.target as HTMLInputElement).style.borderColor = '#e9ecef';
+                        (e.target as HTMLInputElement).style.boxShadow = 'none';
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-            
-            {/* Year Range Selection (Default) */}
-            {dateRangeType === 'years' && (
-              <div>
-                <div className="row">
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label htmlFor="startYear" className="form-label">Start Year</label>
-                      <input 
-                        type="number" 
-                        className="form-control" 
-                        name="startYear"
-                        value={formData.startYear}
-                        onChange={handleInputChange}
-                        min="1988" 
-                        max="2025"
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label htmlFor="endYear" className="form-label">End Year</label>
-                      <input 
-                        type="number" 
-                        className="form-control" 
-                        name="endYear"
-                        value={formData.endYear}
-                        onChange={handleInputChange}
-                        min="1988" 
-                        max="2025"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Exact Date Selection */}
-            {dateRangeType === 'dates' && (
-              <div>
-                <div className="row">
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label htmlFor="startDate" className="form-label">Start Date</label>
-                      <input 
-                        type="date" 
-                        className="form-control form-control-lg" 
-                        name="startDate"
-                        value={formData.startDate}
-                        onChange={handleInputChange}
-                        min="1988-01-01" 
-                        max="2025-12-31"
-                        style={{
-                          borderRadius: '0.75rem',
-                          border: '2px solid #e9ecef',
-                          padding: '0.75rem 1rem',
-                          fontSize: '1rem',
-                          transition: 'all 0.3s ease'
-                        }}
-                        onFocus={(e) => {
-                          (e.target as HTMLInputElement).style.borderColor = '#667eea';
-                          (e.target as HTMLInputElement).style.boxShadow = '0 0 0 0.2rem rgba(102, 126, 234, 0.25)';
-                        }}
-                        onBlur={(e) => {
-                          (e.target as HTMLInputElement).style.borderColor = '#e9ecef';
-                          (e.target as HTMLInputElement).style.boxShadow = 'none';
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label htmlFor="endDate" className="form-label">End Date</label>
-                      <input 
-                        type="date" 
-                        className="form-control form-control-lg" 
-                        name="endDate"
-                        value={formData.endDate}
-                        onChange={handleInputChange}
-                        min="1988-01-01" 
-                        max="2025-12-31"
-                        style={{
-                          borderRadius: '0.75rem',
-                          border: '2px solid #e9ecef',
-                          padding: '0.75rem 1rem',
-                          fontSize: '1rem',
-                          transition: 'all 0.3s ease'
-                        }}
-                        onFocus={(e) => {
-                          (e.target as HTMLInputElement).style.borderColor = '#667eea';
-                          (e.target as HTMLInputElement).style.boxShadow = '0 0 0 0.2rem rgba(102, 126, 234, 0.25)';
-                        }}
-                        onBlur={(e) => {
-                          (e.target as HTMLInputElement).style.borderColor = '#e9ecef';
-                          (e.target as HTMLInputElement).style.boxShadow = 'none';
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
           
           {/* Analysis Type Selection */}
           <div className="mb-4">
             <div className="d-flex align-items-center mb-3">
-              <div className="bg-success bg-opacity-10 rounded-2 p-2 me-3">
-                <i className="fas fa-chart-line text-success"></i>
-              </div>
               <div>
                 <label className="form-label mb-0 fw-semibold text-dark">Analysis Type</label>
                 <p className="text-muted small mb-0">Select the type of satellite analysis to perform</p>
@@ -480,8 +400,8 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                 transition: 'all 0.3s ease'
               }}
               onFocus={(e) => {
-                (e.target as HTMLSelectElement).style.borderColor = '#667eea';
-                (e.target as HTMLSelectElement).style.boxShadow = '0 0 0 0.2rem rgba(102, 126, 234, 0.25)';
+                (e.target as HTMLSelectElement).style.borderColor = '#2ec799';
+                (e.target as HTMLSelectElement).style.boxShadow = '0 0 0 0.2rem rgba(46, 199, 153, 0.25)';
               }}
               onBlur={(e) => {
                 (e.target as HTMLSelectElement).style.borderColor = '#e9ecef';
@@ -493,8 +413,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
               <option value="sar">SAR Backscatter (Sentinel-1 only)</option>
               <option value="comprehensive">Comprehensive Analysis (All)</option>
             </select>
-            <div className="form-text">
-              <i className="fas fa-info-circle me-1"></i>
+            <div className="form-text fst-italic">
               Choose the type of analysis to perform on the selected area.
             </div>
           </div>
@@ -502,9 +421,6 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
           {/* Satellite Mission */}
           <div className="mb-4">
             <div className="d-flex align-items-center mb-3">
-              <div className="bg-primary bg-opacity-10 rounded-2 p-2 me-3">
-                <i className="fas fa-satellite-dish text-primary"></i>
-              </div>
               <div>
                 <label className="form-label mb-0 fw-semibold text-dark">Satellite Mission</label>
                 <p className="text-muted small mb-0">Choose the satellite data source</p>
@@ -535,8 +451,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
               <option value="sentinel2">Sentinel-2 (10m resolution)</option>
               <option value="sentinel1">Sentinel-1 SAR (10m resolution)</option>
             </select>
-            <div className="form-text">
-              <i className="fas fa-info-circle me-1"></i>
+            <div className="form-text fst-italic">
               <span>{getSatelliteDescription()}</span>
             </div>
           </div>
@@ -546,7 +461,6 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
           <>
           <div className="mb-4">
             <label htmlFor="cloudCover" className="form-label">
-              <i className="fas fa-cloud me-2"></i>
               Maximum Cloud Cover (%)
             </label>
             <div className="row align-items-center">
@@ -617,8 +531,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                 </div>
               </div>
             </div>
-            <div className="form-text">
-              <i className="fas fa-info-circle me-1"></i>
+            <div className="form-text fst-italic">
               Filter images with cloud cover below this threshold. Lower values provide clearer images but may reduce available data.
             </div>
           </div>
@@ -626,7 +539,6 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
           {/* Cloud Masking Options (for Landsat) */}
           <div className="mb-4">
             <label className="form-label">
-              <i className="fas fa-eye-slash me-2"></i>
               Cloud Masking Options
             </label>
             
@@ -674,7 +586,6 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
             </div>
             
             <div className="form-text">
-              <i className="fas fa-info-circle me-1"></i>
               Cloud masking removes cloudy pixels for cleaner analysis. Standard masking balances quality and data availability. Strict masking provides highest quality but may reduce available pixels.
             </div>
           </div>
@@ -683,9 +594,9 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
 
           {/* SAR Polarization (for Sentinel-1) */}
           {formData.analysisType === 'sar' && (
+            <>
             <div className="mb-4">
               <label className="form-label">
-                <i className="fas fa-radio me-2"></i>
                 SAR Polarization
               </label>
               <select 
@@ -714,18 +625,51 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                 <option value="HH">HH - Horizontal Transmit, Horizontal Receive</option>
                 <option value="HV">HV - Horizontal Transmit, Vertical Receive</option>
               </select>
-              <div className="form-text">
-                <i className="fas fa-info-circle me-1"></i>
+              <div className="form-text fst-italic">
                 SAR polarization affects sensitivity to different surface features. VV is commonly used for vegetation monitoring.
               </div>
             </div>
+
+            {/* SAR Orbit Direction */}
+            <div className="mb-4">
+              <label className="form-label">
+                Orbit Direction
+              </label>
+              <select 
+                className="form-select form-select-lg" 
+                name="orbitDirection"
+                value={formData.orbitDirection}
+                onChange={handleInputChange}
+                style={{
+                  borderRadius: '0.75rem',
+                  border: '2px solid #e9ecef',
+                  padding: '0.75rem 1rem',
+                  fontSize: '1rem',
+                  transition: 'all 0.3s ease'
+                }}
+                onFocus={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = '#2ec799';
+                  (e.target as HTMLSelectElement).style.boxShadow = '0 0 0 0.2rem rgba(102, 126, 234, 0.25)';
+                }}
+                onBlur={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = '#e9ecef';
+                  (e.target as HTMLSelectElement).style.boxShadow = 'none';
+                }}
+              >
+                <option value="DESCENDING">DESCENDING - Satellite moving South</option>
+                <option value="ASCENDING">ASCENDING - Satellite moving North</option>
+              </select>
+              <div className="form-text fst-italic">
+                Orbit direction affects the look angle and illumination geometry. DESCENDING passes typically occur in the evening (local time).
+              </div>
+            </div>
+            </>
           )}
 
           {/* Earth Engine Integration Info */}
           <div className="mb-4">
             <div className="alert alert-info border-0" style={{ backgroundColor: '#e8f4f8' }}>
               <div className="d-flex align-items-center mb-2">
-                <i className="fas fa-cloud text-primary me-2" style={{ fontSize: '1.2rem' }}></i>
                 <strong className="text-primary">Google Earth Engine Initialized for Analysis</strong>
               </div>
               
@@ -745,8 +689,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                       Service account active</>
                     )}
                   </p>
-                  
-                  
+
                   {eeStatus.service_account_configured && !eeStatus.service_account_available && (
                     <p className="mb-2 small text-warning">
                       <i className="fas fa-exclamation-triangle me-1"></i>
@@ -780,7 +723,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
               className="btn btn-lg shadow-sm" 
               disabled={loading}
               style={{
-                background: loading ? '#6c757d' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: loading ? '#6c757d' : 'linear-gradient(135deg, #0b411f 0%, #064e3b 100%)',
                 border: 'none',
                 borderRadius: '1rem',
                 padding: '1rem 2rem',
@@ -813,7 +756,6 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                 </>
               ) : (
                 <>
-                  <i className="fas fa-rocket me-3"></i>
                   Run Analysis
                 </>
               )}

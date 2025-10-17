@@ -42,7 +42,12 @@
     "eject": "react-scripts eject",
     "lint": "eslint src/**/*.{ts,tsx}",
     "lint:fix": "eslint src/**/*.{ts,tsx} --fix",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "build:prod": "cross-env GENERATE_SOURCEMAP=false npm run build",
+    "analyze": "npm run build && npx bundle-analyzer build/static/js/*.js",
+    "test:coverage": "npm test -- --coverage --watchAll=false",
+    "security:audit": "npm audit",
+    "security:fix": "npm audit fix"
   },
   "eslintConfig": {
     "extends": [
@@ -67,6 +72,7 @@
     "@types/react-router-dom": "^5.3.3",
     "ajv": "^6.12.6",
     "ajv-keywords": "^3.5.2",
+    "cross-env": "^10.1.0",
     "eslint": "^8.49.0",
     "prettier": "^3.0.3"
   },

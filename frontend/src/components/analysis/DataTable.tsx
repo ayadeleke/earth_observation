@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { ArrowDownWideNarrow } from 'lucide-react';
 
 interface DataRow {
   date: string;
@@ -23,14 +24,10 @@ export const DataTable: React.FC<DataTableProps> = ({
   analysisType = 'ndvi',
   loading = false
 }) => {
-  // DEBUG: Log the actual data structure being received
+
   React.useEffect(() => {
     if (data && data.length > 0) {
-      console.log('🔍 DataTable DEBUG - First data item received:', data[0]);
-      console.log('🔍 DataTable DEBUG - originalCloudCover:', data[0].originalCloudCover);
-      console.log('🔍 DataTable DEBUG - adjustedCloudCover:', data[0].adjustedCloudCover);
-      console.log('🔍 DataTable DEBUG - cloudMaskingApplied:', data[0].cloudMaskingApplied);
-      console.log('🔍 DataTable DEBUG - All available fields:', Object.keys(data[0]));
+
     }
   }, [data]);
 
@@ -128,7 +125,9 @@ export const DataTable: React.FC<DataTableProps> = ({
 
   const SortIcon = ({ column }: { column: string }) => {
     if (!sortConfig || sortConfig.key !== column) {
-      return <span className="text-muted">↕️</span>;
+      return (
+    <ArrowDownWideNarrow />
+  );
     }
     return (
       <span className="text-primary">
@@ -138,9 +137,9 @@ export const DataTable: React.FC<DataTableProps> = ({
   };
 
   return (
-    <div className="card border-0 shadow-sm">
+    <div className="card border-0 shadow-sm mb-2 mt-4">
       <div className="card-header bg-white">
-        <h3 className="h5 fw-semibold text-dark mb-1">📋 {analysisType.toUpperCase()} Data Table</h3>
+        <h3 className="h5 fw-semibold text-dark mb-1">{analysisType.toUpperCase()} Data Table</h3>
         <div className="small text-muted">
           Showing {paginatedData.length} of {data.length} observations
         </div>
@@ -244,15 +243,15 @@ export const DataTable: React.FC<DataTableProps> = ({
                     <span className={`${
                       analysisType === 'ndvi' ? 'text-success' :
                       analysisType === 'lst' ? 'text-danger' :
-                      'text-info'
+                      'text-dark'
                     }`}>
-                      {formatValue(value)}
+                      {formatValue(value)} {valueColumn.unit}
                     </span>
                   </td>
                   {(analysisType.toLowerCase() === 'sar' || analysisType.toLowerCase() === 'backscatter') ? (
                     <>
                       <td className="px-3 py-2 small fw-semibold">
-                        <span className="text-info">
+                        <span className="text-dark">
                           {formatValue(row.backscatterVH)} dB
                         </span>
                       </td>
@@ -262,7 +261,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                       <td className="px-3 py-2 small">
                         <span className={`badge ${
                           row.orbitDirection === 'ASCENDING' 
-                            ? 'bg-primary' 
+                            ? 'bg-success' 
                             : 'bg-secondary'
                         }`}>
                           {row.orbitDirection || 'N/A'}

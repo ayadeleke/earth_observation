@@ -14,10 +14,11 @@ import re
 logger = logging.getLogger(__name__)
 
 
-def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCENDING"):
+def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCENDING", polarization="VV"):
     """Process SAR analysis using Sentinel-1 data with memory optimization"""
     try:
         logger.info(f"Processing SAR analysis for {start_date} to {end_date}")
+        logger.warning(f"🎯 SAR ANALYSIS: Using orbit_direction={orbit_direction}, polarization={polarization}")
 
         # Validate date range to prevent overly broad analysis
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
@@ -35,7 +36,7 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
         # For very large date ranges (>3 years), immediately use optimized processing
         if date_range_years > 3:
             logger.info(f"Date range {date_range_years:.1f} years exceeds 3-year limit, using chunked processing")
-            return process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date, orbit_direction, date_range_years)
+            return process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date, orbit_direction, date_range_years, polarization)
 
         # Check geometry size and simplify if needed to prevent memory issues
         area_km2 = geometry.area().divide(1000000).getInfo()
@@ -57,6 +58,9 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
         vv = median_image.select('VV')
         vh = median_image.select('VH')
 
+        # Select the primary polarization for analysis based on user selection
+        primary_polarization = vv if polarization == 'VV' else vh
+
         # Calculate only essential derived indices to reduce memory
         vv_vh_ratio = vv.divide(vh).rename('VV_VH_ratio')
 
@@ -69,8 +73,8 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
             bestEffort=True  # Allow Earth Engine to optimize
         ).getInfo()
 
-        # Get pixel count with lower resolution
-        pixel_count_result = vv.reduceRegion(
+        # Get pixel count with lower resolution using the selected polarization
+        pixel_count_result = primary_polarization.reduceRegion(
             reducer=ee.Reducer.count(),
             geometry=geometry,
             scale=scale * 2,  # Use even lower resolution for counting
@@ -78,7 +82,7 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
             bestEffort=True
         ).getInfo()
 
-        pixel_count = pixel_count_result.get("VV", 0) if pixel_count_result else 0
+        pixel_count = pixel_count_result.get(polarization, 0) if pixel_count_result else 0
 
         # Get real Sentinel-1 data points from the collection
         sample_data = []
@@ -302,6 +306,7 @@ def get_sentinel1_collection(geometry, start_date, end_date, orbit_direction="DE
         logger.info(f"Getting Sentinel-1 collection for {start_date} to {end_date}")
 
         # Create Sentinel-1 collection to get real data
+        # Filter by specific orbit direction as requested by user
         collection = (
             ee.ImageCollection('COPERNICUS/S1_GRD')
             .filterBounds(geometry)
@@ -309,9 +314,12 @@ def get_sentinel1_collection(geometry, start_date, end_date, orbit_direction="DE
             .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
             .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
             .filter(ee.Filter.eq('instrumentMode', 'IW'))
+            # Filter by user-selected orbit direction
             .filter(ee.Filter.eq('orbitProperties_pass', orbit_direction))
             .sort('system:time_start')
         )
+        
+        logger.info(f"🛰️ Filtering Sentinel-1 collection by orbit direction: {orbit_direction}")
 
         # Apply minimal preprocessing to keep original data integrity
         def preprocess_sar_image(image):
@@ -454,13 +462,14 @@ def create_annual_averages(sample_data, start_date, end_date):
         return sample_data  # Fallback to original data
 
 
-def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_direction, total_images, scale, max_pixels):
+def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_direction, total_images, scale, max_pixels, polarization="VV"):
     """
     Process SAR data using annual aggregation to avoid memory limits.
     Creates annual mean composites instead of individual images, similar to LST analysis approach.
     """
     try:
         logger.info(f"Using annual aggregation for {total_images} SAR images to avoid memory limits")
+        logger.info(f"Using polarization: {polarization}")
         
         # Parse dates
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
@@ -491,6 +500,7 @@ def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_
                 logger.debug(f"Processing SAR annual composite for {year}: {year_start} to {year_end}")
                 
                 # Create collection for this year
+                # Accept both orbit directions for maximum data coverage
                 annual_collection = (
                     ee.ImageCollection('COPERNICUS/S1_GRD')
                     .filterBounds(geometry)
@@ -498,6 +508,7 @@ def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_
                     .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
                     .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
                     .filter(ee.Filter.eq('instrumentMode', 'IW'))
+                    # Filter by user-selected orbit direction
                     .filter(ee.Filter.eq('orbitProperties_pass', orbit_direction))
                 )
                 
@@ -572,6 +583,7 @@ def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_
             "demo_mode": False,
             "analysis_type": "SAR",
             "satellite": "Sentinel-1 (Annual Means)",
+            "polarization": polarization,
             "data": sample_data,
             "time_series_data": sample_data,
             "statistics": {
@@ -583,6 +595,7 @@ def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_
                 "min_vh": round(min([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -20.0,
                 "max_vh": round(max([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -15.0,
                 "std_vh": round(np.std([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else 2.0,
+                "selected_polarization": polarization,
                 "area_km2": round(area_km2, 2),
                 "pixel_count": 1000,
                 "total_individual_observations": total_acquisitions,  # Total SAR acquisitions used
@@ -615,31 +628,30 @@ def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_
         }
 
 
-def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date, orbit_direction, date_range_years):
+def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date, orbit_direction, date_range_years, polarization="VV"):
     """
     Process very large date ranges using chunked temporal aggregation.
     Breaks large periods into smaller chunks to avoid memory limits.
     """
     try:
-        logger.info(f"Using chunked processing for {date_range_years:.1f} year SAR analysis")
+        logger.warning(f"🎯 CHUNKED PROCESSING START: {date_range_years:.1f} years from {start_date} to {end_date}")
+        logger.warning(f"🎯 ORBIT DIRECTION: {orbit_direction}")
+        logger.warning(f"🎯 POLARIZATION: {polarization}")
         
         # Parse dates
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
         
-        # Determine chunk size based on total range
+        # Always use annual aggregation for SAR analysis
+        # Chunk size determines how many years to process at once for memory efficiency
         if date_range_years > 10:
-            # For very large ranges, use 2-year chunks with biennial aggregation
+            # For very large ranges, process 2 years at a time but still create annual composites
             chunk_years = 2
-            temporal_resolution = "biennial"  # Every 2 years
-        elif date_range_years > 3:
-            # For large ranges, use 1-year chunks with annual aggregation
-            chunk_years = 1
-            temporal_resolution = "annual"
         else:
-            # This shouldn't happen as we only call this for >3 years, but safety fallback
+            # For ranges 3-10 years, process 1 year at a time
             chunk_years = 1
-            temporal_resolution = "annual"
+        
+        temporal_resolution = "annual"  # Always use annual resolution for SAR
         
         logger.info(f"Using {temporal_resolution} aggregation with {chunk_years}-year chunks")
         
@@ -687,51 +699,62 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
             chunk_end_str = chunk_end.strftime('%Y-%m-%d')
             
             logger.info(f"Processing chunk {chunk_count}: {chunk_start_str} to {chunk_end_str}")
+            logger.warning(f"🔍 CHUNK {chunk_count}: Querying with orbit={orbit_direction}")
             
             try:
-                # Create collection for this chunk with aggressive filtering
-                chunk_collection = (
+                # First check total images before orbit filtering
+                chunk_collection_all_orbits = (
                     ee.ImageCollection('COPERNICUS/S1_GRD')
                     .filterBounds(geometry)
                     .filterDate(chunk_start_str, chunk_end_str)
                     .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
                     .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
                     .filter(ee.Filter.eq('instrumentMode', 'IW'))
-                    .filter(ee.Filter.eq('orbitProperties_pass', orbit_direction))
+                )
+                total_before_orbit_filter = chunk_collection_all_orbits.size().getInfo()
+                
+                # Create collection for this chunk with aggressive filtering
+                # Filter by user-selected orbit direction
+                chunk_collection = chunk_collection_all_orbits.filter(
+                    ee.Filter.eq('orbitProperties_pass', orbit_direction)
                 )
                 
                 # Check collection size for this chunk
                 chunk_size = chunk_collection.size().getInfo()
                 
+                logger.warning(f"🔍 CHUNK {chunk_count}: Total images={total_before_orbit_filter}, {orbit_direction} images={chunk_size} for {chunk_start_str} to {chunk_end_str}")
+                
                 if chunk_size == 0:
-                    logger.debug(f"No SAR data in chunk {chunk_count}")
+                    logger.warning(f"❌ CHUNK {chunk_count}: No SAR data found, moving to next chunk")
                     current_date = chunk_end + timedelta(days=1)
                     continue
                 
                 logger.debug(f"Chunk {chunk_count} has {chunk_size} images")
                 total_acquisitions += chunk_size
                 
-                # For temporal resolution, create appropriate composite
-                if temporal_resolution == "biennial" and chunk_years >= 2:
-                    # Create one data point per 2-year chunk
-                    chunk_composite = chunk_collection.mean()
-                    composite_date = current_date + timedelta(days=365)  # Mid-chunk date
+                # Always create annual composites within the chunk
+                logger.info(f"Processing annual composites from year {current_date.year} to {chunk_end.year}")
+                for year in range(current_date.year, chunk_end.year + 1):
+                    year_start = max(current_date, datetime(year, 1, 1)).strftime('%Y-%m-%d')
+                    year_end = min(chunk_end, datetime(year, 12, 31)).strftime('%Y-%m-%d')
                     
-                elif temporal_resolution == "annual":
-                    # Create annual composites within the chunk
-                    for year in range(current_date.year, chunk_end.year + 1):
-                        year_start = max(current_date, datetime(year, 1, 1)).strftime('%Y-%m-%d')
-                        year_end = min(chunk_end, datetime(year, 12, 31)).strftime('%Y-%m-%d')
-                        
-                        if year_start >= year_end:
-                            continue
-                            
+                    logger.info(f"  Checking year {year}: {year_start} to {year_end}")
+                    
+                    if year_start >= year_end:
+                        logger.warning(f"  Skipping year {year}: invalid date range ({year_start} >= {year_end})")
+                        continue
+                    
+                    try:
                         year_collection = chunk_collection.filterDate(year_start, year_end)
                         year_size = year_collection.size().getInfo()
+                        
+                        logger.info(f"  Year {year} has {year_size} SAR images")
                         
                         if year_size > 0:
                             chunk_composite = year_collection.mean()
                             composite_date = datetime(year, 6, 15)  # Mid-year
+                            
+                            logger.info(f"  Processing {year_size} images for year {year}...")
                             
                             # Process this annual composite with enhanced memory safety
                             chunk_stats = chunk_composite.select(['VV', 'VH']).reduceRegion(
@@ -745,6 +768,8 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
                             
                             vv_value = chunk_stats.get('VV')
                             vh_value = chunk_stats.get('VH')
+                            
+                            logger.info(f"  Year {year} stats: VV={vv_value}, VH={vh_value}")
                             
                             if vv_value is not None and vh_value is not None:
                                 vv_db = round(float(vv_value), 2)
@@ -769,54 +794,15 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
                                     "acquisitions_count": year_size
                                 })
                                 
-                                logger.debug(f"Annual composite {year}: VV={vv_db}dB, VH={vh_db}dB ({year_size} images)")
-                    
-                    current_date = chunk_end + timedelta(days=1)
-                    continue
-                
-                else:
-                    # Default: create one composite per chunk (for biennial case)
-                    chunk_composite = chunk_collection.mean()
-                    composite_date = current_date + timedelta(days=(chunk_end - current_date).days // 2)
-                
-                # Process the composite (for biennial cases)
-                if 'chunk_composite' in locals():
-                    chunk_stats = chunk_composite.select(['VV', 'VH']).reduceRegion(
-                        reducer=ee.Reducer.mean(),
-                        geometry=geometry,
-                        scale=scale,
-                        maxPixels=max_pixels,
-                        bestEffort=True,
-                        tileScale=8  # Even more aggressive tiling for biennial composites
-                    ).getInfo()
-                    
-                    vv_value = chunk_stats.get('VV')
-                    vh_value = chunk_stats.get('VH')
-                    
-                    if vv_value is not None and vh_value is not None:
-                        vv_db = round(float(vv_value), 2)
-                        vh_db = round(float(vh_value), 2)
-                        vv_vh_ratio = round(vv_db / vh_db if vh_db != 0 else 0, 3)
-                        
-                        sample_data.append({
-                            "date": composite_date.strftime('%Y-%m-%d'),
-                            "backscatter_vv": vv_db,
-                            "backscatter_vh": vh_db,
-                            "vv_backscatter": vv_db,
-                            "vh_backscatter": vh_db,
-                            "vv_vh_ratio": vv_vh_ratio,
-                            "lat": round(center_lat, 6),
-                            "lon": round(center_lon, 6),
-                            "orbit_direction": orbit_direction,
-                            "image_id": f"S1_{temporal_resolution}_Mean_{composite_date.strftime('%Y_%m')}",
-                            "satellite": "Sentinel-1",
-                            "polarization": ['VV', 'VH'],
-                            "count": chunk_size,
-                            "processing_method": f"{temporal_resolution.title()} Chunked",
-                            "acquisitions_count": chunk_size
-                        })
-                        
-                        logger.info(f"Chunk {chunk_count} composite: VV={vv_db}dB, VH={vh_db}dB ({chunk_size} images)")
+                                logger.warning(f"  ✅ Added annual composite {year}: VV={vv_db}dB, VH={vh_db}dB ({year_size} images)")
+                            else:
+                                logger.error(f"  ❌ Failed to extract stats for year {year}: VV or VH is None")
+                        else:
+                            logger.warning(f"  Year {year} has 0 images, skipping")
+                            
+                    except Exception as year_error:
+                        logger.error(f"  Error processing year {year}: {year_error}")
+                        continue
                 
             except Exception as chunk_error:
                 logger.warning(f"Error processing chunk {chunk_count} ({chunk_start_str} to {chunk_end_str}): {chunk_error}")
@@ -842,6 +828,7 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
             "demo_mode": False,
             "analysis_type": "SAR",
             "satellite": f"Sentinel-1 ({temporal_resolution.title()} Composites)",
+            "polarization": polarization,
             "data": sample_data,
             "time_series_data": sample_data,
             "statistics": {
@@ -853,6 +840,7 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
                 "min_vh": round(min([d['backscatter_vh'] for d in sample_data]), 2),
                 "max_vh": round(max([d['backscatter_vh'] for d in sample_data]), 2),
                 "std_vh": round(np.std([d['backscatter_vh'] for d in sample_data]), 2),
+                "selected_polarization": polarization,
                 "area_km2": round(area_km2, 2),
                 "pixel_count": 1000,
                 "total_individual_observations": total_acquisitions,
