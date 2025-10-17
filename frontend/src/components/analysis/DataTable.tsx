@@ -261,7 +261,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                       <td className="px-3 py-2 small">
                         <span className={`badge ${
                           row.orbitDirection === 'ASCENDING' 
-                            ? 'bg-primary' 
+                            ? 'bg-success' 
                             : 'bg-secondary'
                         }`}>
                           {row.orbitDirection || 'N/A'}

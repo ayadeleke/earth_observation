@@ -95,7 +95,7 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
             if original_collection_size > 20:  # Reduced threshold for better memory safety
                 logger.warning(f"Large SAR collection detected ({original_collection_size} images) - using memory-optimized processing")
                 # Instead of failing, use temporal aggregation approach
-                return process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_direction, original_collection_size, scale, max_pixels, polarization)
+                return process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_direction, original_collection_size, scale, max_pixels)
 
             if original_collection_size == 0:
                 logger.warning("No Sentinel-1 images found for the specified criteria")
@@ -143,7 +143,7 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
                 logger.error(f"Error in SAR sampling approach: {sampling_error}")
                 # Try the temporal aggregation approach as final fallback
                 logger.info("Falling back to temporal aggregation method")
-                return process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_direction, original_collection_size, scale, max_pixels, polarization)
+                return process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_direction, original_collection_size, scale, max_pixels)
 
             # Get geometry center for sampling
             center = geometry.centroid().coordinates().getInfo()
@@ -261,17 +261,15 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
         logger.warning(f"📊 SENDING TO FRONTEND: {len(sample_data)} individual data points for time series")
         logger.warning(f"📊 TIME SERIES DATA LENGTH: {len(time_series_data)}")
         if time_series_data:
-            primary_key = f'backscatter_{polarization.lower()}'
-            logger.warning(f"📊 FIRST POINT: {time_series_data[0].get('date')} - {polarization}: {time_series_data[0].get(primary_key)}dB")
+            logger.warning(f"📊 FIRST POINT: {time_series_data[0].get('date')} - VV: {time_series_data[0].get('backscatter_vv')}dB")
             if len(time_series_data) > 1:
-                logger.warning(f"📊 LAST POINT: {time_series_data[-1].get('date')} - {polarization}: {time_series_data[-1].get(primary_key)}dB")
+                logger.warning(f"📊 LAST POINT: {time_series_data[-1].get('date')} - VV: {time_series_data[-1].get('backscatter_vv')}dB")
 
         return {
             "success": True,
             "demo_mode": False,
             "analysis_type": "SAR",
             "satellite": "Sentinel-1 (Authentic GEE Data)",
-            "polarization": polarization,
             "data": sample_data,  # Individual images for data table
             "time_series_data": time_series_data,  # Use appropriate temporal resolution
             "statistics": {
@@ -283,7 +281,6 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
                 "min_vh": round(min([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -20.0,
                 "max_vh": round(max([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -15.0,
                 "std_vh": round(np.std([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else 2.0,
-                "selected_polarization": polarization,
                 "area_km2": round(area_km2, 2),
                 "pixel_count": pixel_count,  # Keep for spatial reference
                 "total_individual_observations": len(sample_data),  # Total individual SAR acquisitions
@@ -309,7 +306,7 @@ def get_sentinel1_collection(geometry, start_date, end_date, orbit_direction="DE
         logger.info(f"Getting Sentinel-1 collection for {start_date} to {end_date}")
 
         # Create Sentinel-1 collection to get real data
-        # Note: Accept both orbit directions for maximum data coverage
+        # Filter by specific orbit direction as requested by user
         collection = (
             ee.ImageCollection('COPERNICUS/S1_GRD')
             .filterBounds(geometry)
@@ -317,10 +314,12 @@ def get_sentinel1_collection(geometry, start_date, end_date, orbit_direction="DE
             .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
             .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
             .filter(ee.Filter.eq('instrumentMode', 'IW'))
-            # Accept both ASCENDING and DESCENDING for better coverage
-            .filter(ee.Filter.inList('orbitProperties_pass', ['ASCENDING', 'DESCENDING']))
+            # Filter by user-selected orbit direction
+            .filter(ee.Filter.eq('orbitProperties_pass', orbit_direction))
             .sort('system:time_start')
         )
+        
+        logger.info(f"🛰️ Filtering Sentinel-1 collection by orbit direction: {orbit_direction}")
 
         # Apply minimal preprocessing to keep original data integrity
         def preprocess_sar_image(image):
@@ -509,8 +508,8 @@ def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_
                     .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
                     .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
                     .filter(ee.Filter.eq('instrumentMode', 'IW'))
-                    # Accept both ASCENDING and DESCENDING for better coverage
-                    .filter(ee.Filter.inList('orbitProperties_pass', ['ASCENDING', 'DESCENDING']))
+                    # Filter by user-selected orbit direction
+                    .filter(ee.Filter.eq('orbitProperties_pass', orbit_direction))
                 )
                 
                 # Check if this year has data
@@ -703,24 +702,27 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
             logger.warning(f"🔍 CHUNK {chunk_count}: Querying with orbit={orbit_direction}")
             
             try:
-                # Create collection for this chunk with aggressive filtering
-                # Note: Accept both ASCENDING and DESCENDING orbits for maximum data coverage
-                # The orbit direction parameter is informational but we need all available data
-                chunk_collection = (
+                # First check total images before orbit filtering
+                chunk_collection_all_orbits = (
                     ee.ImageCollection('COPERNICUS/S1_GRD')
                     .filterBounds(geometry)
                     .filterDate(chunk_start_str, chunk_end_str)
                     .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
                     .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
                     .filter(ee.Filter.eq('instrumentMode', 'IW'))
-                    # Accept both orbit directions to ensure we get data
-                    .filter(ee.Filter.inList('orbitProperties_pass', ['ASCENDING', 'DESCENDING']))
+                )
+                total_before_orbit_filter = chunk_collection_all_orbits.size().getInfo()
+                
+                # Create collection for this chunk with aggressive filtering
+                # Filter by user-selected orbit direction
+                chunk_collection = chunk_collection_all_orbits.filter(
+                    ee.Filter.eq('orbitProperties_pass', orbit_direction)
                 )
                 
                 # Check collection size for this chunk
                 chunk_size = chunk_collection.size().getInfo()
                 
-                logger.warning(f"🔍 CHUNK {chunk_count}: Found {chunk_size} images for {chunk_start_str} to {chunk_end_str}")
+                logger.warning(f"🔍 CHUNK {chunk_count}: Total images={total_before_orbit_filter}, {orbit_direction} images={chunk_size} for {chunk_start_str} to {chunk_end_str}")
                 
                 if chunk_size == 0:
                     logger.warning(f"❌ CHUNK {chunk_count}: No SAR data found, moving to next chunk")

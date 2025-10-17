@@ -219,6 +219,7 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
         satellite: Satellite type ('landsat', 'sentinel1', 'sentinel2')
         cloud_cover: Maximum cloud cover percentage
         selected_images: List of pre-selected images (optional)
+        cloud_masking_level: Cloud masking level ('disabled', 'recommended', 'strict')
         polarization: SAR polarization ('VV' or 'VH')
         
     Returns:
@@ -230,8 +231,8 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
             return create_simple_html_map_with_analysis(geometry, analysis_type, start_date, end_date, satellite, cloud_cover)
         
         logger.info(f"Creating interactive map with analysis: {analysis_type}, satellite: {satellite}")
-        if analysis_type.lower() in ['backscatter', 'sar']:
-            logger.info(f"SAR polarization: {polarization}")
+        if analysis_type.lower() in ['sar', 'backscatter']:
+            logger.warning(f"🎯 SAR polarization: {polarization}")
         
         # Get center coordinates from geometry
         try:
@@ -1812,9 +1813,6 @@ def create_custom_map(request):
             cloud_cover = int(data.get('cloud_cover', 20))
             selected_indices = data.get('selected_indices', '').split(',') if data.get('selected_indices') else []
             cloud_masking_level = data.get('cloud_masking_level', 'disabled')
-            polarization = data.get('polarization', 'VV')
-            logger.warning(f"🎯 VISUALIZATION REQUEST (JSON): polarization={polarization}, analysis_type={analysis_type}")
-            logger.warning(f"🎯 VISUALIZATION REQUEST (FormData): polarization={polarization}")
             
             # Convert use_cloud_masking parameter to cloud_masking_level for compatibility
             use_cloud_masking = data.get('use_cloud_masking')
@@ -1859,7 +1857,6 @@ def create_custom_map(request):
             end_date = data.get('end_date')
             cloud_cover = data.get('cloud_cover', 20)
             coordinates = data.get('coordinates')
-            polarization = data.get('polarization', 'VV')
             selected_indices_raw = data.get('selected_indices', [])
             # Handle both list and string formats for selected_indices
             if isinstance(selected_indices_raw, str):
@@ -1870,6 +1867,8 @@ def create_custom_map(request):
             else:
                 selected_indices = selected_indices_raw
             cloud_masking_level = data.get('cloud_masking_level', 'disabled')
+            polarization = data.get('polarization', 'VV')
+            logger.warning(f"🎯 VISUALIZATION REQUEST (JSON): polarization={polarization}, analysis_type={analysis_type}")
             
             # Convert use_cloud_masking parameter to cloud_masking_level for compatibility
             use_cloud_masking = data.get('use_cloud_masking')

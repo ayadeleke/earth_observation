@@ -19,6 +19,7 @@ interface AnalysisData {
   enableCloudMasking?: boolean;
   maskingStrictness?: string;
   polarization?: string;
+  orbitDirection?: string;
   cloud_masking_settings?: {
     enabled?: boolean;
     strict?: boolean;
@@ -84,12 +85,16 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
             data={currentData.timeSeriesData} 
             analysisType={currentData.analysisType}
             cloudCover={currentData.cloudCover}
+            polarization={currentData.statistics?.selected_polarization || currentData.polarization}
+            orbitDirection={currentData.orbitDirection}
           />
         </div>
         <div className="col-12 col-lg-4">
           <Statistics 
             data={currentData.statistics}
             analysisType={currentData.analysisType}
+            polarization={currentData.statistics?.selected_polarization || currentData.polarization}
+            orbitDirection={currentData.orbitDirection}
           />
         </div>
       </div>

@@ -14,6 +14,7 @@ interface FormData {
   enableCloudMasking: boolean;
   maskingStrictness: string;
   polarization: string;
+  orbitDirection: string;
 }
 
 interface AnalysisFormProps {
@@ -46,11 +47,12 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
     enableCloudMasking: false,
     maskingStrictness: 'false',
     polarization: 'VV',
+    orbitDirection: 'DESCENDING',
     ...initialData
   });
 
   const [activeTab, setActiveTab] = useState<string>('coordinates');
-  const [dateRangeType, setDateRangeType] = useState<string>(initialDateRangeType);
+  const dateRangeType = 'dates'; // Always use exact dates
   const [eeStatus, setEeStatus] = useState<any>(null);
 
   // Check Earth Engine status on component mount
@@ -85,11 +87,6 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
       }));
     }
   }, [initialData]);
-
-  // Update date range type when initialDateRangeType changes
-  useEffect(() => {
-    setDateRangeType(initialDateRangeType);
-  }, [initialDateRangeType]);
 
   // Handle input changes
   const handleInputChange = (e: any) => {
@@ -308,146 +305,78 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
             </div>
           </div>
           
-          {/* Date Selection Options */}
+          {/* Date Selection */}
           <div className="mb-4">
             <div className="d-flex align-items-center mb-3">
               <div>
-                <label className="form-label mb-0 fw-semibold text-dark">Date Range Selection</label>
+                <label className="form-label mb-0 fw-semibold text-dark">Date Range</label>
                 <p className="text-muted small mb-0">Choose your temporal analysis period</p>
               </div>
             </div>
             
-            {/* Date Range Type Selection */}
-            <div className="mb-3">
-              <div className="form-check form-check-inline">
-                <input 
-                  className="form-check-input" 
-                  type="radio" 
-                  name="dateRangeType" 
-                  value="years" 
-                  checked={dateRangeType === 'years'}
-                  onChange={(e) => setDateRangeType(e.target.value)}
-                />
-                <label className="form-check-label">
-                  <i className="fas fa-calendar-alt me-1"></i>Year Range
-                </label>
-              </div>
-              <div className="form-check form-check-inline">
-                <input 
-                  className="form-check-input" 
-                  type="radio" 
-                  name="dateRangeType" 
-                  value="dates"
-                  checked={dateRangeType === 'dates'}
-                  onChange={(e) => setDateRangeType(e.target.value)}
-                />
-                <label className="form-check-label">
-                  <i className="fas fa-calendar-day me-1"></i>Exact Dates
-                </label>
+            {/* Exact Date Selection */}
+            <div>
+              <div className="row">
+                <div className="col-md-6">
+                  <div className="mb-3">
+                    <label htmlFor="startDate" className="form-label">Start Date</label>
+                    <input 
+                      type="date" 
+                      className="form-control form-control-lg" 
+                      name="startDate"
+                      value={formData.startDate}
+                      onChange={handleInputChange}
+                      min="1988-01-01" 
+                      max="2025-12-31"
+                      style={{
+                        borderRadius: '0.75rem',
+                        border: '2px solid #e9ecef',
+                        padding: '0.75rem 1rem',
+                        fontSize: '1rem',
+                        transition: 'all 0.3s ease'
+                      }}
+                      onFocus={(e) => {
+                        (e.target as HTMLInputElement).style.borderColor = '#2ec799';
+                        (e.target as HTMLInputElement).style.boxShadow = '0 0 0 0.2rem rgba(102, 126, 234, 0.25)';
+                      }}
+                      onBlur={(e) => {
+                        (e.target as HTMLInputElement).style.borderColor = '#e9ecef';
+                        (e.target as HTMLInputElement).style.boxShadow = 'none';
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  <div className="mb-3">
+                    <label htmlFor="endDate" className="form-label">End Date</label>
+                    <input 
+                      type="date" 
+                      className="form-control form-control-lg" 
+                      name="endDate"
+                      value={formData.endDate}
+                      onChange={handleInputChange}
+                      min="1988-01-01" 
+                      max="2025-12-31"
+                      style={{
+                        borderRadius: '0.75rem',
+                        border: '2px solid #e9ecef',
+                        padding: '0.75rem 1rem',
+                        fontSize: '1rem',
+                        transition: 'all 0.3s ease'
+                      }}
+                      onFocus={(e) => {
+                        (e.target as HTMLInputElement).style.borderColor = '#667eea';
+                        (e.target as HTMLInputElement).style.boxShadow = '0 0 0 0.2rem rgba(102, 126, 234, 0.25)';
+                      }}
+                      onBlur={(e) => {
+                        (e.target as HTMLInputElement).style.borderColor = '#e9ecef';
+                        (e.target as HTMLInputElement).style.boxShadow = 'none';
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-            
-            {/* Year Range Selection (Default) */}
-            {dateRangeType === 'years' && (
-              <div>
-                <div className="row">
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label htmlFor="startYear" className="form-label">Start Year</label>
-                      <input 
-                        type="number" 
-                        className="form-control" 
-                        name="startYear"
-                        value={formData.startYear}
-                        onChange={handleInputChange}
-                        min="1988" 
-                        max="2025"
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label htmlFor="endYear" className="form-label">End Year</label>
-                      <input 
-                        type="number" 
-                        className="form-control" 
-                        name="endYear"
-                        value={formData.endYear}
-                        onChange={handleInputChange}
-                        min="1988" 
-                        max="2025"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Exact Date Selection */}
-            {dateRangeType === 'dates' && (
-              <div>
-                <div className="row">
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label htmlFor="startDate" className="form-label">Start Date</label>
-                      <input 
-                        type="date" 
-                        className="form-control form-control-lg" 
-                        name="startDate"
-                        value={formData.startDate}
-                        onChange={handleInputChange}
-                        min="1988-01-01" 
-                        max="2025-12-31"
-                        style={{
-                          borderRadius: '0.75rem',
-                          border: '2px solid #e9ecef',
-                          padding: '0.75rem 1rem',
-                          fontSize: '1rem',
-                          transition: 'all 0.3s ease'
-                        }}
-                        onFocus={(e) => {
-                          (e.target as HTMLInputElement).style.borderColor = '#667eea';
-                          (e.target as HTMLInputElement).style.boxShadow = '0 0 0 0.2rem rgba(102, 126, 234, 0.25)';
-                        }}
-                        onBlur={(e) => {
-                          (e.target as HTMLInputElement).style.borderColor = '#e9ecef';
-                          (e.target as HTMLInputElement).style.boxShadow = 'none';
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label htmlFor="endDate" className="form-label">End Date</label>
-                      <input 
-                        type="date" 
-                        className="form-control form-control-lg" 
-                        name="endDate"
-                        value={formData.endDate}
-                        onChange={handleInputChange}
-                        min="1988-01-01" 
-                        max="2025-12-31"
-                        style={{
-                          borderRadius: '0.75rem',
-                          border: '2px solid #e9ecef',
-                          padding: '0.75rem 1rem',
-                          fontSize: '1rem',
-                          transition: 'all 0.3s ease'
-                        }}
-                        onFocus={(e) => {
-                          (e.target as HTMLInputElement).style.borderColor = '#667eea';
-                          (e.target as HTMLInputElement).style.boxShadow = '0 0 0 0.2rem rgba(102, 126, 234, 0.25)';
-                        }}
-                        onBlur={(e) => {
-                          (e.target as HTMLInputElement).style.borderColor = '#e9ecef';
-                          (e.target as HTMLInputElement).style.boxShadow = 'none';
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
           
           {/* Analysis Type Selection */}
@@ -471,8 +400,8 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                 transition: 'all 0.3s ease'
               }}
               onFocus={(e) => {
-                (e.target as HTMLSelectElement).style.borderColor = '#667eea';
-                (e.target as HTMLSelectElement).style.boxShadow = '0 0 0 0.2rem rgba(102, 126, 234, 0.25)';
+                (e.target as HTMLSelectElement).style.borderColor = '#2ec799';
+                (e.target as HTMLSelectElement).style.boxShadow = '0 0 0 0.2rem rgba(46, 199, 153, 0.25)';
               }}
               onBlur={(e) => {
                 (e.target as HTMLSelectElement).style.borderColor = '#e9ecef';
@@ -665,6 +594,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
 
           {/* SAR Polarization (for Sentinel-1) */}
           {formData.analysisType === 'sar' && (
+            <>
             <div className="mb-4">
               <label className="form-label">
                 SAR Polarization
@@ -699,6 +629,41 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                 SAR polarization affects sensitivity to different surface features. VV is commonly used for vegetation monitoring.
               </div>
             </div>
+
+            {/* SAR Orbit Direction */}
+            <div className="mb-4">
+              <label className="form-label">
+                Orbit Direction
+              </label>
+              <select 
+                className="form-select form-select-lg" 
+                name="orbitDirection"
+                value={formData.orbitDirection}
+                onChange={handleInputChange}
+                style={{
+                  borderRadius: '0.75rem',
+                  border: '2px solid #e9ecef',
+                  padding: '0.75rem 1rem',
+                  fontSize: '1rem',
+                  transition: 'all 0.3s ease'
+                }}
+                onFocus={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = '#2ec799';
+                  (e.target as HTMLSelectElement).style.boxShadow = '0 0 0 0.2rem rgba(102, 126, 234, 0.25)';
+                }}
+                onBlur={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = '#e9ecef';
+                  (e.target as HTMLSelectElement).style.boxShadow = 'none';
+                }}
+              >
+                <option value="DESCENDING">DESCENDING - Satellite moving South</option>
+                <option value="ASCENDING">ASCENDING - Satellite moving North</option>
+              </select>
+              <div className="form-text fst-italic">
+                Orbit direction affects the look angle and illumination geometry. DESCENDING passes typically occur in the evening (local time).
+              </div>
+            </div>
+            </>
           )}
 
           {/* Earth Engine Integration Info */}
