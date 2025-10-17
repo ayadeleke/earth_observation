@@ -585,9 +585,11 @@ def extract_common_parameters(data, analysis_type):
 
         if analysis_type.lower() == 'sar':
             params['orbit_direction'] = data.get('orbit_direction', 'DESCENDING')
+            params['polarization'] = data.get('polarization', 'VV')
 
         if analysis_type.lower() == 'comprehensive':
             params['analysis_types'] = data.get('analysis_types', ['ndvi', 'lst'])
+            params['polarization'] = data.get('polarization', 'VV')
 
         if analysis_type.lower() == 'trends':
             params['analysis_type'] = data.get('analysis_type', 'ndvi')

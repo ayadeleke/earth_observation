@@ -75,7 +75,7 @@ const ImageSelector: React.FC = () => {
       if (mapContainer && mapContainer.offsetWidth > 0 && mapContainer.offsetHeight > 0) {
         initializeMap();
       } else {
-        console.warn('Map container not ready, retrying in 500ms...');
+
         setTimeout(() => {
           initializeMap();
         }, 500);
@@ -92,7 +92,7 @@ const ImageSelector: React.FC = () => {
           mapInstance.remove(); // Remove the map
           setMapInstance(null); // Clear the reference
         } catch (error) {
-          console.warn('Error during map cleanup:', error);
+
         }
       }
     };
@@ -111,7 +111,7 @@ const ImageSelector: React.FC = () => {
           mapContainer.innerHTML = '';
         }
       } catch (error) {
-        console.warn('Error during final cleanup:', error);
+
       }
     };
   }, []);
@@ -133,7 +133,7 @@ const ImageSelector: React.FC = () => {
     try {
       // Check if map is already initialized
       const mapContainer = document.getElementById('map');
-      console.log('Map container found:', mapContainer);
+
       if (!mapContainer) {
         console.error('Map container not found!');
         return;
@@ -141,32 +141,31 @@ const ImageSelector: React.FC = () => {
       
       // Ensure container has dimensions before initializing
       if (mapContainer.offsetWidth === 0 || mapContainer.offsetHeight === 0) {
-        console.warn('Map container has no dimensions, retrying...');
+
         setTimeout(() => initializeMap(), 200);
         return;
       }
       
       // Clean up any existing map instance first
       if (mapInstance) {
-        console.log('Cleaning up existing map instance');
+
         try {
           mapInstance.off();
           mapInstance.remove();
           setMapInstance(null);
         } catch (error) {
-          console.warn('Error cleaning up existing map:', error);
+
         }
       }
       
       // Prevent double initialization in StrictMode
       if ((mapContainer as any)._leaflet_id) {
-        console.log('Map container already has Leaflet ID, cleaning up');
+
         // Force clean the container
         (mapContainer as any)._leaflet_id = undefined;
         mapContainer.innerHTML = '';
       }
 
-      console.log('Initializing new Leaflet map...');
       const map = L.map('map', {
         // Add some defensive options
         zoomControl: true,
@@ -192,7 +191,7 @@ const ImageSelector: React.FC = () => {
             map.invalidateSize(true);
           }
         } catch (error) {
-          console.warn('Error invalidating map size:', error);
+
         }
       }, 200);
 
@@ -212,11 +211,11 @@ const ImageSelector: React.FC = () => {
                   .openPopup();
               }
             } catch (error) {
-              console.warn('Error setting geolocation on map:', error);
+
             }
           },
           (error) => {
-            console.log('Geolocation error:', error);
+
           }
         );
       }
@@ -265,7 +264,7 @@ const ImageSelector: React.FC = () => {
 
       // Store map reference for cleanup
       setMapInstance(map);
-      console.log('Map initialization complete:', map);
+
     } catch (error) {
       console.error('Error initializing map:', error);
       setError('Failed to initialize map. Please refresh the page.');
@@ -1089,7 +1088,6 @@ const ImageSelector: React.FC = () => {
           </div>
         </div>
       )}
-
 
     </div>
   );

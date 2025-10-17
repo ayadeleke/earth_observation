@@ -63,7 +63,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
           setEeStatus(status);
         }
       } catch (error) {
-        console.log('Could not fetch EE status:', error);
+
         // Set default status if backend is not available
         setEeStatus({
           authenticated: false,
@@ -292,14 +292,14 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                 <div className="tab-pane fade show active">
                   <ShapefileUpload 
                     onFileUpload={(result: any) => {
-                      console.log('Shapefile uploaded:', result);
+
                       if (result.bounds) {
                         const coords = result.bounds;
                         handleAreaSelect(coords, result.wkt || '', 'shapefile');
                       }
                     }}
                     onCoordinatesExtracted={(bounds: any, wkt: string, source: string, geometry: any) => {
-                      console.log('Coordinates extracted from shapefile:', bounds, geometry);
+
                       handleAreaSelect(bounds, wkt || '', source, geometry);
                     }}
                   />
@@ -667,7 +667,6 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
           {formData.analysisType === 'sar' && (
             <div className="mb-4">
               <label className="form-label">
-                <i className="fas fa-radio me-2"></i>
                 SAR Polarization
               </label>
               <select 
@@ -696,8 +695,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                 <option value="HH">HH - Horizontal Transmit, Horizontal Receive</option>
                 <option value="HV">HV - Horizontal Transmit, Vertical Receive</option>
               </select>
-              <div className="form-text">
-                <i className="fas fa-info-circle me-1"></i>
+              <div className="form-text fst-italic">
                 SAR polarization affects sensitivity to different surface features. VV is commonly used for vegetation monitoring.
               </div>
             </div>
@@ -726,8 +724,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                       Service account active</>
                     )}
                   </p>
-                  
-                  
+
                   {eeStatus.service_account_configured && !eeStatus.service_account_available && (
                     <p className="mb-2 small text-warning">
                       <i className="fas fa-exclamation-triangle me-1"></i>

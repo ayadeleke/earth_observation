@@ -24,14 +24,10 @@ export const DataTable: React.FC<DataTableProps> = ({
   analysisType = 'ndvi',
   loading = false
 }) => {
-  // DEBUG: Log the actual data structure being received
+
   React.useEffect(() => {
     if (data && data.length > 0) {
-      console.log('🔍 DataTable DEBUG - First data item received:', data[0]);
-      console.log('🔍 DataTable DEBUG - originalCloudCover:', data[0].originalCloudCover);
-      console.log('🔍 DataTable DEBUG - adjustedCloudCover:', data[0].adjustedCloudCover);
-      console.log('🔍 DataTable DEBUG - cloudMaskingApplied:', data[0].cloudMaskingApplied);
-      console.log('🔍 DataTable DEBUG - All available fields:', Object.keys(data[0]));
+
     }
   }, [data]);
 
@@ -247,15 +243,15 @@ export const DataTable: React.FC<DataTableProps> = ({
                     <span className={`${
                       analysisType === 'ndvi' ? 'text-success' :
                       analysisType === 'lst' ? 'text-danger' :
-                      'text-info'
+                      'text-dark'
                     }`}>
-                      {formatValue(value)}
+                      {formatValue(value)} {valueColumn.unit}
                     </span>
                   </td>
                   {(analysisType.toLowerCase() === 'sar' || analysisType.toLowerCase() === 'backscatter') ? (
                     <>
                       <td className="px-3 py-2 small fw-semibold">
-                        <span className="text-info">
+                        <span className="text-dark">
                           {formatValue(row.backscatterVH)} dB
                         </span>
                       </td>

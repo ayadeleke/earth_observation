@@ -55,7 +55,7 @@ const LoginPage: React.FC = () => {
 
     try {
       await login(formData.email, formData.password);
-      console.log('Login successful');
+
       navigate('/dashboard');
     } catch (error: any) {
       console.error('Login error:', error);

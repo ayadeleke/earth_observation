@@ -93,11 +93,7 @@ export const NDVITimeSeries: React.FC<NDVITimeSeriesProps> = ({
   // Format data for chart
   const chartData = data.map(item => ({
     ...item,
-    date: new Date(item.date).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: '2-digit'
-    })
+    date: new Date(item.date).getFullYear().toString()
   }));
 
   // Calculate date range for subtitle
@@ -129,6 +125,7 @@ export const NDVITimeSeries: React.FC<NDVITimeSeriesProps> = ({
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="4 4" stroke="#f0f0f0" />
             <XAxis 
+              label={{ value: 'Year', offset: 0, position: 'insideBottom', style: { fontSize: window.innerWidth < 768 ? '11px' : '12px' } }}
               dataKey="date" 
               tick={{ fontSize: window.innerWidth < 768 ? 10 : 12 }}
               angle={window.innerWidth < 768 ? -30 : -45}
