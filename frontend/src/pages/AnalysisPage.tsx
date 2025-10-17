@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { InteractiveMap } from '../components/map/InteractiveMap';
 import AnalysisDashboard from '../components/analysis/AnalysisDashboard';
@@ -20,6 +20,7 @@ const AnalysisPage: React.FC = () => {
   const [geometryForMap, setGeometryForMap] = useState<any>(null);
   const [lastFormData, setLastFormData] = useState<any>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState<string | null>(null);
   const [projectAnalyses, setProjectAnalyses] = useState<any[]>([]);
   const [selectedAnalysis, setSelectedAnalysis] = useState<any>(null);
   const [formInitialData, setFormInitialData] = useState<any>({});
@@ -27,6 +28,14 @@ const AnalysisPage: React.FC = () => {
   const [initialDateRangeType, setInitialDateRangeType] = useState<string>('years');
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [mapDrawnCoordinates, setMapDrawnCoordinates] = useState<string>('');
+  const [showAllAnalyses, setShowAllAnalyses] = useState<boolean>(false);
+
+  // Function to update URL with project name
+  const updateURLWithProjectName = useCallback((projectName: string) => {
+    const currentSearchParams = new URLSearchParams(window.location.search);
+    currentSearchParams.set('project', projectName);
+    window.history.replaceState({}, '', `${window.location.pathname}?${currentSearchParams.toString()}`);
+  }, []);
 
   // Delete analysis function
   const deleteAnalysis = async (analysisId: number, analysisName: string) => {
@@ -107,7 +116,7 @@ const AnalysisPage: React.FC = () => {
       
       return '';
     } catch (error) {
-      console.warn('Error converting GeoJSON to WKT:', error);
+
       return '';
     }
   };
@@ -138,22 +147,40 @@ const AnalysisPage: React.FC = () => {
         return `POINT(${geometry.coordinates[0]} ${geometry.coordinates[1]})`;
       
       default:
-        console.warn('Unsupported geometry type:', geometry.type);
+
         return '';
     }
   };
 
-  // Get project ID from URL parameters
-  useEffect(() => {
-    const project = searchParams.get('project');
-    if (project) {
-      setProjectId(project);
-      loadProjectAnalyses(project);
+  // Load project by name to get the ID
+  const loadProjectByName = useCallback(async (projectName: string) => {
+    try {
+      const api = authService.getAuthenticatedAPI();
+      const response = await api.get(`/projects/by-name/${encodeURIComponent(projectName)}/`);
+      
+      if (response.data.success && response.data.project) {
+        const project = response.data.project;
+        setProjectId(project.id.toString());
+        setProjectName(project.name);
+        updateURLWithProjectName(project.name);
+        loadProjectAnalyses(project.id.toString());
+      } else {
+        setError(`Project "${projectName}" not found`);
+      }
+    } catch (error: any) {
+      // If the endpoint doesn't exist (404), fall back to using project name as ID
+      if (error.response?.status === 404) {
+        setProjectId(projectName);
+        setProjectName(projectName);
+        loadProjectAnalyses(projectName);
+      } else {
+        setError(`Failed to load project "${projectName}": ${error.response?.data?.error || error.message}`);
+      }
     }
-  }, [searchParams]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load analyses for the current project
-  const loadProjectAnalyses = async (projectId: string) => {
+  const loadProjectAnalyses = useCallback(async (projectId: string) => {
     try {
       const api = authService.getAuthenticatedAPI();
       const response = await api.get(`/projects/${projectId}/analyses/`);
@@ -161,9 +188,18 @@ const AnalysisPage: React.FC = () => {
       if (response.data.success) {
         setProjectAnalyses(response.data.analyses);
         
-        // If there are analyses, select the most recent one
         if (response.data.analyses.length > 0) {
           const mostRecent = response.data.analyses[0];
+          
+          if (!projectName && mostRecent.project_name) {
+            setProjectName(mostRecent.project_name);
+            
+            const currentProjectParam = new URLSearchParams(window.location.search).get('project');
+            if (currentProjectParam && !isNaN(Number(currentProjectParam))) {
+              updateURLWithProjectName(mostRecent.project_name);
+            }
+          }
+          
           setSelectedAnalysis(mostRecent);
           if (mostRecent.results) {
             setResults(mostRecent.results);
@@ -171,10 +207,45 @@ const AnalysisPage: React.FC = () => {
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading project analyses:', error);
     }
-  };
+  }, [projectName, updateURLWithProjectName]);
+
+  // Load project details by ID to get the name
+  const loadProjectDetails = useCallback(async (projectId: string) => {
+    try {
+      const api = authService.getAuthenticatedAPI();
+      const response = await api.get(`/projects/${projectId}/`);
+      
+      if (response.data) {
+        const project = response.data;
+        setProjectName(project.name);
+        updateURLWithProjectName(project.name);
+        return project;
+      }
+    } catch (error: any) {
+      console.error('Error loading project details:', error);
+    }
+    return null;
+  }, [updateURLWithProjectName]);
+
+  // Get project ID from URL parameters
+  useEffect(() => {
+    const project = searchParams.get('project');
+    
+    if (project) {
+      const isProjectName = isNaN(Number(project));
+      
+      if (isProjectName) {
+        loadProjectByName(project);
+      } else {
+        setProjectId(project);
+        loadProjectDetails(project);
+        loadProjectAnalyses(project);
+      }
+    }
+  }, [searchParams, loadProjectByName, loadProjectAnalyses, loadProjectDetails]);
 
   // Handle area selection from map
   const handleAreaSelect = (coordinates: any, wkt: string = '', source: string = 'drawing', geometry: any = null) => {
@@ -217,16 +288,11 @@ const AnalysisPage: React.FC = () => {
 
     // Store form data for use in results dashboard
     setLastFormData(formData);
-    
-    console.log('=== Storing Form Data Debug ===');
-    console.log('Form data being stored:', formData);
-    console.log('enableCloudMasking:', formData.enableCloudMasking);
-    console.log('maskingStrictness:', formData.maskingStrictness);
 
     setLoading(true);
     setError('');
-    setLoadedAnalysisMessage(''); // Clear any loaded analysis message
-    setInitialDateRangeType('years'); // Reset date range type when starting new analysis
+    setLoadedAnalysisMessage('');
+    setInitialDateRangeType('years');
 
     try {
       // Prepare the request data
@@ -284,9 +350,10 @@ const AnalysisPage: React.FC = () => {
           requestBody.strict_masking = formData.maskingStrictness === 'strict';
         }
 
-        // Add polarization for SAR analyses
+        // Add polarization and orbit direction for SAR analyses
         if (formData.analysisType === 'sar' || formData.analysisType === 'comprehensive') {
           requestBody.polarization = formData.polarization;
+          requestBody.orbit_direction = formData.orbitDirection;
         }
 
         requestData = JSON.stringify(requestBody);
@@ -294,17 +361,6 @@ const AnalysisPage: React.FC = () => {
         contentType = 'application/json';
       }
 
-      console.log('=== Request Debug ===');
-      console.log('Form satellite:', formData.satellite);
-      console.log('Form analysisType:', formData.analysisType);
-      console.log('Form polarization:', formData.polarization);
-      console.log('Form enableCloudMasking:', formData.enableCloudMasking);
-      console.log('Form maskingStrictness:', formData.maskingStrictness);
-      console.log('Coordinates:', formData.coordinates);
-      console.log('Content type:', contentType);
-      console.log('Date range type:', dateRangeType);
-      console.log('Request body/data:', contentType === 'application/json' ? requestData : 'FormData (check network tab)');
-      
       // Determine the correct endpoint based on analysis type
       let endpoint = '';
       switch (formData.analysisType) {
@@ -341,41 +397,10 @@ const AnalysisPage: React.FC = () => {
 
       const result = response.data;
       
-      // Add comprehensive debugging for all analysis types
-      console.log('=== Analysis Response ===');
-      console.log('Analysis Type:', formData.analysisType);
-      console.log('Full result:', result);
-      console.log('Result success:', result.success);
-      console.log('Result data length:', result.data?.length);
-      console.log('Statistics:', result.statistics);
-      console.log('Time series data:', result.time_series_data?.length);
-      
-      if (result.data && result.data.length > 0) {
-        console.log('First data item:', result.data[0]);
-        console.log('First data item keys:', Object.keys(result.data[0]));
-      }
-      
-      // Debug geometry from backend
-      if (result.geometry) {
-        console.log('=== Backend Geometry Debug ===');
-        console.log('Backend geometry type:', result.geometry.type);
-        console.log('Backend geometry coordinates:', result.geometry.coordinates?.length, 'coordinate arrays');
-        console.log('User geometry for comparison:', geometryForMap);
-      } else {
-        console.log('No geometry returned from backend, using user input geometry');
-      }
-      
       if (result.success) {
-        console.log('=== Data Transformation Debug ===');
-        console.log('Original data sample:', result.data?.slice(0, 2));
-        console.log('Original time_series_data sample:', result.time_series_data?.slice(0, 2));
-        console.log('Original statistics:', result.statistics);
-        
-        // Check if this is a duplicate analysis
         if (result.is_duplicate) {
           setLoadedAnalysisMessage(`${result.duplicate_message || 'Loaded existing analysis with same parameters'}`);
           
-          // Set a timeout to clear the duplicate message after 7 seconds
           setTimeout(() => {
             setLoadedAnalysisMessage('');
           }, 7000);
@@ -383,9 +408,8 @@ const AnalysisPage: React.FC = () => {
         
         setResults(result);
         setShowResults(true);
-        setError(''); // Clear any previous errors
+        setError('');
         
-        // Reload project analyses if we're in a project context
         if (projectId) {
           loadProjectAnalyses(projectId);
         }
@@ -395,8 +419,6 @@ const AnalysisPage: React.FC = () => {
       
     } catch (error: any) {
       console.error('Analysis error:', error);
-      console.error('Error response:', error.response);
-      console.error('Error response data:', error.response?.data);
       
       let errorMessage = 'An error occurred during analysis';
       
@@ -417,15 +439,8 @@ const AnalysisPage: React.FC = () => {
   // Helper functions for data transformation
   const transformTimeSeriesData = (data: any[], analysisType: string) => {
     if (!Array.isArray(data)) {
-      console.log('=== transformTimeSeriesData Debug ===');
-      console.log('Input data is not an array:', data);
       return [];
     }
-    
-    console.log('=== transformTimeSeriesData Debug ===');
-    console.log('Input data length:', data.length);
-    console.log('Sample input:', data.slice(0, 2));
-    console.log('Analysis type:', analysisType);
     
     const transformed = data.map((item: any) => {
       const date = new Date(item.date || item.time || '2020-01-01');
@@ -434,7 +449,6 @@ const AnalysisPage: React.FC = () => {
         time: date.getTime()
       };
       
-      // Add analysis-specific data with proper field mapping
       switch (analysisType.toLowerCase()) {
         case 'ndvi':
           result.ndvi = parseFloat(item.ndvi || item.mean_ndvi || item.value || 0);
@@ -443,8 +457,13 @@ const AnalysisPage: React.FC = () => {
           result.lst = parseFloat(item.lst || item.mean_lst || item.temperature || item.value || 0);
           break;
         case 'sar':
-          // SAR backend returns backscatter_vv, vv_backscatter fields
           result.backscatter = parseFloat(item.backscatter || item.backscatter_vv || item.vv_backscatter || item.mean_backscatter || item.value || 0);
+          // Preserve both polarization values
+          result.backscatter_vv = parseFloat(item.backscatter_vv || item.vv_backscatter || 0);
+          result.backscatter_vh = parseFloat(item.backscatter_vh || item.vh_backscatter || 0);
+          result.vv_backscatter = parseFloat(item.vv_backscatter || item.backscatter_vv || 0);
+          result.vh_backscatter = parseFloat(item.vh_backscatter || item.backscatter_vh || 0);
+          result.count = parseInt(item.count || item.acquisitions_count || 1);
           break;
         default:
           result.value = parseFloat(item.value || item.ndvi || item.lst || item.backscatter || item.backscatter_vv || 0);
@@ -453,17 +472,11 @@ const AnalysisPage: React.FC = () => {
       return result;
     });
     
-    console.log('Transformed time series data length:', transformed.length);
-    console.log('Sample transformed:', transformed.slice(0, 2));
     return transformed;
   };
 
   const transformStatistics = (stats: any, analysisType: string) => {
     if (!stats) return {};
-    
-    console.log('=== transformStatistics Debug ===');
-    console.log('Input stats:', stats);
-    console.log('Analysis type:', analysisType);
     
     let transformed: any = {
       analysisType: analysisType,
@@ -471,12 +484,9 @@ const AnalysisPage: React.FC = () => {
       pixel_count: parseInt(stats.pixel_count || 0),
       date_range: stats.date_range || '',
       total_observations: parseInt(stats.total_individual_observations || stats.annual_observations || 0),
-      
-      // The Statistics component expects a 'count' field specifically
       count: parseInt(stats.total_individual_observations || stats.annual_observations || stats.count || stats.pixel_count || stats.observations || 0)
     };
     
-    // Handle analysis-specific statistics with proper field mapping
     switch (analysisType.toLowerCase()) {
       case 'ndvi':
         transformed.mean = parseFloat(stats.mean_ndvi || stats.mean || 0);
@@ -491,11 +501,21 @@ const AnalysisPage: React.FC = () => {
         transformed.std = parseFloat(stats.std_lst || stats.std_temperature || stats.std || stats.stdDev || 0);
         break;
       case 'sar':
-        // SAR backend returns mean_vv, min_vv, max_vv, std_vv fields
         transformed.mean = parseFloat(stats.mean_backscatter || stats.mean_vv || stats.mean || 0);
         transformed.min = parseFloat(stats.min_backscatter || stats.min_vv || stats.min || 0);
         transformed.max = parseFloat(stats.max_backscatter || stats.max_vv || stats.max || 0);
         transformed.std = parseFloat(stats.std_backscatter || stats.std_vv || stats.std || stats.stdDev || 0);
+        // Preserve polarization-specific values for both VV and VH
+        transformed.mean_vv = parseFloat(stats.mean_vv || 0);
+        transformed.min_vv = parseFloat(stats.min_vv || 0);
+        transformed.max_vv = parseFloat(stats.max_vv || 0);
+        transformed.std_vv = parseFloat(stats.std_vv || 0);
+        transformed.mean_vh = parseFloat(stats.mean_vh || 0);
+        transformed.min_vh = parseFloat(stats.min_vh || 0);
+        transformed.max_vh = parseFloat(stats.max_vh || 0);
+        transformed.std_vh = parseFloat(stats.std_vh || 0);
+        // Preserve selected polarization info
+        transformed.selected_polarization = stats.selected_polarization;
         break;
       default:
         transformed.mean = parseFloat(stats.mean || 0);
@@ -504,48 +524,32 @@ const AnalysisPage: React.FC = () => {
         transformed.std = parseFloat(stats.std || stats.stdDev || 0);
     }
     
-    console.log('Transformed stats with count field:', transformed);
-    console.log('Count value specifically:', transformed.count);
     return transformed;
   };
 
   const transformDataForTable = (data: any[], analysisType: string) => {
     if (!Array.isArray(data)) return [];
     
-    console.log('=== transformDataForTable Debug ===');
-    console.log('Input data:', data.slice(0, 2));
-    console.log('Analysis type:', analysisType);
-    
     const transformed = data.map((item: any, index: number) => {
-      // Create the row object with DataTable expected field names
       const row: any = {
         id: index + 1,
         date: item.date || item.time || 'Unknown',
         imageId: item.image_id || item.imageId || `img_${index + 1}`,
-        
-        // Analysis-specific value fields that DataTable expects
         ndviValue: undefined,
         lstValue: undefined,
         backscatterValue: undefined,
-        
-        // Cloud cover and masking fields that DataTable expects
         originalCloudCover: parseFloat(item.cloud_cover || item.originalCloudCover || 0),
         adjustedCloudCover: parseFloat(item.adjusted_cloud_cover || item.adjustedCloudCover || item.cloud_cover || 0),
         cloudMaskingApplied: Boolean(item.cloud_masking_applied || item.cloudMaskingApplied || false),
-        
-        // Additional metadata
         lat: parseFloat(item.lat || 0),
         lon: parseFloat(item.lon || 0),
         satellite: item.satellite || '',
-        
-        // For SAR-specific fields - map both VV and VH backscatter properly
         backscatterVV: parseFloat(item.backscatter_vv || item.vv_backscatter || item.backscatterVV || 0),
         backscatterVH: parseFloat(item.backscatter_vh || item.vh_backscatter || item.backscatterVH || 0),
         vvVhRatio: parseFloat(item.vv_vh_ratio || item.vvVhRatio || 0),
         orbitDirection: item.orbit_direction || item.orbitDirection || 'ASCENDING'
       };
       
-      // Set the appropriate analysis-specific value field
       switch (analysisType.toLowerCase()) {
         case 'ndvi':
           row.ndviValue = parseFloat(item.ndvi || item.value || 0);
@@ -555,7 +559,6 @@ const AnalysisPage: React.FC = () => {
           break;
         case 'sar':
         case 'backscatter':
-          // SAR backend returns backscatter_vv, backscatter_vh, vv_backscatter fields
           row.backscatterValue = parseFloat(item.backscatter || item.backscatter_vv || item.vv_backscatter || item.value || 0);
           break;
         default:
@@ -565,22 +568,8 @@ const AnalysisPage: React.FC = () => {
       return row;
     });
     
-    console.log('Transformed table data sample:', transformed.slice(0, 2));
-    console.log('Field names in transformed data:', transformed.length > 0 ? Object.keys(transformed[0]) : []);
     return transformed;
   };
-
-  // Get CSRF token for Django (currently unused but may be needed for future authentication)
-  // const getCsrfToken = () => {
-  //   const cookies = document.cookie.split(';');
-  //   for (let cookie of cookies) {
-  //     const [name, value] = cookie.trim().split('=');
-  //     if (name === 'csrftoken') {
-  //       return value;
-  //     }
-  //   }
-  //   return '';
-  // };
 
   return (
     <div>
@@ -594,7 +583,7 @@ const AnalysisPage: React.FC = () => {
             <div className="col-12">
               <div className="d-flex align-items-center mb-3 flex-column flex-md-row text-center text-md-start">
                 <div className="rounded-3 p-3 me-md-4 mb-3 mb-md-0 d-flex align-items-center justify-content-center" style={{
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  background: 'linear-gradient(135deg, #062c14 0%, #065d26 50%, #065d26 100%)',
                   backdropFilter: 'blur(10px)',
                   border: '1px solid rgba(255,255,255,0.2)',
                   boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)',
@@ -612,16 +601,16 @@ const AnalysisPage: React.FC = () => {
               </div>
               <div className="d-flex gap-2 gap-md-3 flex-wrap justify-content-center justify-content-md-start">
                 <span className="badge bg-light text-dark">
-                  <i className="fas fa-satellite me-2"></i>Landsat & Sentinel
+                  Landsat & Sentinel
                 </span>
                 <span className="badge bg-light text-dark">
-                  <i className="fas fa-leaf me-2"></i>NDVI Analysis
+                  NDVI Analysis
                 </span>
                 <span className="badge bg-light text-dark">
-                  <i className="fas fa-thermometer-half me-2"></i>Temperature Monitoring
+                  Temperature Monitoring
                 </span>
                 <span className="badge bg-light text-dark">
-                  <i className="fas fa-satellite-dish me-2"></i>Backscatter Analysis
+                  Backscatter Analysis
                 </span>
               </div>
             </div>
@@ -636,7 +625,7 @@ const AnalysisPage: React.FC = () => {
             <div className="card-header bg-light d-flex justify-content-between align-items-center">
               <h5 className="mb-0">
                 <i className="fas fa-history me-2"></i>
-                Saved Analyses for this Project
+                Saved Analyses {projectName ? `for "${projectName}"` : 'for this Project'}
               </h5>
               <button
                 className="btn btn-sm btn-outline-secondary"
@@ -648,7 +637,7 @@ const AnalysisPage: React.FC = () => {
                   setGeometryForMap(null);
                   setLastFormData(null);
                   setLoadedAnalysisMessage('');
-                  setInitialDateRangeType('years'); // Reset to default
+                  setInitialDateRangeType('years');
                 }}
                 title="Clear loaded analysis and start fresh"
               >
@@ -657,7 +646,7 @@ const AnalysisPage: React.FC = () => {
             </div>
             <div className="card-body">
               <div className="row">
-                {projectAnalyses.map((analysis) => (
+                {(showAllAnalyses ? projectAnalyses : projectAnalyses.slice(0, 6)).map((analysis) => (
                   <div key={analysis.id} className="col-md-6 col-lg-4 mb-3">
                     <div className={`card ${selectedAnalysis?.id === analysis.id ? 'border-primary' : 'border-light'}`}>
                       <div className="card-body p-3">
@@ -675,52 +664,32 @@ const AnalysisPage: React.FC = () => {
                             onClick={() => {
                               setSelectedAnalysis(analysis);
                               if (analysis.results) {
-                                // Process saved results the same way as fresh analysis results
-                                console.log('=== Loading Saved Analysis Results ===');
-                                console.log('Saved analysis data:', analysis.results);
-                                
-                                // Set the results directly - they should have the same structure as fresh results
                                 setResults(analysis.results);
                                 setShowResults(true);
                                 
-                                // Create form data for proper transformation and form population
                                 const formData = {
                                   analysisType: analysis.analysis_type,
                                   satellite: analysis.satellite,
                                   startDate: analysis.start_date,
                                   endDate: analysis.end_date,
                                   cloudCover: analysis.cloud_cover || 20,
-                                  cloudCoverValue: analysis.cloud_cover || 20, // Sync with cloudCover
+                                  cloudCoverValue: analysis.cloud_cover || 20,
                                   coordinates: convertGeoJSONToWKT(analysis.geometry_data),
-                                  // Convert boolean fields to form format
                                   enableCloudMasking: analysis.use_cloud_masking !== undefined ? analysis.use_cloud_masking : true,
-                                  maskingStrictness: analysis.strict_masking ? 'true' : 'false', // Form expects 'true'/'false' strings
+                                  maskingStrictness: analysis.strict_masking ? 'true' : 'false',
                                   polarization: analysis.polarization || 'VV',
-                                  // Add year fields if needed (extract from dates)
                                   startYear: new Date(analysis.start_date).getFullYear(),
                                   endYear: new Date(analysis.end_date).getFullYear()
                                 };
                                 
-                                // Set form data for dashboard transformation
                                 setLastFormData(formData);
-                                
-                                // Set initial data for the form to populate fields
                                 setFormInitialData(formData);
-                                
-                                // Set date range type to 'dates' since saved analyses use specific dates
                                 setInitialDateRangeType('dates');
-                                
-                                // Set success message
                                 setLoadedAnalysisMessage(`Loaded ${analysis.analysis_type.toUpperCase()} analysis from ${new Date(analysis.created_at).toLocaleDateString()}`);
                                 
-                                console.log('Set form data for saved analysis:', formData);
-                                
-                                // Update map geometry if available
                                 if (analysis.geometry_data) {
-                                  // Use the original GeoJSON for map display
                                   let mapGeometry = analysis.geometry_data;
                                   
-                                  // Convert FeatureCollection to simple geometry for map
                                   if (mapGeometry.type === 'FeatureCollection' && mapGeometry.features && mapGeometry.features.length > 0) {
                                     mapGeometry = mapGeometry.features[0].geometry;
                                   } else if (mapGeometry.type === 'Feature' && mapGeometry.geometry) {
@@ -750,6 +719,19 @@ const AnalysisPage: React.FC = () => {
                   </div>
                 ))}
               </div>
+              
+              {/* See More / See Less Button */}
+              {projectAnalyses.length > 6 && (
+                <div className="text-center mt-3">
+                  <button
+                    className="btn btn-outline-primary btn-sm"
+                    onClick={() => setShowAllAnalyses(!showAllAnalyses)}
+                  >
+                    <i className={`fas fa-chevron-${showAllAnalyses ? 'up' : 'down'} me-2`}></i>
+                    {showAllAnalyses ? 'Show Less' : `See More (${projectAnalyses.length - 6} more)`}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -811,11 +793,6 @@ const AnalysisPage: React.FC = () => {
                       <small className="text-muted">Draw polygons or upload shapefiles to define your area of interest</small>
                     </div>
                   </div>
-                  <div className="d-flex gap-2">
-                    <span className="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">
-                      <i className="fas fa-draw-polygon me-1"></i>Draw Mode
-                    </span>
-                  </div>
                 </div>
               </div>
               <div className="card-body p-0" style={{ height: '600px', position: 'relative' }}>
@@ -846,13 +823,13 @@ const AnalysisPage: React.FC = () => {
                   Unlock powerful satellite image processing with advanced analysis tools, custom spectral analysis, and detailed change detection.
                 </p>
                 <div className="d-flex justify-content-center gap-2 flex-wrap mb-3">
-                  <span className="badge bg-success bg-opacity-10 text-success px-2 py-1 small">
+                  <span className="badge bg-success bg-opacity-10 text-success px-3 py-2 large">
                     <i className="fas fa-chart-area me-1"></i>Spectral
                   </span>
-                  <span className="badge bg-warning bg-opacity-10 text-warning px-2 py-1 small">
+                  <span className="badge bg-warning bg-opacity-10 text-warning px-3 py-2 large">
                     <i className="fas fa-exchange-alt me-1"></i>Change Detection
                   </span>
-                  <span className="badge bg-info bg-opacity-10 text-info px-2 py-1 small">
+                  <span className="badge bg-info bg-opacity-10 text-primary px-3 py-2 large">
                     <i className="fas fa-layer-group me-1"></i>Multi-temporal
                   </span>
                 </div>
@@ -873,61 +850,37 @@ const AnalysisPage: React.FC = () => {
           </div>
         </div>
 
-
-
         {/* Results Section - Enhanced Dashboard */}
         {showResults && results && (
           <div className="row mt-5">
             <div className="col-12">
-              {/* Debug logging before passing to dashboard */}
               {(() => {
-                console.log('=== Passing to AnalysisDashboard Debug ===');
-                console.log('Full backend results:', results);
-                console.log('First data item from backend:', results.data?.[0]);
-                console.log('Cloud masking applied from backend:', results.data?.[0]?.cloudMaskingApplied);
-                console.log('Cloud masking settings from backend:', results.cloud_masking_settings);
-                console.log('lastFormData:', lastFormData);
-                
-                return null;
-              })()}
-              
-              {/* Create unified analysis data object with consistent source of truth */}
-              {(() => {
-                // Use original form data as primary source of truth for user inputs
                 const unifiedAnalysisData = {
-                  // Backend-generated data (analysis results)
                   timeSeriesData: transformTimeSeriesData(results.time_series_data || [], results.analysis_type || 'ndvi'),
                   statistics: transformStatistics(results.statistics, results.analysis_type || 'ndvi'),
                   tableData: transformDataForTable(results.data || [], results.analysis_type || 'ndvi'),
                   geometry: results.geometry || geometryForMap,
-                  
-                  // Original user inputs (consistent source of truth)
                   analysisType: lastFormData?.analysisType || results.analysis_type?.toLowerCase() || 'ndvi',
                   satellite: lastFormData?.satellite || results.satellite || 'landsat',
                   startDate: lastFormData?.startDate || results.start_date || '2020-01-01',
                   endDate: lastFormData?.endDate || results.end_date || '2023-12-31',
                   cloudCover: lastFormData?.cloudCover || results.cloud_cover || 20,
-                  
-                  // Cloud masking settings (prefer backend processed values, fallback to user input)
                   enableCloudMasking: results.cloud_masking_settings?.enabled ?? 
                                     results.data?.[0]?.cloudMaskingApplied ?? 
                                     lastFormData?.enableCloudMasking ?? false,
                   maskingStrictness: results.cloud_masking_settings?.strict ? 'true' : 
                                    (lastFormData?.maskingStrictness || 'false'),
-                  
-                  // Additional metadata
-                  cloud_masking_settings: results.cloud_masking_settings
+                  cloud_masking_settings: results.cloud_masking_settings,
+                  polarization: results.statistics?.selected_polarization || results.polarization || lastFormData?.polarization || 'VV',
+                  orbitDirection: results.orbit_direction || lastFormData?.orbitDirection || 'DESCENDING'
                 };
-                
-                console.log('=== Unified Analysis Data ===');
-                console.log('Using form data for:', ['analysisType', 'satellite', 'startDate', 'endDate', 'cloudCover']);
-                console.log('Using backend data for:', ['timeSeriesData', 'statistics', 'tableData', 'geometry', 'enableCloudMasking']);
-                console.log('Final unified data:', unifiedAnalysisData);
                 
                 return (
                   <AnalysisDashboard 
                     analysisData={unifiedAnalysisData}
-                    onDataUpdate={(data) => console.log('Dashboard data updated:', data)}
+                    onDataUpdate={(data) => {
+                      // Handle data updates if needed
+                    }}
                   />
                 );
               })()}

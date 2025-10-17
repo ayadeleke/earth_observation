@@ -1,0 +1,47 @@
+# Virtual environment
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Development files
+.env
+.env.backup
+*.log
+logs/
+
+# Static files (can be generated)
+static/
+staticfiles/
+
+# Media files (should be handled by volumes in production)
+media/
+
+# Development and testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Database
+*.sqlite3
+db.sqlite3

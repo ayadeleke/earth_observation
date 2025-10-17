@@ -42,16 +42,9 @@ export const AnalysisMapLayer: React.FC<NDVIMapLayerProps> = ({
   });
 
   useEffect(() => {
-    console.log('AnalysisMapLayer useEffect triggered:', { 
-      hasGeometry: !!geometry, 
-      visible, 
-      analysisType, 
-      startDate, 
-      endDate 
-    });
-    
+
     if (!geometry || !shouldLoad) {
-      console.log('Early return - no geometry or shouldLoad=false:', { hasGeometry: !!geometry, shouldLoad });
+
       // Remove existing layer if conditions not met
       if (tileLayerRef.current) {
         map.removeLayer(tileLayerRef.current);
@@ -92,8 +85,6 @@ export const AnalysisMapLayer: React.FC<NDVIMapLayerProps> = ({
           }
         }
 
-        console.log('Sending geometry to backend:', geoJsonGeometry);
-
         const response = await fetch('http://localhost:8000/api/v1/visualization/get_analysis_map/', {
           method: 'POST',
           headers: {
@@ -116,7 +107,6 @@ export const AnalysisMapLayer: React.FC<NDVIMapLayerProps> = ({
         }
 
         const data = await response.json();
-        console.log('Map API response:', data);
 
         if (data.success && data.tile_url) {
           // Remove existing layer
@@ -172,7 +162,7 @@ export const AnalysisMapLayer: React.FC<NDVIMapLayerProps> = ({
 
   // Show loading indicator
   if (loading) {
-    console.log(`Loading ${analysisType} map visualization...`);
+
   }
 
   // This component doesn't render anything directly since it manages layers on the map
