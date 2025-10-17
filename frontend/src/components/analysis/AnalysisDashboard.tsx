@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { NDVITimeSeries } from './NDVITimeSeries';
+import { NDVITimeSeries } from './TimeSeries';
 import { Statistics } from './Statistics';
-import InteractiveMapSimple from '../InteractiveMapSimple';
+import InteractiveMapSimple from './InteractiveMapSimple';
 import { DataTable } from './DataTable';
 import { DownloadButtons } from './DownloadButtons';
 
@@ -18,6 +18,8 @@ interface AnalysisData {
   cloudCover?: number;
   enableCloudMasking?: boolean;
   maskingStrictness?: string;
+  polarization?: string;
+  orbitDirection?: string;
   cloud_masking_settings?: {
     enabled?: boolean;
     strict?: boolean;
@@ -37,42 +39,12 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
   const [currentData, setCurrentData] = useState<AnalysisData | null>(analysisData || null);
   // Removed unused setLoading variable
 
-  // Debug logging
-  useEffect(() => {
-    console.log('=== AnalysisDashboard Data Debug ===');
-    console.log('Received analysisData:', analysisData);
-    console.log('Backend cloud_masking_settings:', analysisData?.cloud_masking_settings);
-    console.log('First data item cloudMaskingApplied:', analysisData?.tableData?.[0]?.cloudMaskingApplied);
-    console.log('Current enableCloudMasking from props:', analysisData?.enableCloudMasking);
-    console.log('Current maskingStrictness from props:', analysisData?.maskingStrictness);
-    
-    // Calculate what will be passed to InteractiveMapSimple
-    const calculatedCloudMasking = analysisData?.cloud_masking_settings?.enabled ?? 
-                                  analysisData?.enableCloudMasking ?? 
-                                  analysisData?.tableData?.[0]?.cloudMaskingApplied ?? 
-                                  false;
-    const calculatedStrictness = analysisData?.cloud_masking_settings?.strict ? 'true' : 
-                               (analysisData?.maskingStrictness || 'false');
-    
-    console.log('🎯 CALCULATED enableCloudMasking for InteractiveMap:', calculatedCloudMasking);
-    console.log('🎯 CALCULATED maskingStrictness for InteractiveMap:', calculatedStrictness);
-    console.log('TimeSeriesData sample:', currentData?.timeSeriesData?.slice(0, 2));
-    console.log('Analysis type:', currentData?.analysisType);
-  }, [analysisData, currentData]);
-
   useEffect(() => {
     if (analysisData) {
-      console.log('=== AnalysisDashboard Data Debug ===');
-      console.log('Received analysisData:', analysisData);
-      console.log('TimeSeriesData sample:', analysisData.timeSeriesData?.slice(0, 2));
-      console.log('Analysis type:', analysisData.analysisType);
+
       setCurrentData(analysisData);
     }
   }, [analysisData]);
-
-
-
-
 
   if (!currentData) {
     return (
@@ -86,12 +58,12 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
   }
 
   return (
-    <div className="p-4 bg-light min-vh-100">
+    <div className="container-fluid p-2 p-md-4 bg-light min-vh-100">
       {/* Analysis Results Header */}
-      <div className="bg-white rounded shadow-sm p-4">
+      <div className="bg-white rounded shadow-sm p-4 mb-3">
         <div className="d-flex justify-content-between align-items-center">
           <div>
-            <h1 className="fs-2 fw-bold text-dark">📊 Analysis Results</h1>
+            <h1 className="fs-2 fw-bold text-dark">Analysis Results</h1>
             <div className="small text-muted mt-1">
               {currentData.analysisType?.toUpperCase()} Analysis • {currentData.satellite?.toUpperCase()} • 
               {currentData.startDate} to {currentData.endDate}
@@ -99,7 +71,9 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
           </div>
           <DownloadButtons 
             data={currentData}
-            onDownload={(type: 'csv' | 'plot') => console.log(`Downloading ${type}`)}
+            onDownload={(type: 'csv' | 'plot') => {
+              // Handle download action if needed
+            }}
           />
         </div>
       </div>
@@ -111,12 +85,16 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
             data={currentData.timeSeriesData} 
             analysisType={currentData.analysisType}
             cloudCover={currentData.cloudCover}
+            polarization={currentData.statistics?.selected_polarization || currentData.polarization}
+            orbitDirection={currentData.orbitDirection}
           />
         </div>
         <div className="col-12 col-lg-4">
           <Statistics 
             data={currentData.statistics}
             analysisType={currentData.analysisType}
+            polarization={currentData.statistics?.selected_polarization || currentData.polarization}
+            orbitDirection={currentData.orbitDirection}
           />
         </div>
       </div>
@@ -140,6 +118,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
           currentData.cloud_masking_settings?.strict ? 'true' : 
           (currentData.maskingStrictness || 'false')
         }
+        polarization={currentData.statistics?.selected_polarization || currentData.polarization || 'VV'}
       />
       
       {/* Data Table */}

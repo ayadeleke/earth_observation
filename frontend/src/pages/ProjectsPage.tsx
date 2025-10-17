@@ -96,13 +96,12 @@ const ProjectsPage: React.FC = () => {
               <div className="card border-0 shadow-sm" style={{ borderRadius: '1rem' }}>
                 <div className="card-body">
                   <h5 className="card-title fw-bold mb-4">
-                    <i className="fas fa-chart-bar text-primary me-2"></i>
                     Project Statistics
                   </h5>
                   <div className="row text-center">
                     <div className="col-md-4">
                       <div className="p-3">
-                        <h3 className="display-6 fw-bold text-primary mb-1">{projects.length}</h3>
+                        <h3 className="display-6 fw-bold text-dark mb-1">{projects.length}</h3>
                         <p className="text-muted mb-0">Total Projects</p>
                       </div>
                     </div>
@@ -116,7 +115,7 @@ const ProjectsPage: React.FC = () => {
                     </div>
                     <div className="col-md-4">
                       <div className="p-3">
-                        <h3 className="display-6 fw-bold text-info mb-1">
+                        <h3 className="display-6 fw-bold text-warning mb-1">
                           {projects.filter((p: Project) => new Date(p.created_at) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length}
                         </h3>
                         <p className="text-muted mb-0">Created This Month</p>

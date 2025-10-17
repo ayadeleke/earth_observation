@@ -45,6 +45,11 @@ urlpatterns = [
         views.AnalysisProjectDetailView.as_view(),
         name="project-detail",
     ),
+    path(
+        "projects/by-name/<str:project_name>/",
+        views.AnalysisProjectByNameView.as_view(),
+        name="project-by-name",
+    ),
     
     # Geometry and file management
     path(

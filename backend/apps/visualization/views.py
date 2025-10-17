@@ -207,7 +207,7 @@ def calculate_sentinel2_ndvi(image, enable_cloud_masking=False, masking_strictne
     return image.addBands(ndvi)
 
 
-def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_date=None, satellite='landsat', cloud_cover=20, selected_images=None, cloud_masking_level='disabled'):
+def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_date=None, satellite='landsat', cloud_cover=20, selected_images=None, cloud_masking_level='disabled', polarization='VV'):
     """
     Create an interactive map with calculated analysis layers 
 
@@ -219,6 +219,8 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
         satellite: Satellite type ('landsat', 'sentinel1', 'sentinel2')
         cloud_cover: Maximum cloud cover percentage
         selected_images: List of pre-selected images (optional)
+        cloud_masking_level: Cloud masking level ('disabled', 'recommended', 'strict')
+        polarization: SAR polarization ('VV' or 'VH')
         
     Returns:
         dict: Map HTML file information and metadata
@@ -229,6 +231,8 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
             return create_simple_html_map_with_analysis(geometry, analysis_type, start_date, end_date, satellite, cloud_cover)
         
         logger.info(f"Creating interactive map with analysis: {analysis_type}, satellite: {satellite}")
+        if analysis_type.lower() in ['sar', 'backscatter']:
+            logger.warning(f"🎯 SAR polarization: {polarization}")
         
         # Get center coordinates from geometry
         try:
@@ -388,7 +392,7 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
         elif analysis_type.lower() == 'lst' and satellite.lower() != 'sentinel2':
             add_lst_layers(map_obj, images, geometry, satellite, collection, cloud_masking_level)
         elif (analysis_type.lower() in ['backscatter', 'sar']) and ('sentinel1' in satellite.lower() or 'sentinel-1' in satellite.lower()):
-            add_backscatter_layers(map_obj, images, geometry, collection)
+            add_backscatter_layers(map_obj, images, geometry, collection, polarization)
         else:
             logger.warning(f"Analysis type {analysis_type} not supported for satellite {satellite}")
             # Add basic RGB layers as fallback
@@ -1039,21 +1043,21 @@ def add_lst_layers(map_obj, images, geometry, satellite, collection, cloud_maski
         logger.error(f"Error adding LST layers: {e}")
 
 
-def add_backscatter_layers(map_obj, images, geometry, collection):
+def add_backscatter_layers(map_obj, images, geometry, collection, polarization='VV'):
     """Add Sentinel-1 backscatter layers to the map"""
     try:
-        logger.info("Adding Sentinel-1 backscatter layers")
+        logger.info(f"Adding Sentinel-1 backscatter layers for {polarization} polarization")
         
         # Get median backscatter
         median_image = collection.median().clip(geometry)
         
-        # Add VV polarization layer
+        # Add selected polarization layer
         vis_params_sar = {
             'min': -25,
             'max': 0,
             'palette': ['black', 'gray', 'white']
         }
-        map_obj.addLayer(median_image.select('VV'), vis_params_sar, 'SAR VV Median (dB)')
+        map_obj.addLayer(median_image.select(polarization), vis_params_sar, f'SAR {polarization} Median (dB)')
         
         # Add individual backscatter images and calculate changes
         logger.info(f"Adding {len(images)} individual SAR layers and changes")
@@ -1071,13 +1075,13 @@ def add_backscatter_layers(map_obj, images, geometry, collection):
                 
                 # Add individual SAR layer with brackets for first/last images
                 if i == 0 and len(images) > 1:
-                    layer_name = f'[First Image] SAR VV {date_info} (dB)'
+                    layer_name = f'[First Image] SAR {polarization} {date_info} (dB)'
                 elif i == len(images) - 1 and len(images) > 1:
-                    layer_name = f'[Last Image] SAR VV {date_info} (dB)'
+                    layer_name = f'[Last Image] SAR {polarization} {date_info} (dB)'
                 else:
-                    layer_name = f'SAR VV {date_info} (dB)'
+                    layer_name = f'SAR {polarization} {date_info} (dB)'
                 
-                map_obj.addLayer(sar_clipped.select('VV'), vis_params_sar, layer_name)
+                map_obj.addLayer(sar_clipped.select(polarization), vis_params_sar, layer_name)
                 logger.info(f"Added SAR layer: {layer_name}")
             except Exception as e:
                 logger.warning(f"Failed to add SAR layer for image {i}: {e}")
@@ -1094,17 +1098,17 @@ def add_backscatter_layers(map_obj, images, geometry, collection):
                 
                 # Calculate sequential backscatter changes
                 for i in range(len(sar_images) - 1):
-                    earlier_sar = sar_images[i].select('VV')
-                    later_sar = sar_images[i + 1].select('VV')
+                    earlier_sar = sar_images[i].select(polarization)
+                    later_sar = sar_images[i + 1].select(polarization)
                     sar_change = later_sar.subtract(earlier_sar)
                     
-                    change_label = f'SAR VV Change ({image_dates[i]} → {image_dates[i + 1]}) dB'
+                    change_label = f'SAR {polarization} Change ({image_dates[i]} → {image_dates[i + 1]}) dB'
                     map_obj.addLayer(sar_change, vis_params_sar_change, change_label)
                     logger.info(f"Added SAR change layer: {change_label}")
                 
                 # Add total backscatter change (first to last)
-                total_change = sar_images[-1].select('VV').subtract(sar_images[0].select('VV'))
-                total_change_label = f'SAR VV Total Change ({image_dates[0]} → {image_dates[-1]}) dB'
+                total_change = sar_images[-1].select(polarization).subtract(sar_images[0].select(polarization))
+                total_change_label = f'SAR {polarization} Total Change ({image_dates[0]} → {image_dates[-1]}) dB'
                 map_obj.addLayer(total_change, vis_params_sar_change, total_change_label)
                 logger.info("Added SAR total change layer")
             except Exception as e:
@@ -1863,6 +1867,8 @@ def create_custom_map(request):
             else:
                 selected_indices = selected_indices_raw
             cloud_masking_level = data.get('cloud_masking_level', 'disabled')
+            polarization = data.get('polarization', 'VV')
+            logger.warning(f"🎯 VISUALIZATION REQUEST (JSON): polarization={polarization}, analysis_type={analysis_type}")
             
             # Convert use_cloud_masking parameter to cloud_masking_level for compatibility
             use_cloud_masking = data.get('use_cloud_masking')
@@ -2012,7 +2018,8 @@ def create_custom_map(request):
                 satellite=satellite,
                 cloud_cover=cloud_cover,
                 selected_images=selected_indices,
-                cloud_masking_level=cloud_masking_level
+                cloud_masking_level=cloud_masking_level,
+                polarization=polarization
             )
             
             if map_result.get('success'):

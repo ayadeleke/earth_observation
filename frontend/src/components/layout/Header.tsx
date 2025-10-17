@@ -4,17 +4,11 @@ import {
   Satellite, 
   Menu, 
   X, 
-  Home, 
-  BarChart3, 
-  Globe, 
   Settings, 
   User,
   LogOut,
   LogIn,
   UserPlus,
-  Layout as LayoutIcon,
-  FolderOpen,
-  Info
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -51,23 +45,23 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
 
   // Navigation items that are always visible
   const publicNavigationItems = [
-    { path: '/', label: 'Home', icon: Home },
+    { path: '/', label: 'Home' },
     // Only show demo for non-authenticated users
-    ...(user ? [] : [{ path: '/demo', label: 'Demo', icon: Globe }]),
+    ...(user ? [] : [{ path: '/demo', label: 'Demo'}]),
   ];
 
   // Navigation items only visible to authenticated users
   const authenticatedNavigationItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutIcon },
-    { path: '/analysis', label: 'Analysis', icon: BarChart3 },
-    { path: '/projects', label: 'Projects', icon: FolderOpen },
-    { path: '/about', label: 'About', icon: Info },
+    { path: '/dashboard', label: 'Dashboard' },
+    { path: '/analysis', label: 'Analysis' },
+    { path: '/projects', label: 'Projects' },
+    { path: '/about', label: 'About' },
   ];
 
   // Combine navigation items based on authentication status
   const navigationItems = user
     ? [...publicNavigationItems, ...authenticatedNavigationItems]
-    : [...publicNavigationItems, { path: '/about', label: 'About', icon: Info }];
+    : [...publicNavigationItems, { path: '/about', label: 'About' }];
 
   const handleLogout = () => {
     if (onLogout) {
@@ -82,7 +76,7 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
 
   return (
     <header className="navbar navbar-expand-lg navbar-dark position-sticky top-0" style={{ 
-      background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #3730a3 100%)',
+      background: 'linear-gradient(135deg, #073317 0%, #064e3b 100%)',
       zIndex: 1050
     }}>
       <div className="container-fluid">
@@ -117,7 +111,6 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
           {/* Desktop Navigation */}
           <nav className="navbar-nav mx-auto">
             {navigationItems.map((item) => {
-              const IconComponent = item.icon;
               const isActive = isActivePath(item.path);
               
               return (
@@ -129,9 +122,8 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
                       ? 'text-white fw-semibold'
                       : 'text-light opacity-75'
                   }`}
-                  style={isActive ? { borderBottom: `2px solid #789af7` } : {}}
+                  style={isActive ? { borderBottom: `2px solid #ffffff` } : {}}
                 >
-                  <IconComponent style={{ width: '16px', height: '16px' }} className="me-2" />
                   <span>{item.label}</span>
                 </Link>
               );
@@ -148,9 +140,9 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
                 >
                   <div className="rounded-circle d-flex align-items-center justify-content-center me-2" 
                         style={{ 
-                          width: '32px', 
-                          height: '32px', 
-                          background: 'linear-gradient(135deg, #60a5fa 0%, #a855f7 100%)' 
+                          width: '38px', 
+                          height: '38px', 
+                          background: 'linear-gradient(135deg, #073317 0%, #064e3b 100%)', 
                         }}>
                     {user.avatar ? (
                       <img src={user.avatar} alt={user.name} className="rounded-circle" style={{ width: '32px', height: '32px' }} />
@@ -172,7 +164,6 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
                       <div className="small text-muted">{user.email}</div>
                     </div>
                     <Link to="/dashboard" className="dropdown-item d-flex align-items-center">
-                      <LayoutIcon style={{ width: '16px', height: '16px' }} className="me-2" />
                       Dashboard
                     </Link>
                     <Link to="/settings" className="dropdown-item d-flex align-items-center">

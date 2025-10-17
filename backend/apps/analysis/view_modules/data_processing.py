@@ -15,7 +15,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime
 from django.conf import settings
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 import os
+import io
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +73,7 @@ def validate_analysis_request(data):
 
 
 def export_to_csv(data, filename_prefix, analysis_type):
-    """Export analysis data to CSV file"""
+    """Export analysis data to CSV file using Django storage backend"""
     try:
         if not data:
             logger.warning("No data to export")
@@ -82,21 +85,22 @@ def export_to_csv(data, filename_prefix, analysis_type):
         # Generate filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"{filename_prefix}_{timestamp}.csv"
+        
+        # Create relative path for storage
+        file_path = f"csv/{filename}"
 
-        # Ensure media directory exists
-        csv_dir = os.path.join(settings.MEDIA_ROOT, 'csv')
-        os.makedirs(csv_dir, exist_ok=True)
+        # Convert DataFrame to CSV in memory
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+        csv_content = csv_buffer.getvalue()
 
-        # Full file path
-        file_path = os.path.join(csv_dir, filename)
-
-        # Export to CSV
-        df.to_csv(file_path, index=False)
+        # Save to storage backend (Azure or local)
+        saved_path = default_storage.save(file_path, ContentFile(csv_content.encode('utf-8')))
 
         logger.info(f"Data exported to {filename}")
 
-        # Return relative path for URL generation
-        return os.path.join('csv', filename)
+        # Return the saved path (e.g., 'csv/filename.csv')
+        return saved_path
 
     except Exception as e:
         logger.error(f"CSV export error: {str(e)}")
@@ -104,7 +108,7 @@ def export_to_csv(data, filename_prefix, analysis_type):
 
 
 def create_plot(data, analysis_type, filename_prefix):
-    """Create visualization plot for analysis data"""
+    """Create visualization plot for analysis data using Django storage backend"""
     try:
         if not data:
             logger.warning("No data to plot")
@@ -128,23 +132,24 @@ def create_plot(data, analysis_type, filename_prefix):
         # Generate filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"{filename_prefix}_plot_{timestamp}.png"
+        
+        # Create relative path for storage
+        file_path = f"plots/{filename}"
 
-        # Ensure plots directory exists
-        plots_dir = os.path.join(settings.MEDIA_ROOT, 'plots')
-        os.makedirs(plots_dir, exist_ok=True)
-
-        # Full file path
-        file_path = os.path.join(plots_dir, filename)
-
-        # Save plot
+        # Save plot to memory buffer
+        buffer = io.BytesIO()
         plt.tight_layout()
-        plt.savefig(file_path, dpi=300, bbox_inches='tight')
+        plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight')
+        buffer.seek(0)
         plt.close()
+
+        # Save to storage backend (Azure or local)
+        saved_path = default_storage.save(file_path, ContentFile(buffer.read()))
 
         logger.info(f"Plot saved to {filename}")
 
-        # Return relative path for URL generation
-        return os.path.join('plots', filename)
+        # Return the saved path (e.g., 'plots/filename.png')
+        return saved_path
 
     except Exception as e:
         logger.error(f"Plot creation error: {str(e)}")

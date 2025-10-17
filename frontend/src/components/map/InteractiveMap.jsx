@@ -62,8 +62,7 @@ export const InteractiveMap = ({
     }
     
     // Process the shapefile features to extract coordinates (and display on map)
-    console.log(`Found ${geojson.features.length} features in shapefile`);
-    
+
     // Create a feature group for all shapefile features
     const shapefileGroup = L.featureGroup();
     
@@ -95,16 +94,10 @@ export const InteractiveMap = ({
     });
     
     // Add the shapefile group to the map
-    console.log('Adding shapefile group to map:', {
-      groupHasLayers: shapefileGroup.getLayers().length > 0,
-      mapExists: !!mapRef.current,
-      groupBounds: shapefileGroup.getBounds()
-    });
-    
+
     shapefileLayerRef.current = shapefileGroup;
     mapRef.current.addLayer(shapefileGroup);
-    console.log('Shapefile layer added successfully');
-    
+
     // Clear any drawn shapes when shapefile is loaded
     if (drawnItemsRef.current) {
       drawnItemsRef.current.clearLayers();
@@ -131,7 +124,7 @@ export const InteractiveMap = ({
       const coords = firstFeature.geometry.coordinates;
       wkt = `POINT(${coords[0]} ${coords[1]})`;
     } else {
-      console.warn('Unsupported geometry type:', firstFeature.geometry.type);
+
       // Fallback to creating a bounding box
       const bounds = L.geoJSON(firstFeature).getBounds();
       const sw = bounds.getSouthWest();
@@ -157,8 +150,7 @@ export const InteractiveMap = ({
   // Function to process and display shapefile
   const processAndDisplayShapefile = useCallback(async (file) => {
     try {
-      console.log('Processing shapefile:', file.name, 'Size:', file.size, 'Type:', file.type);
-      
+
       // Remove any existing shapefile layer
       if (shapefileLayerRef.current && mapRef.current) {
         mapRef.current.removeLayer(shapefileLayerRef.current);
@@ -167,16 +159,14 @@ export const InteractiveMap = ({
       
       // Check if it's a .zip file containing shapefile components
       if (file.name.toLowerCase().endsWith('.zip')) {
-        console.log('Processing ZIP file containing shapefile...');
-        
+
         // For ZIP files, we need to extract and process the .shp file
         const JSZip = await import('jszip');
         const zip = new JSZip.default();
         const zipContents = await zip.loadAsync(file);
         
         const allFiles = Object.keys(zipContents.files);
-        console.log('ZIP contents:', allFiles);
-        
+
         // Find the .shp file in the ZIP - allow files in subdirectories but exclude actual directories
         const shpFile = allFiles.find(name => 
           name.toLowerCase().endsWith('.shp') && !name.endsWith('/')
@@ -186,29 +176,23 @@ export const InteractiveMap = ({
           console.error('Available files in ZIP:', allFiles);
           throw new Error(`No .shp file found in ZIP archive. Found files: ${allFiles.join(', ')}`);
         }
-        
-        console.log('Found .shp file:', shpFile);
-        
+
         // Extract the .shp file data
         const shpData = await zipContents.files[shpFile].async('arraybuffer');
         
         // Parse the shapefile using the shapefile library
         const geojson = await shapefile.read(shpData);
-        console.log('Parsed shapefile data from ZIP:', geojson);
-        console.log('Features found:', geojson.features?.length || 0);
-        
+
         await processGeojsonFeatures(geojson, file.name);
         
       } else if (file.name.toLowerCase().endsWith('.shp')) {
-        console.log('Processing .shp file directly...');
-        
+
         // Read the shapefile data
         const arrayBuffer = await file.arrayBuffer();
         
         // Parse the shapefile using the shapefile library
         const geojson = await shapefile.read(arrayBuffer);
-        console.log('Parsed shapefile data:', geojson);
-        
+
         await processGeojsonFeatures(geojson, file.name);
         
       } else {
@@ -231,18 +215,12 @@ export const InteractiveMap = ({
 
   // Handle shapefile upload and display
   useEffect(() => {
-    console.log('Shapefile useEffect triggered:', {
-      uploadedShapefile: !!uploadedShapefile,
-      fileName: uploadedShapefile?.name,
-      mapRef: !!mapRef.current,
-      shapefileLayerRef: !!shapefileLayerRef.current
-    });
-    
+
     if (uploadedShapefile && mapRef.current) {
-      console.log('Processing shapefile upload...');
+
       processAndDisplayShapefile(uploadedShapefile);
     } else if (!uploadedShapefile && shapefileLayerRef.current && mapRef.current) {
-      console.log('Removing shapefile layer...');
+
       // Remove shapefile layer when no file is uploaded
       mapRef.current.removeLayer(shapefileLayerRef.current);
       shapefileLayerRef.current = null;
@@ -252,23 +230,16 @@ export const InteractiveMap = ({
         onAreaSelectRef.current([], '', 'shapefile-removal');
       }
     } else if (uploadedShapefile && !mapRef.current) {
-      console.warn('Shapefile uploaded but map not ready yet');
+
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadedShapefile]); // processAndDisplayShapefile excluded to prevent recreation
 
   // Handle geometry display (from shapefile or other sources)
   useEffect(() => {
-    console.log('Geometry useEffect triggered:', {
-      geometry: !!geometry,
-      geometryType: geometry?.type,
-      mapRef: !!mapRef.current,
-      shapefileLayerRef: !!shapefileLayerRef.current
-    });
-    
+
     if (geometry && mapRef.current) {
-      console.log('Displaying geometry on map...');
-      
+
       // Remove existing shapefile layer if any
       if (shapefileLayerRef.current) {
         mapRef.current.removeLayer(shapefileLayerRef.current);
@@ -303,13 +274,12 @@ export const InteractiveMap = ({
         if (bounds.isValid()) {
           mapRef.current.fitBounds(bounds, { padding: [20, 20] });
         }
-        
-        console.log('Geometry displayed successfully on map');
+
       } catch (error) {
         console.error('Error displaying geometry on map:', error);
       }
     } else if (!geometry && shapefileLayerRef.current && mapRef.current) {
-      console.log('Removing geometry layer...');
+
       // Remove geometry layer when no geometry is provided
       mapRef.current.removeLayer(shapefileLayerRef.current);
       shapefileLayerRef.current = null;
@@ -321,20 +291,16 @@ export const InteractiveMap = ({
   const defaultZoom = 8;
 
   useEffect(() => {
-    console.log('useEffect triggered, mapRef.current:', !!mapRef.current);
-    
+
     // Add a delay to ensure the map is fully rendered before adding controls
     const timer = setTimeout(() => {
-      console.log('Timer triggered, checking map...', !!mapRef.current);
-      
+
       if (mapRef.current && !drawnItemsRef.current) {
         const map = mapRef.current;
-        console.log('Adding drawing controls to map...');
-        
+
         // Initialize drawn items layer
         drawnItemsRef.current = new L.FeatureGroup();
         map.addLayer(drawnItemsRef.current);
-        console.log('Added drawn items layer');
 
         // Add drawing controls
         drawControlRef.current = new L.Control.Draw({
@@ -352,7 +318,6 @@ export const InteractiveMap = ({
         });
         
         map.addControl(drawControlRef.current);
-        console.log('Drawing controls added successfully!');
 
         // Handle drawn shapes
         map.on('draw:created', function(e) {
@@ -419,7 +384,7 @@ export const InteractiveMap = ({
                 .openPopup();
             },
             function(error) {
-              console.log('Geolocation error:', error);
+
             },
             {
               enableHighAccuracy: true,
@@ -438,7 +403,7 @@ export const InteractiveMap = ({
         try {
           mapRef.current.removeControl(drawControlRef.current);
         } catch (e) {
-          console.log('Error removing draw control:', e);
+
         }
       }
     };
@@ -453,7 +418,7 @@ export const InteractiveMap = ({
         ref={mapRef}
         whenCreated={(mapInstance) => {
           mapRef.current = mapInstance;
-          console.log('Map created successfully, will add drawing controls shortly');
+
         }}
       >
         <TileLayer

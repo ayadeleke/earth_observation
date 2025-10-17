@@ -4,9 +4,7 @@
 
   // Debug effect to monitor user state changes
   useEffect(() => {
-    console.log('AuthContext user state changed:', user);
-    console.log('AuthService isAuthenticated:', authService.isAuthenticated());
-    console.log('AuthService getCurrentUser:', authService.getCurrentUser());
+
   }, [user]);
 
   const login = async (email: string, password: string): Promise<void> => {pplication
@@ -52,7 +50,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setUser(currentUser);
           } else {
             // Token is invalid, clear auth
-            console.log('Token verification failed, clearing auth');
+
             authService.clearInvalidAuth();
           }
         } else {

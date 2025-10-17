@@ -6,6 +6,7 @@ Provides Earth Engine authentication and basic endpoints for app functionality.
 import logging
 from datetime import datetime
 import requests
+import urllib.parse
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from rest_framework import generics, status, permissions
@@ -206,6 +207,39 @@ class AnalysisProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return AnalysisProject.objects.filter(user=self.request.user).order_by('-updated_at')
+
+
+class AnalysisProjectByNameView(APIView):
+    """Get project by name for the current user"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, project_name):
+        try:
+            # Decode the project name from URL
+            decoded_name = urllib.parse.unquote(project_name)
+            
+            # Find the project by name for the current user
+            project = AnalysisProject.objects.get(
+                name=decoded_name,
+                user=request.user
+            )
+            
+            serializer = AnalysisProjectSerializer(project)
+            return Response({
+                'success': True,
+                'project': serializer.data
+            })
+            
+        except AnalysisProject.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': f'Project "{decoded_name}" not found'
+            }, status=404)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=500)
 
 
 class GeometryInputListCreateView(generics.ListCreateAPIView):

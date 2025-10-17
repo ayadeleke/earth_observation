@@ -267,7 +267,8 @@ def process_sentinel(request):
             geometry=geometry,
             start_date=params['start_date'],
             end_date=params['end_date'],
-            orbit_direction=params['orbit_direction']
+            orbit_direction=params['orbit_direction'],
+            polarization=params.get('polarization', 'VV')
         )
 
         # Add processed geometry to response for frontend map display
