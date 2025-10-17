@@ -52,7 +52,7 @@ export const Statistics: React.FC<StatisticsProps> = ({
     switch (analysisType.toLowerCase()) {
       case 'lst': return 'text-danger';
       case 'backscatter':
-      case 'sar': return 'text-info';
+      case 'sar': return 'text-dark';
       default: return 'text-success';
     }
   };

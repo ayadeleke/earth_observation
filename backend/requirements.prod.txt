@@ -14,6 +14,10 @@ django-cachalot==2.8.0
 django-redis==6.0.0
 redis==6.4.0
 
+# Storage
+django-storages==1.14.2
+azure-storage-blob==12.27.0
+
 # Earth Engine and Geospatial (core)
 earthengine-api==0.1.358
 google-api-core==2.25.1

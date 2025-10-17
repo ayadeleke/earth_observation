@@ -180,7 +180,7 @@ const DemoPage: React.FC = () => {
         zoom={8}
         style={{ height: '400px', width: '100%' }}
         whenReady={() => {
-          console.log('Map instance ready and ref set');
+
         }}
       >
         <TileLayer
@@ -467,7 +467,7 @@ const DemoPage: React.FC = () => {
         ...prev,
         coordinates: '' // Clear manual coordinates when shapefile is uploaded
       }));
-      console.log('Demo: Shapefile uploaded:', file.name);
+
     }
   };
 
@@ -483,7 +483,7 @@ const DemoPage: React.FC = () => {
     if (fileInput) {
       fileInput.value = '';
     }
-    console.log('Demo: Shapefile removed');
+
   };
 
   // Handle form submission
@@ -506,7 +506,7 @@ const DemoPage: React.FC = () => {
       } else {
         coordinates = 'POLYGON((-95.0 39.0, -94.5 39.0, -94.5 39.5, -95.0 39.5, -95.0 39.0))'; // Central US
       }
-      console.log(`Demo: Using simulated coordinates for shapefile "${uploadedShapefile.name}": ${coordinates}`);
+
     } else if (!coordinates) {
       // If no coordinates or shapefile provided, use a default global area for demonstration
       coordinates = 'POLYGON((-180 -60, 180 -60, 180 60, -180 60, -180 -60))'; // Global coverage for demo
@@ -1194,7 +1194,6 @@ const DemoPage: React.FC = () => {
                 </div>
               </div>
             </div>
-
 
           </div>
         </div>

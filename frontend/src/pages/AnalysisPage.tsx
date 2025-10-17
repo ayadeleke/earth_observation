@@ -28,6 +28,7 @@ const AnalysisPage: React.FC = () => {
   const [initialDateRangeType, setInitialDateRangeType] = useState<string>('years');
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [mapDrawnCoordinates, setMapDrawnCoordinates] = useState<string>('');
+  const [showAllAnalyses, setShowAllAnalyses] = useState<boolean>(false);
 
   // Function to update URL with project name
   const updateURLWithProjectName = useCallback((projectName: string) => {
@@ -115,7 +116,7 @@ const AnalysisPage: React.FC = () => {
       
       return '';
     } catch (error) {
-      console.warn('Error converting GeoJSON to WKT:', error);
+
       return '';
     }
   };
@@ -146,7 +147,7 @@ const AnalysisPage: React.FC = () => {
         return `POINT(${geometry.coordinates[0]} ${geometry.coordinates[1]})`;
       
       default:
-        console.warn('Unsupported geometry type:', geometry.type);
+
         return '';
     }
   };
@@ -359,17 +360,6 @@ const AnalysisPage: React.FC = () => {
         contentType = 'application/json';
       }
 
-      console.log('=== Request Debug ===');
-      console.log('Form satellite:', formData.satellite);
-      console.log('Form analysisType:', formData.analysisType);
-      console.log('Form polarization:', formData.polarization);
-      console.log('Form enableCloudMasking:', formData.enableCloudMasking);
-      console.log('Form maskingStrictness:', formData.maskingStrictness);
-      console.log('Coordinates:', formData.coordinates);
-      console.log('Content type:', contentType);
-      console.log('Date range type:', dateRangeType);
-      console.log('Request body/data:', contentType === 'application/json' ? requestData : 'FormData (check network tab)');
-      
       // Determine the correct endpoint based on analysis type
       let endpoint = '';
       switch (formData.analysisType) {
@@ -629,7 +619,7 @@ const AnalysisPage: React.FC = () => {
                   setGeometryForMap(null);
                   setLastFormData(null);
                   setLoadedAnalysisMessage('');
-                  setInitialDateRangeType('years'); // Reset to default
+                  setInitialDateRangeType('years');
                 }}
                 title="Clear loaded analysis and start fresh"
               >
@@ -638,7 +628,7 @@ const AnalysisPage: React.FC = () => {
             </div>
             <div className="card-body">
               <div className="row">
-                {projectAnalyses.map((analysis) => (
+                {(showAllAnalyses ? projectAnalyses : projectAnalyses.slice(0, 6)).map((analysis) => (
                   <div key={analysis.id} className="col-md-6 col-lg-4 mb-3">
                     <div className={`card ${selectedAnalysis?.id === analysis.id ? 'border-primary' : 'border-light'}`}>
                       <div className="card-body p-3">
@@ -711,6 +701,19 @@ const AnalysisPage: React.FC = () => {
                   </div>
                 ))}
               </div>
+              
+              {/* See More / See Less Button */}
+              {projectAnalyses.length > 6 && (
+                <div className="text-center mt-3">
+                  <button
+                    className="btn btn-outline-primary btn-sm"
+                    onClick={() => setShowAllAnalyses(!showAllAnalyses)}
+                  >
+                    <i className={`fas fa-chevron-${showAllAnalyses ? 'up' : 'down'} me-2`}></i>
+                    {showAllAnalyses ? 'Show Less' : `See More (${projectAnalyses.length - 6} more)`}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -829,8 +832,6 @@ const AnalysisPage: React.FC = () => {
           </div>
         </div>
 
-
-
         {/* Results Section - Enhanced Dashboard */}
         {showResults && results && (
           <div className="row mt-5">
@@ -857,7 +858,9 @@ const AnalysisPage: React.FC = () => {
                 return (
                   <AnalysisDashboard 
                     analysisData={unifiedAnalysisData}
-                    onDataUpdate={(data) => console.log('Dashboard data updated:', data)}
+                    onDataUpdate={(data) => {
+                      // Handle data updates if needed
+                    }}
                   />
                 );
               })()}

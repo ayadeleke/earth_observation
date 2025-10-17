@@ -174,9 +174,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
     try {
       // Debug authentication
       const token = authService.getAccessToken();
-      console.log('AI Assistant - Token available:', !!token);
-      console.log('AI Assistant - Token preview:', token ? token.substring(0, 20) + '...' : 'No token');
-      
+
       // Call AI service to process the query
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1'}/ai/query/`, {
         method: 'POST',

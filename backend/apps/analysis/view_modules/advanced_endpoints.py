@@ -89,8 +89,9 @@ def process_comprehensive(request):
             analysis_types=params['analysis_types'],
             satellite=params['satellite'],
             cloud_cover=params['cloud_cover'],
-            use_cloud_masking=params['use_cloud_masking', False],
-            strict_masking=params['strict_masking', False]
+            use_cloud_masking=params.get('use_cloud_masking', False),
+            strict_masking=params.get('strict_masking', False),
+            polarization=params.get('polarization', 'VV')
         )
 
         # Add processed geometry to response for frontend map display

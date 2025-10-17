@@ -6,6 +6,10 @@ from datetime import timedelta
 import os
 import environ
 from pathlib import Path
+import logging
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -42,6 +46,7 @@ THIRD_PARTY_APPS = [
     "corsheaders",
     "django_filters",
     "drf_spectacular",
+    "storages",  # Django storages for Azure Blob Storage
     # "cachalot",  # Database query caching - disabled for development
 ]
 
@@ -154,9 +159,62 @@ STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
 
-# Media files
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+# Azure Blob Storage Configuration
+USE_AZURE_STORAGE = env.bool("USE_AZURE_STORAGE", default=False)
+
+if USE_AZURE_STORAGE:
+    # Azure Storage settings for media files
+    AZURE_ACCOUNT_NAME = env("AZURE_ACCOUNT_NAME")
+    AZURE_ACCOUNT_KEY = env("AZURE_ACCOUNT_KEY")
+    AZURE_CONTAINER = env("AZURE_CONTAINER", default="media")
+    AZURE_CUSTOM_DOMAIN = env("AZURE_CUSTOM_DOMAIN", default="").strip()
+    
+    # Media files will be stored in Azure Blob Storage
+    if AZURE_CUSTOM_DOMAIN:  # Empty string evaluates to False
+        MEDIA_URL = f"https://{AZURE_CUSTOM_DOMAIN}/"
+    else:
+        MEDIA_URL = f"https://{AZURE_ACCOUNT_NAME}.blob.core.windows.net/{AZURE_CONTAINER}/"
+    
+    # Azure Storage connection settings
+    AZURE_CONNECTION_STRING = f"DefaultEndpointsProtocol=https;AccountName={AZURE_ACCOUNT_NAME};AccountKey={AZURE_ACCOUNT_KEY};EndpointSuffix=core.windows.net"
+    AZURE_SSL = True
+    AZURE_AUTO_SIGN = True  # Generate SAS tokens for private containers
+    AZURE_UPLOAD_MAX_CONN = 2
+    AZURE_TIMEOUT = 20
+    AZURE_MAX_MEMORY_SIZE = 2 * 1024 * 1024  # 2 MB
+    
+    # Configure django-storages for Azure (Django 4.2+ STORAGES setting)
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.azure_storage.AzureStorage",
+            "OPTIONS": {
+                "account_name": AZURE_ACCOUNT_NAME,
+                "account_key": AZURE_ACCOUNT_KEY,
+                "azure_container": AZURE_CONTAINER,
+                "azure_ssl": AZURE_SSL,
+            },
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+    
+    logger.info(f"✅ Azure Blob Storage enabled for media files: {MEDIA_URL}")
+else:
+    # Local file storage (development)
+    MEDIA_URL = "/media/"
+    MEDIA_ROOT = BASE_DIR / "media"
+    
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+    
+    logger.info("📁 Using local file storage for media files")
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -317,54 +375,43 @@ CORS_EXPOSE_HEADERS = [
 ]
 
 # Redis Caching Configuration
+REDIS_URL = env("REDIS_URL")
+
 CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': 'redis://127.0.0.1:6379/1',
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'CONNECTION_POOL_KWARGS': {
-                'retry_on_timeout': True,
-                'socket_keepalive': True,
-                'socket_keepalive_options': {},
-            },
-            'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
-            'IGNORE_EXCEPTIONS': True,  # Graceful fallback if Redis is down
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL,  # Full Redis Cloud URL
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "SSL": False,  # Redis Cloud port 17903 uses plain TCP (SSL available on other ports)
+            "IGNORE_EXCEPTIONS": True,
         },
-        'TIMEOUT': 3600,  # 1 hour default timeout
-        'KEY_PREFIX': 'earth_obs',
-        'VERSION': 1,
+        "TIMEOUT": 3600,
     },
-    'sessions': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': 'redis://127.0.0.1:6379/2',
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'CONNECTION_POOL_KWARGS': {
-                'retry_on_timeout': True,
-            },
+    "sessions": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL,  # Full Redis Cloud URL
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "SSL": False,
         },
-        'TIMEOUT': 86400,  # 24 hours for sessions
-        'KEY_PREFIX': 'earth_obs_session',
+        "TIMEOUT": 86400,
     },
-    'analysis': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': 'redis://127.0.0.1:6379/3',
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'CONNECTION_POOL_KWARGS': {
-                'retry_on_timeout': True,
-            },
+    "analysis": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL,  # Full Redis Cloud URL
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "SSL": False,
         },
-        'TIMEOUT': 7200,  # 2 hours for analysis results
-        'KEY_PREFIX': 'earth_obs_analysis',
-    }
+        "TIMEOUT": 7200,
+    },
 }
 
-# Session configuration with Redis
-SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
-SESSION_CACHE_ALIAS = 'sessions'
-SESSION_COOKIE_AGE = 86400  # 24 hours
+# Sessions
+SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+SESSION_CACHE_ALIAS = "sessions"
+SESSION_COOKIE_AGE = 86400
 SESSION_SAVE_EVERY_REQUEST = False
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 

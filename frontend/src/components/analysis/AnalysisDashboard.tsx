@@ -18,6 +18,7 @@ interface AnalysisData {
   cloudCover?: number;
   enableCloudMasking?: boolean;
   maskingStrictness?: string;
+  polarization?: string;
   cloud_masking_settings?: {
     enabled?: boolean;
     strict?: boolean;
@@ -37,42 +38,12 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
   const [currentData, setCurrentData] = useState<AnalysisData | null>(analysisData || null);
   // Removed unused setLoading variable
 
-  // Debug logging
-  useEffect(() => {
-    console.log('=== AnalysisDashboard Data Debug ===');
-    console.log('Received analysisData:', analysisData);
-    console.log('Backend cloud_masking_settings:', analysisData?.cloud_masking_settings);
-    console.log('First data item cloudMaskingApplied:', analysisData?.tableData?.[0]?.cloudMaskingApplied);
-    console.log('Current enableCloudMasking from props:', analysisData?.enableCloudMasking);
-    console.log('Current maskingStrictness from props:', analysisData?.maskingStrictness);
-    
-    // Calculate what will be passed to InteractiveMapSimple
-    const calculatedCloudMasking = analysisData?.cloud_masking_settings?.enabled ?? 
-                                  analysisData?.enableCloudMasking ?? 
-                                  analysisData?.tableData?.[0]?.cloudMaskingApplied ?? 
-                                  false;
-    const calculatedStrictness = analysisData?.cloud_masking_settings?.strict ? 'true' : 
-                               (analysisData?.maskingStrictness || 'false');
-    
-    console.log('🎯 CALCULATED enableCloudMasking for InteractiveMap:', calculatedCloudMasking);
-    console.log('🎯 CALCULATED maskingStrictness for InteractiveMap:', calculatedStrictness);
-    console.log('TimeSeriesData sample:', currentData?.timeSeriesData?.slice(0, 2));
-    console.log('Analysis type:', currentData?.analysisType);
-  }, [analysisData, currentData]);
-
   useEffect(() => {
     if (analysisData) {
-      console.log('=== AnalysisDashboard Data Debug ===');
-      console.log('Received analysisData:', analysisData);
-      console.log('TimeSeriesData sample:', analysisData.timeSeriesData?.slice(0, 2));
-      console.log('Analysis type:', analysisData.analysisType);
+
       setCurrentData(analysisData);
     }
   }, [analysisData]);
-
-
-
-
 
   if (!currentData) {
     return (
@@ -99,7 +70,9 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
           </div>
           <DownloadButtons 
             data={currentData}
-            onDownload={(type: 'csv' | 'plot') => console.log(`Downloading ${type}`)}
+            onDownload={(type: 'csv' | 'plot') => {
+              // Handle download action if needed
+            }}
           />
         </div>
       </div>
@@ -140,6 +113,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({
           currentData.cloud_masking_settings?.strict ? 'true' : 
           (currentData.maskingStrictness || 'false')
         }
+        polarization={currentData.statistics?.selected_polarization || currentData.polarization || 'VV'}
       />
       
       {/* Data Table */}

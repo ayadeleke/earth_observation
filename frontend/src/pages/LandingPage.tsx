@@ -60,8 +60,7 @@ const LandingPage: React.FC = () => {
   // Debug log current image and preload next image
   useEffect(() => {
     const currentImage = ecologicalImages[currentImageIndex];
-    console.log('Current image:', currentImage.src);
-    
+
     // Preload the current image to ensure smooth transitions
     const img = new Image();
     img.onload = () => {
@@ -81,8 +80,6 @@ const LandingPage: React.FC = () => {
     nextImg.src = ecologicalImages[nextIndex].src;
   }, [currentImageIndex, ecologicalImages]);
 
-
-
   const handleGetStarted = () => {
     if (isAuthenticated) {
       navigate('/dashboard');
@@ -94,8 +91,6 @@ const LandingPage: React.FC = () => {
   const handleTryDemo = () => {
     navigate('/demo');
   };
-
-
 
   return (
     <div 
