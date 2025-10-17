@@ -8,22 +8,16 @@ import {
   Mail, 
   MapPin,
   Phone,
-  Globe,
-  BarChart3,
-  FileText,
-  Shield,
-  HelpCircle,
-  BookOpen
 } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   const productLinks = [
-    { href: '/analysis', label: 'NDVI Analysis', icon: BarChart3 },
-    { href: '/analysis', label: 'LST Analysis', icon: Globe },
-    { href: '/analysis', label: 'SAR Analysis', icon: BarChart3 },
-    { href: '/demo', label: 'Demo', icon: Globe },
+    { href: '/analysis', label: 'NDVI Analysis'},
+    { href: '/analysis', label: 'LST Analysis' },
+    { href: '/analysis', label: 'SAR Analysis' },
+    { href: '/demo', label: 'Demo' },
   ];
 
   const companyLinks = [
@@ -34,13 +28,13 @@ export const Footer: React.FC = () => {
   ];
 
   const resourceLinks = [
-    { href: '/docs', label: 'Documentation', icon: FileText },
-    { href: '/tutorials', label: 'Tutorials', icon: BookOpen },
-    { href: '/support', label: 'Support', icon: HelpCircle },
+    { href: '/docs', label: 'Documentation' },
+    { href: '/tutorials', label: 'Tutorials' },
+    { href: '/support', label: 'Support' },
   ];
 
   const legalLinks = [
-    { href: '/privacy', label: 'Privacy Policy', icon: Shield },
+    { href: '/privacy', label: 'Privacy Policy' },
     { href: '/terms', label: 'Terms of Service' },
     { href: '/cookies', label: 'Cookie Policy' },
     { href: '/compliance', label: 'Compliance' },
@@ -48,7 +42,7 @@ export const Footer: React.FC = () => {
 
   return (
     <footer className="text-white" style={{
-      background: 'linear-gradient(135deg, #212529 0%, #1e3a8a 50%, #3730a3 100%)'
+      background: 'linear-gradient(135deg, #141917 0%, #073317 50%, #064e3b 100%)'
     }}>
       {/* Main Footer Content */}
       <div className="container py-5">
@@ -128,14 +122,12 @@ export const Footer: React.FC = () => {
             <h4 className="h5 fw-semibold mb-3 text-white">Products</h4>
             <ul className="list-unstyled">
               {productLinks.map((link, index) => {
-                const IconComponent = link.icon;
                 return (
                   <li key={`${link.href}-${link.label}-${index}`} className="mb-2">
                     <Link
                       to={link.href}
                       className="d-flex align-items-center text-light text-decoration-none opacity-75"
                     >
-                      {IconComponent && <IconComponent style={{ width: '16px', height: '16px' }} className="text-info me-2" />}
                       <span className="small">{link.label}</span>
                     </Link>
                   </li>
@@ -149,14 +141,12 @@ export const Footer: React.FC = () => {
             <h4 className="h5 fw-semibold mb-3 text-white">Resources</h4>
             <ul className="list-unstyled">
               {resourceLinks.map((link, index) => {
-                const IconComponent = link.icon;
                 return (
                   <li key={`${link.href}-${link.label}-${index}`} className="mb-2">
                     <Link
                       to={link.href}
                       className="d-flex align-items-center text-light text-decoration-none opacity-75"
                     >
-                      {IconComponent && <IconComponent style={{ width: '16px', height: '16px' }} className="text-info me-2" />}
                       <span className="small">{link.label}</span>
                     </Link>
                   </li>
@@ -188,14 +178,12 @@ export const Footer: React.FC = () => {
                 <h4 className="h5 fw-semibold mb-3 text-white">Legal</h4>
                 <ul className="list-unstyled">
                   {legalLinks.slice(0, 2).map((link, index) => {
-                    const IconComponent = link.icon;
                     return (
                       <li key={`${link.href}-${link.label}-${index}`} className="mb-2">
                         <Link
                           to={link.href}
                           className="d-flex align-items-center text-light text-decoration-none opacity-75"
                         >
-                          {IconComponent && <IconComponent style={{ width: '16px', height: '16px' }} className="text-info me-2" />}
                           <span className="small">{link.label}</span>
                         </Link>
                       </li>
@@ -222,7 +210,6 @@ export const Footer: React.FC = () => {
             <div className="col-md-6">
               <div className="d-flex flex-column flex-sm-row align-items-center justify-content-center justify-content-md-end gap-3 small">
                 <div className="d-flex align-items-center text-light opacity-75">
-                  <Globe style={{ width: '16px', height: '16px' }} className="text-info me-2" />
                   <span>Powered by Google Earth Engine</span>
                 </div>
               </div>

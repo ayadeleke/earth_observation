@@ -15,10 +15,12 @@ from .sar_analysis import process_sar_analysis
 logger = logging.getLogger(__name__)
 
 
-def process_comprehensive_analysis(geometry, start_date, end_date, analysis_types=['ndvi', 'lst'], satellite="landsat", cloud_cover=20, use_cloud_masking=False, strict_masking=False):
+def process_comprehensive_analysis(geometry, start_date, end_date, analysis_types=['ndvi', 'lst'], satellite="landsat", cloud_cover=20, use_cloud_masking=False, strict_masking=False, polarization='VV'):
     """Process comprehensive analysis combining multiple indicators"""
     try:
         logger.info(f"Processing comprehensive analysis: {analysis_types} using {satellite}")
+        if 'sar' in analysis_types:
+            logger.info(f"SAR analysis will use polarization: {polarization}")
 
         results = {
             "success": True,
@@ -58,7 +60,7 @@ def process_comprehensive_analysis(geometry, start_date, end_date, analysis_type
 
         if 'sar' in analysis_types:
             try:
-                sar_result = process_sar_analysis(geometry, start_date, end_date)
+                sar_result = process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCENDING", polarization=polarization)
                 component_results['sar'] = sar_result
                 logger.info("SAR component completed successfully")
             except Exception as e:
@@ -107,7 +109,7 @@ def process_comprehensive_analysis(geometry, start_date, end_date, analysis_type
         raise
 
 
-def process_trend_analysis(geometry, start_date, end_date, analysis_type='ndvi', satellite="landsat", cloud_cover=20, time_window='monthly'):
+def process_trend_analysis(geometry, start_date, end_date, analysis_type='ndvi', satellite="landsat", cloud_cover=20, time_window='monthly', use_cloud_masking=False, strict_masking=False):
     """Process trend analysis over time for specified indicator"""
     try:
         logger.info(f"Processing {analysis_type} trend analysis from {start_date} to {end_date}")

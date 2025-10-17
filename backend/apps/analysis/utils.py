@@ -32,14 +32,20 @@ except ImportError as e:
 
 def ensure_media_directories():
     """Ensure media directories exist for file storage"""
-    media_root = settings.MEDIA_ROOT
-    subdirs = ["plots", "csv", "maps"]
+    # When using Azure Storage, directories are virtual and don't need to be created
+    # Only create local directories if MEDIA_ROOT is configured (local storage)
+    if hasattr(settings, 'MEDIA_ROOT') and settings.MEDIA_ROOT:
+        media_root = settings.MEDIA_ROOT
+        subdirs = ["plots", "csv", "maps"]
 
-    for subdir in subdirs:
-        dir_path = os.path.join(media_root, subdir)
-        os.makedirs(dir_path, exist_ok=True)
+        for subdir in subdirs:
+            dir_path = os.path.join(media_root, subdir)
+            os.makedirs(dir_path, exist_ok=True)
 
-    return media_root
+        return media_root
+    
+    # For Azure Storage, return None (directories are virtual)
+    return None
 
 
 def generate_plot_file(data, plot_type, title="Analysis Plot", analysis_type="ndvi"):

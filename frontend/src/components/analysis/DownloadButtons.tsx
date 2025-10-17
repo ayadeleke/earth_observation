@@ -121,13 +121,7 @@ export const DownloadButtons: React.FC<DownloadButtonsProps> = ({
         
         return processedPoint;
       });
-      
-      console.log('=== Plot Download Debug ===');
-      console.log('Original analysis type:', data.analysisType);
-      console.log('Backend analysis type:', backendAnalysisType);
-      console.log('Original time series data:', data.timeSeriesData?.slice(0, 2));
-      console.log('Processed time series data:', processedTimeSeriesData?.slice(0, 2));
-      
+
       const response = await fetch(`${API_BASE_URL}/visualization/generate_time_series_plot/`, {
         method: 'POST',
         headers: {

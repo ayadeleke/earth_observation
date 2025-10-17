@@ -4,7 +4,7 @@ body {
 }
 
 .header-section {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background:  #064e3b;
     color: white;
     padding: 3rem 0 2rem;
     margin-bottom: 2rem;
@@ -67,12 +67,61 @@ body {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+.form-check-input {
+  width: 20px;
+  height: 20px;
+  border-color: #096d2e;
+}
+
+.form-check-input:checked {
+  background-color: #096d2e;
+  border-color: #096d2e;
+}
+
+.form-range {
+  accent-color: #064e3b;
+}
+
+.form-range {
+    accent-color: #064e3b;
+}
+
+.form-range::-webkit-slider-thumb {
+    background-color: #064e3b !important;
+    border-color: #064e3b !important;
+}
+
+.form-range::-moz-range-thumb {
+    background-color: #064e3b !important;
+    border-color: #064e3b !important;
+}
+
+.form-range:focus::-webkit-slider-thumb {
+    background-color: #064e3b !important;
+    border-color: #064e3b !important;
+    box-shadow: 0 0 0 1px #fff, 0 0 0 0.25rem rgba(6, 78, 59, 0.25) !important;
+}
+
+.form-range:focus::-moz-range-thumb {
+    background-color: #064e3b !important;
+    border-color: #064e3b !important;
+    box-shadow: 0 0 0 1px #fff, 0 0 0 0.25rem rgba(6, 78, 59, 0.25) !important;
+}
+
 .result-container {
     margin-top: 2rem;
 }
 
+.text-primary {
+    color: #096d2e !important;
+}
+
+.text-info {
+    color: #ffffff !important;
+}
+
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #0b411f 0%, #064e3b 100%);
     border: none;
     padding: 0.75rem 2rem;
     border-radius: 0.5rem;
@@ -82,6 +131,17 @@ body {
 .btn-primary:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.btn-outline-primary {
+    color: #064e3b;
+    border-color: #064e3b;
+}
+
+.btn-outline-primary:hover {
+    background-color: #064e3b;
+    color: white;
+    border: #064e3b;
 }
 
 .form-label {
@@ -126,4 +186,28 @@ body {
 .upload-area:hover {
     border-color: #667eea !important;
     background-color: #f0f2ff !important;
+}
+
+/* Custom shapefile upload button */
+.btn-shapefile {
+    background-color: transparent;
+    border: 2px solid #064e3b;
+    color: #064e3b;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    transition: all 0.3s ease;
+}
+
+.btn-shapefile:hover {
+    background-color: #064e3b;
+    color: white;
+    border-color: #064e3b;
+}
+
+.btn-shapefile:focus {
+    background-color: #064e3b;
+    color: white;
+    border-color: #064e3b;
+    box-shadow: 0 0 0 0.25rem rgba(6, 78, 59, 0.25);
 }
