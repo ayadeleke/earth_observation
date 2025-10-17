@@ -350,9 +350,10 @@ const AnalysisPage: React.FC = () => {
           requestBody.strict_masking = formData.maskingStrictness === 'strict';
         }
 
-        // Add polarization for SAR analyses
+        // Add polarization and orbit direction for SAR analyses
         if (formData.analysisType === 'sar' || formData.analysisType === 'comprehensive') {
           requestBody.polarization = formData.polarization;
+          requestBody.orbit_direction = formData.orbitDirection;
         }
 
         requestData = JSON.stringify(requestBody);
@@ -457,6 +458,12 @@ const AnalysisPage: React.FC = () => {
           break;
         case 'sar':
           result.backscatter = parseFloat(item.backscatter || item.backscatter_vv || item.vv_backscatter || item.mean_backscatter || item.value || 0);
+          // Preserve both polarization values
+          result.backscatter_vv = parseFloat(item.backscatter_vv || item.vv_backscatter || 0);
+          result.backscatter_vh = parseFloat(item.backscatter_vh || item.vh_backscatter || 0);
+          result.vv_backscatter = parseFloat(item.vv_backscatter || item.backscatter_vv || 0);
+          result.vh_backscatter = parseFloat(item.vh_backscatter || item.backscatter_vh || 0);
+          result.count = parseInt(item.count || item.acquisitions_count || 1);
           break;
         default:
           result.value = parseFloat(item.value || item.ndvi || item.lst || item.backscatter || item.backscatter_vv || 0);
@@ -498,6 +505,17 @@ const AnalysisPage: React.FC = () => {
         transformed.min = parseFloat(stats.min_backscatter || stats.min_vv || stats.min || 0);
         transformed.max = parseFloat(stats.max_backscatter || stats.max_vv || stats.max || 0);
         transformed.std = parseFloat(stats.std_backscatter || stats.std_vv || stats.std || stats.stdDev || 0);
+        // Preserve polarization-specific values for both VV and VH
+        transformed.mean_vv = parseFloat(stats.mean_vv || 0);
+        transformed.min_vv = parseFloat(stats.min_vv || 0);
+        transformed.max_vv = parseFloat(stats.max_vv || 0);
+        transformed.std_vv = parseFloat(stats.std_vv || 0);
+        transformed.mean_vh = parseFloat(stats.mean_vh || 0);
+        transformed.min_vh = parseFloat(stats.min_vh || 0);
+        transformed.max_vh = parseFloat(stats.max_vh || 0);
+        transformed.std_vh = parseFloat(stats.std_vh || 0);
+        // Preserve selected polarization info
+        transformed.selected_polarization = stats.selected_polarization;
         break;
       default:
         transformed.mean = parseFloat(stats.mean || 0);
@@ -852,7 +870,9 @@ const AnalysisPage: React.FC = () => {
                                     lastFormData?.enableCloudMasking ?? false,
                   maskingStrictness: results.cloud_masking_settings?.strict ? 'true' : 
                                    (lastFormData?.maskingStrictness || 'false'),
-                  cloud_masking_settings: results.cloud_masking_settings
+                  cloud_masking_settings: results.cloud_masking_settings,
+                  polarization: results.statistics?.selected_polarization || results.polarization || lastFormData?.polarization || 'VV',
+                  orbitDirection: results.orbit_direction || lastFormData?.orbitDirection || 'DESCENDING'
                 };
                 
                 return (

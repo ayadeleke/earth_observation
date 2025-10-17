@@ -15,6 +15,10 @@ interface TimeSeriesDataPoint {
   ndvi?: number;
   lst?: number;
   backscatter?: number;
+  backscatter_vv?: number;
+  backscatter_vh?: number;
+  vv_backscatter?: number;
+  vh_backscatter?: number;
   count?: number;
 }
 
@@ -23,13 +27,17 @@ interface NDVITimeSeriesProps {
   analysisType?: string;
   loading?: boolean;
   cloudCover?: number;
+  polarization?: string;
+  orbitDirection?: string;
 }
 
 export const NDVITimeSeries: React.FC<NDVITimeSeriesProps> = ({
   data,
   analysisType = 'ndvi',
   loading = false,
-  cloudCover
+  cloudCover,
+  polarization,
+  orbitDirection
 }) => {
 
   if (loading) {
@@ -60,6 +68,15 @@ export const NDVITimeSeries: React.FC<NDVITimeSeriesProps> = ({
   }
 
   const getDataKey = () => {
+    const isSAR = analysisType.toLowerCase() === 'sar' || analysisType.toLowerCase() === 'backscatter';
+    
+    if (isSAR && polarization) {
+      // For SAR, use polarization-specific field
+      const polarizationLower = polarization.toLowerCase();
+      // Try both naming conventions: backscatter_vh and vh_backscatter
+      return `backscatter_${polarizationLower}`;
+    }
+    
     switch (analysisType.toLowerCase()) {
       case 'lst': return 'lst';
       case 'backscatter':
@@ -90,11 +107,27 @@ export const NDVITimeSeries: React.FC<NDVITimeSeriesProps> = ({
   const color = getColor();
   const yAxisLabel = getYAxisLabel();
 
-  // Format data for chart
-  const chartData = data.map(item => ({
-    ...item,
-    date: new Date(item.date).getFullYear().toString()
-  }));
+  // Format data for chart and handle polarization-specific fields
+  const chartData = data.map(item => {
+    const formattedItem: any = {
+      ...item,
+      date: new Date(item.date).getFullYear().toString()
+    };
+    
+    // For SAR with polarization, ensure we have the correct field
+    if ((analysisType.toLowerCase() === 'sar' || analysisType.toLowerCase() === 'backscatter') && polarization) {
+      const polarizationLower = polarization.toLowerCase();
+      const primaryKey = `backscatter_${polarizationLower}`;
+      const altKey = `${polarizationLower}_backscatter`;
+      
+      // Use the appropriate field, with fallback
+      if (!formattedItem[primaryKey] && formattedItem[altKey]) {
+        formattedItem[primaryKey] = formattedItem[altKey];
+      }
+    }
+    
+    return formattedItem;
+  });
 
   // Calculate date range for subtitle
   const dateRange = data.length > 0 
@@ -108,6 +141,22 @@ export const NDVITimeSeries: React.FC<NDVITimeSeriesProps> = ({
       <div className="border-bottom p-3 p-md-4">
         <h2 className="fs-6 fs-md-5 fw-semibold text-dark mb-2">
           {analysisType.toUpperCase()} Time Series (Annual Means)
+          {(analysisType?.toLowerCase() === 'sar' || analysisType?.toLowerCase() === 'backscatter') && (
+            <>
+              {polarization && (
+                <>
+                  <br /> Polarization: <span className="text-primary">{polarization}</span>
+                </>
+              )}
+              {orbitDirection && (
+                <>
+                  {polarization && ' • '}
+                  {!polarization && <br />}
+                  Orbit: <span className="text-primary">{orbitDirection}</span>
+                </>
+              )}
+            </>
+          )}
         </h2>
         <div className="small text-muted lh-sm">
           <div>{dateRange}</div>
@@ -137,8 +186,8 @@ export const NDVITimeSeries: React.FC<NDVITimeSeriesProps> = ({
               label={{ value: yAxisLabel, angle: -90, position: 'insideLeft', style: { fontSize: window.innerWidth < 768 ? '11px' : '12px' } }}
               tick={{ fontSize: window.innerWidth < 768 ? 10 : 12 }}
               domain={(() => {
-                if (!data || data.length === 0) return [-1, 1];
-                const values = data.map(item => item[dataKey]).filter((v): v is number => typeof v === 'number' && !isNaN(v));
+                if (!chartData || chartData.length === 0) return [-1, 1];
+                const values = chartData.map(item => item[dataKey]).filter((v): v is number => typeof v === 'number' && !isNaN(v));
                 if (values.length === 0) return [-1, 1];
                 const min = Math.min(...values);
                 const max = Math.max(...values);
@@ -147,8 +196,8 @@ export const NDVITimeSeries: React.FC<NDVITimeSeriesProps> = ({
                 return [minTick, maxTick];
               })()}
               ticks={(() => {
-                if (!data || data.length === 0) return undefined;
-                const values = data.map(item => item[dataKey]).filter((v): v is number => typeof v === 'number' && !isNaN(v));
+                if (!chartData || chartData.length === 0) return undefined;
+                const values = chartData.map(item => item[dataKey]).filter((v): v is number => typeof v === 'number' && !isNaN(v));
                 if (values.length === 0) return undefined;
                 const min = Math.min(...values);
                 const max = Math.max(...values);

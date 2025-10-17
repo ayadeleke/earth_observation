@@ -12,11 +12,15 @@ interface StatisticsData {
 interface StatisticsProps {
   data?: StatisticsData;
   analysisType?: string;
+  polarization?: string;
+  orbitDirection?: string;
 }
 
 export const Statistics: React.FC<StatisticsProps> = ({
   data,
-  analysisType = 'ndvi'
+  analysisType = 'ndvi',
+  polarization,
+  orbitDirection
 }) => {
   if (!data) {
     return (
@@ -59,28 +63,47 @@ export const Statistics: React.FC<StatisticsProps> = ({
 
   const colorClass = getColor();
 
+  // For SAR analysis, use polarization-specific values
+  const isSAR = analysisType.toLowerCase() === 'sar' || analysisType.toLowerCase() === 'backscatter';
+  let mean, std, min, max;
+  
+  if (isSAR && polarization) {
+    // Use polarization-specific values (e.g., mean_vh, mean_vv)
+    const polarizationLower = polarization.toLowerCase();
+    mean = data[`mean_${polarizationLower}`] ?? data.mean;
+    std = data[`std_${polarizationLower}`] ?? data.std;
+    min = data[`min_${polarizationLower}`] ?? data.min;
+    max = data[`max_${polarizationLower}`] ?? data.max;
+  } else {
+    // Use default values for non-SAR or when polarization not specified
+    mean = data.mean;
+    std = data.std;
+    min = data.min;
+    max = data.max;
+  }
+
   const statisticsItems = [
     {
       label: `Mean ${analysisType.toUpperCase()}`,
-      value: formatValue(data.mean),
+      value: formatValue(mean),
       unit,
       color: colorClass
     },
     {
       label: 'Std Dev',
-      value: formatValue(data.std),
+      value: formatValue(std),
       unit,
       color: 'text-primary'
     },
     {
       label: 'Min Value',
-      value: formatValue(data.min),
+      value: formatValue(min),
       unit,
       color: 'text-warning'
     },
     {
       label: 'Max Value',
-      value: formatValue(data.max),
+      value: formatValue(max),
       unit,
       color: 'text-secondary'
     },
@@ -100,6 +123,22 @@ export const Statistics: React.FC<StatisticsProps> = ({
         </h2>
         <div className="small text-muted mt-1">
           Summary statistics for {analysisType.toUpperCase()} analysis
+          {(analysisType.toLowerCase() === 'sar' || analysisType.toLowerCase() === 'backscatter') && (
+            <>
+              {polarization && (
+                <>
+                  <br /> Polarization: <span className="fw-semibold text-dark">{polarization}</span>
+                </>
+              )}
+              {orbitDirection && (
+                <>
+                  {polarization && ' • '}
+                  {!polarization && <br />}
+                  Orbit: <span className="fw-semibold text-dark">{orbitDirection}</span>
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
       
