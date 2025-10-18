@@ -5,6 +5,7 @@ import AnalysisDashboard from '../components/analysis/AnalysisDashboard';
 import { AnalysisForm } from '../components/analysis/AnalysisForm';
 import authService from '../services/authService';
 import '../styles/AnalysisPage.css';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
 
 const AnalysisPage: React.FC = () => {
   const navigate = useNavigate();
@@ -30,6 +31,9 @@ const AnalysisPage: React.FC = () => {
   const [mapDrawnCoordinates, setMapDrawnCoordinates] = useState<string>('');
   const [showAllAnalyses, setShowAllAnalyses] = useState<boolean>(false);
 
+  const [showConfirmDialog, setShowConfirmDialog] = useState<boolean>(false);
+  const [analysisToDelete, setAnalysisToDelete] = useState<string | null>(null);
+
   // Function to update URL with project name
   const updateURLWithProjectName = useCallback((projectName: string) => {
     const currentSearchParams = new URLSearchParams(window.location.search);
@@ -39,13 +43,11 @@ const AnalysisPage: React.FC = () => {
 
   // Delete analysis function
   const deleteAnalysis = async (analysisId: number, analysisName: string) => {
-    if (!window.confirm(`Are you sure you want to delete the analysis "${analysisName}"? This action cannot be undone.`)) {
-      return;
-    }
-
+    // Remove the window.confirm - now handled by ConfirmDialog
     try {
       const token = authService.getAccessToken();
-      const response = await fetch(`http://localhost:8000/api/v1/analysis/delete/${analysisId}/`, {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+      const response = await fetch(`${apiUrl}/analysis/delete/${analysisId}/`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -436,6 +438,26 @@ const AnalysisPage: React.FC = () => {
     }
   };
 
+  // Confirmation dialog handlers
+  const handleConfirmDelete = async () => {
+    if (analysisToDelete) {
+      const analysisId = parseInt(analysisToDelete);
+      const analysis = projectAnalyses.find(a => a.id === analysisId);
+      const analysisName = analysis 
+        ? `${analysis.analysis_type.toUpperCase()} (${new Date(analysis.created_at).toLocaleDateString()})`
+        : 'Analysis';
+      
+      await deleteAnalysis(analysisId, analysisName);
+    }
+    setShowConfirmDialog(false);
+    setAnalysisToDelete(null);
+  };
+
+  const handleCancelDelete = () => {
+    setShowConfirmDialog(false);
+    setAnalysisToDelete(null);
+  };
+
   // Helper functions for data transformation
   const transformTimeSeriesData = (data: any[], analysisType: string) => {
     if (!Array.isArray(data)) {
@@ -466,7 +488,7 @@ const AnalysisPage: React.FC = () => {
           result.count = parseInt(item.count || item.acquisitions_count || 1);
           break;
         default:
-          result.value = parseFloat(item.value || item.ndvi || item.lst || item.backscatter || item.backscatter_vv || 0);
+          result.value = parseFloat(item.value || item.ndvi || item.lst || item.backscatter || 0);
       }
       
       return result;
@@ -707,7 +729,8 @@ const AnalysisPage: React.FC = () => {
                             className="btn btn-outline-danger btn-sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              deleteAnalysis(analysis.id, `${analysis.analysis_type.toUpperCase()} (${new Date(analysis.created_at).toLocaleDateString()})`);
+                              setAnalysisToDelete(analysis.id.toString());
+                              setShowConfirmDialog(true);
                             }}
                             title="Delete this analysis"
                           >
@@ -896,6 +919,24 @@ const AnalysisPage: React.FC = () => {
           while more recent years combine data from multiple Landsat missions (5, 7, 8, 9) for better coverage.
         </div>
       </div>
+
+      {/* Confirmation Dialog */}
+      <ConfirmDialog
+        show={showConfirmDialog}
+        title="Confirm Delete"
+        message={(() => {
+          const analysis = projectAnalyses.find(a => a.id === parseInt(analysisToDelete || '0'));
+          if (analysis) {
+            return `Are you sure you want to delete the analysis "${analysis.analysis_type.toUpperCase()} (${new Date(analysis.created_at).toLocaleDateString()})"? This action cannot be undone.`;
+          }
+          return "Are you sure you want to delete this analysis? This action cannot be undone.";
+        })()}
+        confirmText="OK"
+        cancelText="Cancel"
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+        variant="success"
+      />
     </div>
   );
 };

@@ -1063,7 +1063,7 @@ const ImageSelector: React.FC = () => {
               </div>
               <div className="card-body p-0">
                 <iframe 
-                  src={`http://localhost:8000${mapUrl}`}
+                  src={`${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}${mapUrl}`}
                   style={{ width: '100%', height: '800px', border: 'none' }}
                   title="Advanced Satellite Analysis Map"
                 />
