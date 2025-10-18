@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { Layout } from './components/layout';
 import LandingPage from './pages/LandingPage';
@@ -18,10 +18,16 @@ import DashboardPage from './pages/DashboardPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import { useSessionMonitor } from './hooks/useSessionMonitor';
+import { SessionExpiredDialog } from './components/common/SessionExpiredDialog';
+import { SessionWarning } from './components/common/SessionWarning';
+import { SESSION_CONFIG } from './config/session.config';
 
 const AppContent: React.FC = () => {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isSessionExpired, timeUntilExpiry, checkSession } = useSessionMonitor(SESSION_CONFIG.CHECK_INTERVAL);
 
   // Pages that don't need the full layout (like landing page)
   const noLayoutPaths = ['/'];
@@ -48,8 +54,37 @@ const AppContent: React.FC = () => {
     };
   };
 
+  const handleLoginAfterExpiry = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const handleExtendSession = () => {
+    // Activity is automatically recorded by the hook
+    // Just trigger a session check to update the UI
+    checkSession();
+    console.log('Session manually extended');
+  };
+
   return (
-    <Layout user={transformUser(user)} onLogout={logout} showFooter={shouldShowFooter}>
+    <>
+      {/* Session Expired Dialog - only show when authenticated */}
+      {user && (
+        <>
+          <SessionExpiredDialog 
+            show={isSessionExpired}
+            onLogin={handleLoginAfterExpiry}
+          />
+
+          {/* Session Warning (5 minutes before expiry) */}
+          <SessionWarning 
+            timeUntilExpiry={timeUntilExpiry}
+            onExtendSession={handleExtendSession}
+          />
+        </>
+      )}
+
+      <Layout user={transformUser(user)} onLogout={logout} showFooter={shouldShowFooter}>
       <Routes>
         <Route path="/demo" element={<DemoPage />} />
         <Route path="/about" element={<AboutPage />} />
@@ -82,6 +117,7 @@ const AppContent: React.FC = () => {
         } />
       </Routes>
     </Layout>
+    </>
   );
 };
 

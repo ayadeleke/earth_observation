@@ -24,7 +24,8 @@ environ.Env.read_env(BASE_DIR / ".env")
 SECRET_KEY = env("SECRET_KEY", default="django-insecure-change-me-in-production")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env("DEBUG", default=True)
+# Default to False for safety - explicitly set DEBUG=True in local .env for development
+DEBUG = env("DEBUG", default=False)
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
@@ -332,11 +333,14 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024 * 1024  # 16MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024 * 1024  # 16MB
 
 # CORS configuration - properly handle credentials
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",   # React development server
-    "http://127.0.0.1:3000",   # Alternative localhost
-    "https://localhost:3000",  # HTTPS version if used
-]
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=[
+        "http://localhost:3000",   # React development server
+        "http://127.0.0.1:3000",   # Alternative localhost
+        "https://localhost:3000",  # HTTPS version if used
+    ]
+)
 
 # Important: Never use CORS_ALLOW_ALL_ORIGINS=True when using credentials
 CORS_ALLOW_ALL_ORIGINS = False
