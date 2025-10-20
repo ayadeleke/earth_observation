@@ -28,8 +28,16 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
   const [mapUrl, setMapUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isCreatingRef = React.useRef(false); // Prevent concurrent requests
 
   const createMap = useCallback(async () => {
+    // Prevent multiple concurrent requests
+    if (isCreatingRef.current) {
+      console.log('Map creation already in progress, skipping duplicate request');
+      return;
+    }
+
+    isCreatingRef.current = true;
     setLoading(true);
     setError(null);
     
@@ -94,14 +102,36 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
       setError(error instanceof Error ? error.message : 'Failed to create interactive map');
     } finally {
       setLoading(false);
+      isCreatingRef.current = false; // Allow new requests after completion
     }
   }, [geometry, startDate, endDate, satellite, analysisType, cloudCover, enableCloudMasking, maskingStrictness, polarization]);
 
+  // Track if map has been created for current parameters to prevent duplicate requests
+  const paramsRef = React.useRef<string>('');
+
   useEffect(() => {
     if (analysisData && geometry && startDate && endDate) {
-      createMap();
+      // Create a unique key for the current parameters
+      const currentParams = JSON.stringify({
+        geometry: typeof geometry === 'string' ? geometry : JSON.stringify(geometry),
+        startDate,
+        endDate,
+        satellite,
+        analysisType,
+        cloudCover,
+        enableCloudMasking,
+        maskingStrictness,
+        polarization
+      });
+
+      // Only create map if parameters have actually changed
+      if (currentParams !== paramsRef.current) {
+        paramsRef.current = currentParams;
+        createMap();
+      }
     }
-  }, [analysisData, geometry, startDate, endDate, createMap]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysisData, geometry, startDate, endDate, satellite, analysisType, cloudCover, enableCloudMasking, maskingStrictness, polarization]);
 
   if (loading) {
     return (

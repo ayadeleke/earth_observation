@@ -7,6 +7,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet-draw';
+import { useAuth } from '../contexts/AuthContext';
 
 interface MockFormData {
   coordinates: string;
@@ -50,6 +51,7 @@ interface MockStatistics {
 
 const DemoPage: React.FC = () => {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   
   const [formData, setFormData] = useState<MockFormData>({
     coordinates: '',
@@ -75,6 +77,15 @@ const DemoPage: React.FC = () => {
   const [uploadedShapefile, setUploadedShapefile] = useState<File | null>(null);
   const mapRef = useRef<any>(null);
   const featureGroupRef = useRef<any>(null);
+
+  // Handle Get Full Access / Upgrade button click
+  const handleUpgradeClick = () => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    } else {
+      navigate('/register');
+    }
+  };
 
   // Custom Map Component with Drawing Controls
   const MapWithDrawingControls: React.FC = () => {
@@ -656,9 +667,11 @@ const DemoPage: React.FC = () => {
                 </button>
                 <button 
                   className="btn btn-outline-light" 
-                  onClick={() => navigate('/register')}
+                  onClick={handleUpgradeClick}
                 >
-                  <i className="fas fa-user-plus"></i> <span className="d-none d-sm-inline">Get Full Access</span><span className="d-sm-none">Access</span>
+                  <i className={isAuthenticated ? "fas fa-tachometer-alt" : "fas fa-user-plus"}></i> 
+                  <span className="d-none d-sm-inline">{isAuthenticated ? 'Go to Dashboard' : 'Get Full Access'}</span>
+                  <span className="d-sm-none">{isAuthenticated ? 'Dashboard' : 'Access'}</span>
                 </button>
               </div>
             </div>
@@ -1185,10 +1198,10 @@ const DemoPage: React.FC = () => {
                     </ul>
                     <button 
                       className="btn btn-success btn-sm mt-2"
-                      onClick={() => navigate('/register')}
+                      onClick={handleUpgradeClick}
                     >
-                      <i className="fas fa-arrow-right me-1"></i>
-                      Upgrade Now
+                      <i className={isAuthenticated ? "fas fa-tachometer-alt me-1" : "fas fa-arrow-right me-1"}></i>
+                      {isAuthenticated ? 'Go to Dashboard' : 'Upgrade Now'}
                     </button>
                   </div>
                 </div>

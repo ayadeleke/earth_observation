@@ -40,16 +40,56 @@ def initialize_earth_engine():
         service_account_key_path = getattr(
             settings, "EARTH_ENGINE_SERVICE_ACCOUNT_KEY", None
         )
+        service_account_key_base64 = getattr(
+            settings, "EARTH_ENGINE_SERVICE_ACCOUNT_KEY_BASE64", None
+        )
 
-        if use_service_account and service_account_key_path:
-            # Construct full path to service account key
-            if not os.path.isabs(service_account_key_path):
-                base_dir = Path(settings.BASE_DIR)
-                key_file_path = base_dir / service_account_key_path
-            else:
-                key_file_path = Path(service_account_key_path)
+        if use_service_account and (service_account_key_path or service_account_key_base64):
+            # Check if service_account_key_path is JSON content or a file path
+            import json
+            import base64
+            
+            key_file_path = None
+            key_data = None
+            
+            # Try base64-encoded JSON first (most reliable for Azure)
+            if service_account_key_base64:
+                try:
+                    json_bytes = base64.b64decode(service_account_key_base64)
+                    key_data = json.loads(json_bytes.decode('utf-8'))
+                    # Write JSON to temporary file
+                    temp_key_file = Path(settings.BASE_DIR) / "auth" / "service_account.json"
+                    temp_key_file.parent.mkdir(parents=True, exist_ok=True)
+                    with open(temp_key_file, 'w') as f:
+                        json.dump(key_data, f)
+                    key_file_path = temp_key_file
+                    logger.info(f"[SUCCESS] Created service account key file from base64 environment variable at {temp_key_file}")
+                except Exception as e:
+                    logger.warning(f"[WARNING] Failed to decode base64 service account key: {e}")
+            
+            # Try to parse as JSON (environment variable contains JSON content)
+            if not key_file_path and isinstance(service_account_key_path, str) and service_account_key_path.strip().startswith('{'):
+                try:
+                    key_data = json.loads(service_account_key_path)
+                    # Write JSON to temporary file
+                    temp_key_file = Path(settings.BASE_DIR) / "auth" / "service_account.json"
+                    temp_key_file.parent.mkdir(parents=True, exist_ok=True)
+                    with open(temp_key_file, 'w') as f:
+                        json.dump(key_data, f)
+                    key_file_path = temp_key_file
+                    logger.info(f"[SUCCESS] Created service account key file from JSON environment variable at {temp_key_file}")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"[WARNING] Failed to parse service account key as JSON: {e}")
+            
+            # Treat as file path
+            if not key_file_path and isinstance(service_account_key_path, str):
+                if not os.path.isabs(service_account_key_path):
+                    base_dir = Path(settings.BASE_DIR)
+                    key_file_path = base_dir / service_account_key_path
+                else:
+                    key_file_path = Path(service_account_key_path)
 
-            if key_file_path.exists():
+            if key_file_path and key_file_path.exists():
                 # Initialize with service account credentials
                 credentials = ee.ServiceAccountCredentials(
                     email=None,  # Will be read from the key file
