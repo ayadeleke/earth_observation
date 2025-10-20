@@ -498,38 +498,21 @@ def get_image_metadata(request):
             end_year = int(end_date.split("-")[0])
             collections = []
 
-            # Initial cloud cover threshold
-            initial_cloud_cover = float(cloud_cover)
-            collections = []
+            # Use EXACT cloud cover threshold specified by user (no relaxation)
+            cloud_cover_threshold = float(cloud_cover)
+            logger.info(f"Using user-specified cloud cover threshold: {cloud_cover_threshold}%")
 
-            # Helper function to create collection with relaxed cloud cover if needed
+            # Helper function to create collection with user's exact parameters
             def create_collection(dataset_id, start_year_coll, end_year_coll, collection_name):
-                nonlocal cloud_cover
-                # First try with original cloud cover
+                # Use EXACT user-specified cloud cover (no automatic relaxation)
                 try:
                     collection = (ee.ImageCollection(dataset_id)
                                   .filterDate(start_date, end_date)
                                   .filterBounds(geometry)
-                                  .filter(ee.Filter.lt("CLOUD_COVER", float(cloud_cover))))
+                                  .filter(ee.Filter.lt("CLOUD_COVER", cloud_cover_threshold)))
 
                     size = collection.size().getInfo()
-                    if size == 0:
-                        # Try with relaxed cloud cover
-                        relaxed_cloud_cover = min(float(cloud_cover) * 2, 100)
-                        logger.info(f"No {collection_name} images found with {cloud_cover}% cloud cover, trying {relaxed_cloud_cover}%")
-
-                        collection = (ee.ImageCollection(dataset_id)
-                                      .filterDate(start_date, end_date)
-                                      .filterBounds(geometry)
-                                      .filter(ee.Filter.lt("CLOUD_COVER", relaxed_cloud_cover)))
-
-                        size = collection.size().getInfo()
-                        if size > 0:
-                            cloud_cover = relaxed_cloud_cover
-                            logger.info(f"Found {size} {collection_name} images with relaxed cloud cover {relaxed_cloud_cover}%")
-                    else:
-                        logger.info(f"Found {size} {collection_name} images with {cloud_cover}% cloud cover")
-
+                    logger.info(f"Found {size} {collection_name} images with {cloud_cover_threshold}% cloud cover")
                     return collection
                 except Exception as e:
                     logger.error(f"Error creating collection for {collection_name}: {e}")
@@ -588,13 +571,10 @@ def get_image_metadata(request):
                         collections.append(l5)
                         logger.info(f"Added Landsat 5 collection for years {start_year}-{l5_end}")
 
-            if cloud_cover > initial_cloud_cover:
-                logger.info(f"Using relaxed cloud cover threshold: {cloud_cover}% (original was {initial_cloud_cover}%)")
-
             if not collections:
                 return Response({
                     "success": False,
-                    "error": f"No Landsat collections available for the specified date range: {start_date} to {end_date}"
+                    "error": f"No Landsat collections available for the specified date range: {start_date} to {end_date} with {cloud_cover_threshold}% cloud cover. Try increasing cloud cover threshold."
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             # Merge collections

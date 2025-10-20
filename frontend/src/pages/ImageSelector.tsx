@@ -37,6 +37,8 @@ interface FormData {
   coordinates: string;
   inputMethod: 'map' | 'text' | 'shapefile';
   cloudMaskingLevel: string;
+  polarization: string;
+  orbitDirection: string;
 }
 
 const ImageSelector: React.FC = () => {
@@ -51,6 +53,7 @@ const ImageSelector: React.FC = () => {
   const [mapUrl, setMapUrl] = useState<string | null>(null);
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const [showAllImages, setShowAllImages] = useState<boolean>(false);
+  const [imageStatistics, setImageStatistics] = useState<any[]>([]);
 
   // Form state
   const [formData, setFormData] = useState<FormData>({
@@ -61,7 +64,9 @@ const ImageSelector: React.FC = () => {
     cloudCover: 20,
     coordinates: 'POLYGON((-74.0059 40.7128, -74.0059 40.7628, -73.9559 40.7628, -73.9559 40.7128, -74.0059 40.7128))',
     inputMethod: 'map',
-    cloudMaskingLevel: 'disabled'
+    cloudMaskingLevel: 'disabled',
+    polarization: 'VV',
+    orbitDirection: 'BOTH'
   });
 
   // Initialize component
@@ -337,6 +342,13 @@ const ImageSelector: React.FC = () => {
         formDataObj.append('cloud_cover', formData.cloudCover.toString());
         formDataObj.append('date_range_type', 'dates');
         formDataObj.append('cloud_masking_level', formData.cloudMaskingLevel);
+        
+        // Add SAR-specific parameters if Sentinel-1
+        if (formData.satellite === 'sentinel1') {
+          formDataObj.append('polarization', formData.polarization);
+          formDataObj.append('orbit_direction', formData.orbitDirection);
+        }
+        
         formDataObj.append('shapefile', shapefile);
         
         requestOptions = {
@@ -345,7 +357,7 @@ const ImageSelector: React.FC = () => {
         };
       } else {
         // Handle JSON data
-        const jsonData = {
+        const jsonData: any = {
           project_id: 'ee-ayotundenew',
           satellite: formData.satellite,
           analysis_type: formData.analysisType,
@@ -357,6 +369,12 @@ const ImageSelector: React.FC = () => {
           cloud_masking_level: formData.cloudMaskingLevel
         };
         
+        // Add SAR-specific parameters if Sentinel-1
+        if (formData.satellite === 'sentinel1') {
+          jsonData.polarization = formData.polarization;
+          jsonData.orbit_direction = formData.orbitDirection;
+        }
+        
         requestOptions = {
           method: 'POST',
           headers: {
@@ -366,7 +384,8 @@ const ImageSelector: React.FC = () => {
         };
       }
 
-      const response = await fetch('/api/v1/analysis/get_image_metadata/', requestOptions);
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+      const response = await fetch(`${apiUrl}/analysis/get_image_metadata/`, requestOptions);
       const data = await response.json();
 
       if (data.success) {
@@ -398,8 +417,8 @@ const ImageSelector: React.FC = () => {
       if (prev.includes(index)) {
         return prev.filter(i => i !== index);
       } else {
-        if (prev.length >= 5) {
-          alert('Maximum 5 images can be selected at once');
+        if (prev.length >= 10) {
+          alert('Maximum 10 images can be selected at once');
           return prev;
         }
         return [...prev, index];
@@ -431,6 +450,9 @@ const ImageSelector: React.FC = () => {
       
       if (formData.inputMethod === 'shapefile' && shapefile) {
         // Handle shapefile upload with clipping
+        // OPTIMIZATION: Send image IDs instead of indices to avoid backend re-filtering
+        const selectedImageIds = selectedIndices.map(idx => availableImages[idx]?.id).filter(Boolean);
+        
         const formDataObj = new FormData();
         formDataObj.append('project_id', 'ee-ayotundenew');
         formDataObj.append('satellite', formData.satellite);
@@ -440,9 +462,16 @@ const ImageSelector: React.FC = () => {
         formDataObj.append('cloud_cover', formData.cloudCover.toString());
         formDataObj.append('coordinates', formData.coordinates);
         formDataObj.append('date_range_type', 'dates');
-        formDataObj.append('selected_indices', JSON.stringify(selectedIndices));
+        formDataObj.append('selected_indices', JSON.stringify(selectedImageIds.length > 0 ? selectedImageIds : selectedIndices));
         formDataObj.append('clip_to_aoi', 'true');
         formDataObj.append('cloud_masking_level', formData.cloudMaskingLevel);
+        
+        // Add SAR-specific parameters if Sentinel-1
+        if (formData.satellite === 'sentinel1') {
+          formDataObj.append('polarization', formData.polarization);
+          formDataObj.append('orbit_direction', formData.orbitDirection);
+        }
+        
         formDataObj.append('shapefile', shapefile);
         
         requestOptions = {
@@ -451,7 +480,10 @@ const ImageSelector: React.FC = () => {
         };
       } else {
         // Handle JSON data
-        const jsonData = {
+        // OPTIMIZATION: Send image IDs instead of indices to avoid backend re-filtering
+        const selectedImageIds = selectedIndices.map(idx => availableImages[idx]?.id).filter(Boolean);
+        
+        const jsonData: any = {
           project_id: 'ee-ayotundenew',
           satellite: formData.satellite,
           analysis_type: formData.analysisType,
@@ -460,10 +492,16 @@ const ImageSelector: React.FC = () => {
           cloud_cover: formData.cloudCover,
           coordinates: formData.coordinates,
           date_range_type: 'dates',
-          selected_indices: selectedIndices,
+          selected_indices: selectedImageIds.length > 0 ? selectedImageIds : selectedIndices, // Use IDs if available, fallback to indices
           clip_to_aoi: false,
           cloud_masking_level: formData.cloudMaskingLevel
         };
+        
+        // Add SAR-specific parameters if Sentinel-1
+        if (formData.satellite === 'sentinel1') {
+          jsonData.polarization = formData.polarization;
+          jsonData.orbit_direction = formData.orbitDirection;
+        }
         
         requestOptions = {
           method: 'POST',
@@ -474,11 +512,13 @@ const ImageSelector: React.FC = () => {
         };
       }
 
-      const response = await fetch('/api/v1/visualization/create_custom_map/', requestOptions);
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+      const response = await fetch(`${apiUrl}/visualization/create_custom_map/`, requestOptions);
       const data = await response.json();
 
       if (data.success) {
         setMapUrl(data.map_url);
+        setImageStatistics(data.statistics || []);
       } else {
         setError(data.error || 'Failed to create custom map');
       }
@@ -663,7 +703,6 @@ const ImageSelector: React.FC = () => {
                       <option value="landsat">Landsat (30m, NDVI + LST)</option>
                       <option value="sentinel2">Sentinel-2 (10m, NDVI only)</option>
                       <option value="sentinel1">Sentinel-1 SAR</option>
-                      <option value="modis">MODIS</option>
                     </select>
                   </div>
                   <div className="col-md-6">
@@ -833,6 +872,60 @@ const ImageSelector: React.FC = () => {
                     </div>
                   </div>
                 )}
+
+                {/* SAR Options (for Sentinel-1) */}
+                {formData.satellite === 'sentinel1' && (
+                  <div className="mb-4">
+                    <div className="row">
+                      <div className="col-md-6">
+                        <label className="form-label">
+                          Polarization *
+                        </label>
+                        
+                        <select 
+                          className="form-select" 
+                          name="polarization"
+                          value={formData.polarization}
+                          onChange={handleInputChange}
+                          required
+                        >
+                          <option value="VV">VV (Vertical-Vertical)</option>
+                          <option value="VH">VH (Vertical-Horizontal)</option>
+                          <option value="HH">HH (Horizontal-Horizontal)</option>
+                          <option value="HV">HV (Horizontal-Vertical)</option>
+                        </select>
+                        
+                        <div className="form-text">
+                          <strong>VV:</strong> Best for water, urban areas, and rough surfaces<br/>
+                          <strong>VH:</strong> Best for vegetation and crop monitoring
+                        </div>
+                      </div>
+                      
+                      <div className="col-md-6">
+                        <label className="form-label">
+                          Orbit Direction *
+                        </label>
+                        
+                        <select 
+                          className="form-select" 
+                          name="orbitDirection"
+                          value={formData.orbitDirection}
+                          onChange={handleInputChange}
+                          required
+                        >
+                          <option value="BOTH">Both (Ascending + Descending)</option>
+                          <option value="ASCENDING">Ascending only</option>
+                          <option value="DESCENDING">Descending only</option>
+                        </select>
+                        
+                        <div className="form-text">
+                          <strong>Ascending:</strong> Satellite moving south to north<br/>
+                          <strong>Descending:</strong> Satellite moving north to south
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 
                 <div className="mt-3">
                   <button 
@@ -860,7 +953,7 @@ const ImageSelector: React.FC = () => {
               <div 
                 id="map" 
                 style={{ 
-                  height: '450px', 
+                  height: '470px', 
                   width: '100%', 
                   borderRadius: '1rem', 
                   overflow: 'hidden', 
@@ -927,17 +1020,19 @@ const ImageSelector: React.FC = () => {
               </div>
               <div className="card-body">
                 <div className="row">
-                  {(showAllImages ? availableImages : availableImages.slice(0, 12)).map((image, index) => {
-                    const isRecommended = recommendedIndices.includes(index);
-                    const isSelected = selectedIndices.includes(index);
+                  {(showAllImages ? availableImages : availableImages.slice(0, 12)).map((image, localIndex) => {
+                    // Use the actual index from availableImages, not the local map index
+                    const actualIndex = image.index;
+                    const isRecommended = recommendedIndices.includes(actualIndex);
+                    const isSelected = selectedIndices.includes(actualIndex);
                     const cloudCoverClass = image.cloud_cover < 10 ? 'success' : 
                                           image.cloud_cover < 30 ? 'warning' : 'danger';
                     
                     return (
-                      <div key={index} className="col-lg-4 col-md-6">
+                      <div key={actualIndex} className="col-lg-4 col-md-6">
                         <div 
                           className={`image-card ${isRecommended ? 'recommended' : ''} ${isSelected ? 'selected' : ''}`}
-                          onClick={() => toggleImageSelection(index)}
+                          onClick={() => toggleImageSelection(actualIndex)}
                         >
                           <div className="d-flex justify-content-between align-items-start mb-2">
                             <h6 className="mb-0">
@@ -965,7 +1060,7 @@ const ImageSelector: React.FC = () => {
                               className="form-check-input" 
                               type="checkbox" 
                               checked={isSelected}
-                              onChange={() => toggleImageSelection(index)}
+                              onChange={() => toggleImageSelection(actualIndex)}
                             />
                             <label className="form-check-label">
                               Select for analysis
@@ -1063,7 +1158,7 @@ const ImageSelector: React.FC = () => {
               </div>
               <div className="card-body p-0">
                 <iframe 
-                  src={`${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}${mapUrl}`}
+                  src={mapUrl.startsWith('http://') || mapUrl.startsWith('https://') ? mapUrl : `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}${mapUrl.startsWith('/') ? mapUrl : `/${mapUrl}`}`}
                   style={{ width: '100%', height: '800px', border: 'none' }}
                   title="Advanced Satellite Analysis Map"
                 />
@@ -1072,6 +1167,68 @@ const ImageSelector: React.FC = () => {
                 <small className="text-muted fst-italic">
                   Use the layer control to toggle between different visualizations and time periods.
                 </small>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Statistics Table */}
+      {imageStatistics.length > 0 && (
+        <div className="row mt-4 mb-4">
+          <div className="col-12">
+            <div className="card">
+              <div className="card-header">
+                <h5>
+                  <i className="fas fa-table me-2"></i>
+                  Analysis Statistics for Selected Images
+                </h5>
+              </div>
+              <div className="card-body">
+                <div className="table-responsive">
+                  <table className="table table-striped table-hover">
+                    <thead className="table-dark">
+                      <tr>
+                        <th>#</th>
+                        <th>Date</th>
+                        <th>Satellite</th>
+                        <th>{formData.analysisType.toUpperCase()} Value {imageStatistics[0]?.unit}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {imageStatistics.map((stat, idx) => (
+                        <tr key={idx}>
+                          <td>{idx + 1}</td>
+                          <td>
+                            <strong>{stat.date}</strong>
+                          </td>
+                          <td>
+                            <strong>
+                              {stat.satellite_name}
+                            </strong>
+                          </td>
+                          <td>
+                            {stat.value !== null ? (
+                              <span className="text-dark fw-bold">
+                                {stat.value} {stat.unit}
+                              </span>
+                            ) : (
+                              <span className="text-muted">N/A</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-3">
+                  <small className="text-muted fst-italic">
+                    <strong>Analysis Type:</strong> {formData.analysisType.toUpperCase()}
+                    {formData.analysisType === 'ndvi' && ' (Normalized Difference Vegetation Index: -1 to 1, higher values indicate healthier vegetation)'}
+                    {formData.analysisType === 'lst' && ' (Land Surface Temperature in Celsius)'}
+                    {formData.analysisType === 'sar' && ' (SAR Backscatter in decibels)'}
+                  </small>
+                </div>
               </div>
             </div>
           </div>

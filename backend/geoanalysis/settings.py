@@ -27,7 +27,7 @@ SECRET_KEY = env("SECRET_KEY", default="django-insecure-change-me-in-production"
 # Default to False for safety - explicitly set DEBUG=True in local .env for development
 DEBUG = env("DEBUG", default=False)
 
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "169.254.131.4"])
 
 # Application definition
 DJANGO_APPS = [
@@ -68,7 +68,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
-    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # "django.middleware.clickjacking.XFrameOptionsMiddleware",  # DISABLED: Allow iframe embedding for maps
 ]
 
 ROOT_URLCONF = "geoanalysis.urls"
@@ -168,13 +168,16 @@ if USE_AZURE_STORAGE:
     AZURE_ACCOUNT_NAME = env("AZURE_ACCOUNT_NAME")
     AZURE_ACCOUNT_KEY = env("AZURE_ACCOUNT_KEY")
     AZURE_CONTAINER = env("AZURE_CONTAINER", default="media")
+    AZURE_STATIC_CONTAINER = env("AZURE_STATIC_CONTAINER", default="static")
     AZURE_CUSTOM_DOMAIN = env("AZURE_CUSTOM_DOMAIN", default="").strip()
     
     # Media files will be stored in Azure Blob Storage
     if AZURE_CUSTOM_DOMAIN:  # Empty string evaluates to False
         MEDIA_URL = f"https://{AZURE_CUSTOM_DOMAIN}/"
+        STATIC_URL = f"https://{AZURE_CUSTOM_DOMAIN}/static/"
     else:
         MEDIA_URL = f"https://{AZURE_ACCOUNT_NAME}.blob.core.windows.net/{AZURE_CONTAINER}/"
+        STATIC_URL = f"https://{AZURE_ACCOUNT_NAME}.blob.core.windows.net/{AZURE_STATIC_CONTAINER}/"
     
     # Azure Storage connection settings
     AZURE_CONNECTION_STRING = f"DefaultEndpointsProtocol=https;AccountName={AZURE_ACCOUNT_NAME};AccountKey={AZURE_ACCOUNT_KEY};EndpointSuffix=core.windows.net"
@@ -196,11 +199,18 @@ if USE_AZURE_STORAGE:
             },
         },
         "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+            "BACKEND": "storages.backends.azure_storage.AzureStorage",
+            "OPTIONS": {
+                "account_name": AZURE_ACCOUNT_NAME,
+                "account_key": AZURE_ACCOUNT_KEY,
+                "azure_container": AZURE_STATIC_CONTAINER,
+                "azure_ssl": AZURE_SSL,
+            },
         },
     }
     
     logger.info(f"✅ Azure Blob Storage enabled for media files: {MEDIA_URL}")
+    logger.info(f"✅ Azure Blob Storage enabled for static files: {STATIC_URL}")
 else:
     # Local file storage (development)
     MEDIA_URL = "/media/"
@@ -322,6 +332,7 @@ SPECTACULAR_SETTINGS = {
 
 # Earth Engine Configuration
 EARTH_ENGINE_SERVICE_ACCOUNT_KEY = env("EARTH_ENGINE_SERVICE_ACCOUNT_KEY", default=None)
+EARTH_ENGINE_SERVICE_ACCOUNT_KEY_BASE64 = env("EARTH_ENGINE_SERVICE_ACCOUNT_KEY_BASE64", default=None)
 EARTH_ENGINE_PROJECT = env("EARTH_ENGINE_PROJECT", default="ee-ayotundenew")
 EARTH_ENGINE_USE_SERVICE_ACCOUNT = env(
     "EARTH_ENGINE_USE_SERVICE_ACCOUNT", default=False, cast=bool
@@ -379,7 +390,7 @@ CORS_EXPOSE_HEADERS = [
 ]
 
 # Redis Caching Configuration
-REDIS_URL = env("REDIS_URL")
+REDIS_URL = env("REDIS_URL", default="redis://localhost:6379")
 
 CACHES = {
     "default": {
@@ -425,6 +436,11 @@ CACHE_MIDDLEWARE_SECONDS = 300  # 5 minutes
 CACHE_MIDDLEWARE_KEY_PREFIX = 'earth_obs_page'
 
 # Logging
+# Use different log levels based on environment
+# Development: INFO level shows all details
+# Production: WARNING level only shows warnings and errors
+LOG_LEVEL = env("LOG_LEVEL", default="WARNING" if not DEBUG else "INFO")
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -433,34 +449,49 @@ LOGGING = {
             "format": "{levelname} {asctime} {module} {message}",
             "style": "{",
         },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
     },
     "handlers": {
         "file": {
-            "level": "INFO",
+            "level": LOG_LEVEL,
             "class": "logging.FileHandler",
             "filename": BASE_DIR / "logs" / "django.log",
             "formatter": "verbose",
             "encoding": "utf-8",
         },
         "console": {
-            "level": "INFO",
+            "level": LOG_LEVEL,
             "class": "logging.StreamHandler",
-            "formatter": "verbose",
+            "formatter": "simple" if not DEBUG else "verbose",
         },
     },
     "root": {
         "handlers": ["console", "file"],
-        "level": "INFO",
+        "level": LOG_LEVEL,
     },
     "loggers": {
         "django": {
             "handlers": ["console", "file"],
-            "level": "INFO",
+            "level": "WARNING" if not DEBUG else "INFO",  # Reduce Django's verbosity in production
             "propagate": False,
         },
         "apps": {
             "handlers": ["console", "file"],
-            "level": "INFO",
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        # Silence specific noisy loggers in production
+        "django.server": {
+            "handlers": ["console"],
+            "level": "ERROR" if not DEBUG else "INFO",
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console", "file"],
+            "level": "ERROR",  # Only log request errors
             "propagate": False,
         },
     },

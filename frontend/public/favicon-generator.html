@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Favicon Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .preview {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            margin: 10px;
+        }
+        button {
+            background: #0ea5e9;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0284c7;
+        }
+        .instructions {
+            background: #fff3cd;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+        }
+        h1 {
+            color: #0ea5e9;
+        }
+    </style>
+</head>
+<body>
+    <h1>🌍 Earth Observation Favicon Generator</h1>
+    
+    <div class="preview">
+        <h2>Preview</h2>
+        <canvas id="favicon16" width="16" height="16"></canvas>
+        <canvas id="favicon32" width="32" height="32"></canvas>
+        <canvas id="favicon64" width="64" height="64"></canvas>
+        <canvas id="favicon192" width="192" height="192"></canvas>
+        <canvas id="favicon512" width="512" height="512"></canvas>
+    </div>
+
+    <div class="preview">
+        <h2>Download</h2>
+        <button onclick="downloadFavicon(16)">Download 16x16</button>
+        <button onclick="downloadFavicon(32)">Download 32x32</button>
+        <button onclick="downloadFavicon(64)">Download 64x64</button>
+        <button onclick="downloadFavicon(192)">Download 192x192 (Android)</button>
+        <button onclick="downloadFavicon(512)">Download 512x512 (PWA)</button>
+    </div>
+
+    <div class="instructions">
+        <h3>📋 Instructions</h3>
+        <ol>
+            <li>Click the download buttons above to get each size</li>
+            <li>Rename the 32x32 file to <code>favicon.ico</code></li>
+            <li>Rename the 192x192 file to <code>logo192.png</code></li>
+            <li>Rename the 512x512 file to <code>logo512.png</code></li>
+            <li>Place all files in <code>frontend/public/</code> directory</li>
+            <li>Rebuild and redeploy the frontend</li>
+        </ol>
+        <p><strong>Note:</strong> For best results, use an online favicon generator like <a href="https://realfavicongenerator.net/" target="_blank">RealFaviconGenerator</a> with the favicon.svg file.</p>
+    </div>
+
+    <script>
+        // Draw favicon on all canvases
+        function drawFavicon(canvas) {
+            const ctx = canvas.getContext('2d');
+            const size = canvas.width;
+            const center = size / 2;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, size, size);
+            
+            // Background circle
+            ctx.fillStyle = '#0ea5e9';
+            ctx.beginPath();
+            ctx.arc(center, center, center * 0.94, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Earth globe
+            ctx.fillStyle = '#1e40af';
+            ctx.beginPath();
+            ctx.arc(center, center, center * 0.625, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Continents (simplified green shapes)
+            ctx.fillStyle = '#10b981';
+            
+            // Continent 1
+            ctx.beginPath();
+            ctx.arc(center - size * 0.15, center - size * 0.15, size * 0.15, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Continent 2
+            ctx.beginPath();
+            ctx.arc(center + size * 0.12, center + size * 0.08, size * 0.12, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Orbit line
+            ctx.strokeStyle = '#fbbf24';
+            ctx.lineWidth = size * 0.015;
+            ctx.setLineDash([size * 0.05, size * 0.05]);
+            ctx.beginPath();
+            ctx.arc(center, center, center * 0.81, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Satellite
+            const satX = center + center * 0.7;
+            const satY = center - center * 0.5;
+            const satSize = size * 0.08;
+            
+            // Satellite body
+            ctx.fillStyle = '#fbbf24';
+            ctx.fillRect(satX - satSize/2, satY - satSize/3, satSize, satSize * 0.67);
+            
+            // Solar panels
+            ctx.fillStyle = '#fcd34d';
+            ctx.fillRect(satX - satSize * 1.2, satY - satSize/4, satSize * 0.6, satSize * 0.5);
+            ctx.fillRect(satX + satSize * 0.6, satY - satSize/4, satSize * 0.6, satSize * 0.5);
+        }
+
+        // Draw on all canvases
+        ['favicon16', 'favicon32', 'favicon64', 'favicon192', 'favicon512'].forEach(id => {
+            const canvas = document.getElementById(id);
+            drawFavicon(canvas);
+        });
+
+        // Download function
+        function downloadFavicon(size) {
+            const canvas = document.getElementById('favicon' + size);
+            const link = document.createElement('a');
+            link.download = `favicon-${size}x${size}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+    </script>
+</body>
+</html>
