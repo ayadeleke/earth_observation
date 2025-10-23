@@ -5,7 +5,9 @@ This file acts as the main entry point for all analysis endpoints with caching s
 
 # Import caching utilities
 from .cached_views import CachedAnalysisViewMixin, SmartCacheInvalidator
-from apps.core.caching import AnalysisCache
+from apps.core.caching import AnalysisCache, cache_manager
+import hashlib
+import json
 
 # Import from basic endpoints module (NDVI, LST, SAR)
 from .view_modules.basic_endpoints import (
@@ -343,7 +345,7 @@ def get_image_metadata(request):
 
         # Extract request data - handle both JSON and FormData
         if request.content_type and 'multipart/form-data' in request.content_type:
-            # Handle shapefile upload (FormData)
+            # Handle shapefile upload (FormData) - DON'T CACHE (file uploads)
             data = request.data
             project_id = data.get('project_id', 'ee-ayotundenew')
             satellite = data.get('satellite', 'landsat')
@@ -367,8 +369,11 @@ def get_image_metadata(request):
                     {"success": False, "error": "Failed to process shapefile"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            
+            # File uploads bypass cache
+            use_cache = False
         else:
-            # Handle JSON data
+            # Handle JSON data - CAN CACHE
             data = request.data
             project_id = data.get('project_id', 'ee-ayotundenew')
             satellite = data.get('satellite', 'landsat')
@@ -385,6 +390,7 @@ def get_image_metadata(request):
             logger.info(f"Using cloud cover threshold: {cloud_cover}%")
 
             coordinates = data.get('coordinates')
+            use_cache = True
 
         # Validate required parameters
         if not all([start_date, end_date, coordinates]):
@@ -392,6 +398,26 @@ def get_image_metadata(request):
                 {"success": False, "error": "Missing required parameters: start_date, end_date, coordinates"},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Generate cache key for metadata queries (JSON requests only)
+        if use_cache:
+            # Convert coordinates to string for cache key
+            coords_str = json.dumps(coordinates, sort_keys=True) if isinstance(coordinates, (list, dict)) else str(coordinates)
+            cache_key = cache_manager.get_cache_key(
+                prefix="image_metadata",
+                satellite=satellite,
+                analysis_type=analysis_type,
+                start_date=start_date,
+                end_date=end_date,
+                cloud_cover=cloud_cover,
+                coordinates_hash=hashlib.md5(coords_str.encode()).hexdigest()[:16]
+            )
+            
+            # Try to get from cache
+            cached_result = cache_manager.get_earth_engine_data(cache_key)
+            if cached_result is not None:
+                logger.info(f"🎯 Returning cached metadata for {satellite}")
+                return Response(cached_result)
 
         # Convert coordinates to Earth Engine geometry
         try:
@@ -744,7 +770,7 @@ def get_image_metadata(request):
         # Generate recommended selections (first 3 images with lowest cloud cover)
         recommended_indices = [i for i in range(min(3, len(images)))]
 
-        return Response({
+        result = {
             'success': True,
             'images': images,
             'recommended_selections': recommended_indices,
@@ -753,7 +779,15 @@ def get_image_metadata(request):
             'satellite': satellite,
             'analysis_type': analysis_type,
             'date_range': f"{start_date} to {end_date}"
-        })
+        }
+        
+        # Cache the result if it was a JSON request (not file upload)
+        if use_cache:
+            # Cache for 1 hour (3600 seconds) - metadata doesn't change frequently
+            cache_manager.set_earth_engine_data(cache_key, result, timeout=3600)
+            logger.info(f"✅ Cached metadata result for {satellite} ({len(images)} images)")
+        
+        return Response(result)
 
     except Exception as e:
         logger.error(f"Error getting image metadata: {str(e)}")
