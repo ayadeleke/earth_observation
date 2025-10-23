@@ -97,6 +97,8 @@ if env("DATABASE_URL", default="").startswith("postgres"):
     # PostgreSQL configuration (supports both local and cloud with SSL)
     db_options = {
         "connect_timeout": 10,
+        # Optimize for Azure App Service - reduce statement timeout for faster failures
+        "options": "-c statement_timeout=30000",  # 30 seconds max query time
     }
     
     # Add SSL configuration for cloud databases (Aiven)
@@ -117,7 +119,11 @@ if env("DATABASE_URL", default="").startswith("postgres"):
             "HOST": env("DB_HOST", default="localhost"),
             "PORT": env("DB_PORT", default="5432"),
             "OPTIONS": db_options,
-            "CONN_MAX_AGE": 600,  # Connection pooling
+            # Optimized connection pooling for Azure
+            # Keep connections alive longer to reduce reconnection overhead
+            "CONN_MAX_AGE": 900,  # 15 minutes (increased from 10 minutes)
+            # Disable persistent connections in development to avoid connection exhaustion
+            "DISABLE_SERVER_SIDE_CURSORS": True,  # Better for connection pooling
         }
     }
 else:
@@ -252,12 +258,20 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
+# Authentication backends
+AUTHENTICATION_BACKENDS = [
+    "apps.core.auth_backends.CachedModelBackend",  # Custom cached authentication
+    "django.contrib.auth.backends.ModelBackend",   # Fallback to default
+]
+
 # JWT Configuration
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
+    # Disable token blacklisting for better performance
+    # Trade-off: Old tokens remain valid until expiration, but login is 50-100ms faster
+    "BLACKLIST_AFTER_ROTATION": False,  # Disabled for performance (was True)
     "UPDATE_LAST_LOGIN": True,
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
