@@ -606,7 +606,7 @@ const ImageSelector: React.FC = () => {
 
       {/* Analysis Configuration */}
       <div className="row">
-        <div className="col-lg-6">
+        <div className="col-lg-6 mt-2">
           <div className="card">
             <div className="card-header">
               <h5><i className="fas fa-cogs me-2"></i> Analysis Configuration</h5>
@@ -943,7 +943,7 @@ const ImageSelector: React.FC = () => {
         </div>
         
         {/* Interactive Map */}
-        <div className="col-lg-6">
+        <div className="col-lg-6 mt-2">
           <div className="card">
             <div className="card-header">
               <h5><i className="fas fa-map"></i> Interactive Map</h5>

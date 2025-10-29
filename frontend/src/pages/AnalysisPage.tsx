@@ -835,7 +835,7 @@ const AnalysisPage: React.FC = () => {
               height: '400px',
               background: 'linear-gradient(145deg, #f8f9fa 0%, #e9ecef 100%)'
             }}>
-              <div className="card-body text-center py-4 mt-5">
+              <div className="card-body text-center py-4 mt-3">
                 <div className="mb-3">
                   <div className="bg-primary bg-opacity-10 rounded-circle p-3 d-inline-flex">
                     <i className="fas fa-microscope text-primary" style={{ fontSize: '2rem' }}></i>
@@ -857,7 +857,7 @@ const AnalysisPage: React.FC = () => {
                   </span>
                 </div>
                 <button
-                  className="btn btn-primary px-4 py-2"
+                  className="btn btn-primary px-4 py-2.5 mt-2"
                   onClick={() => navigate('/advanced-image-analysis')}
                   style={{
                     borderRadius: '0.75rem',
