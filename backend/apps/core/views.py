@@ -19,11 +19,13 @@ from django.contrib.auth import logout
 from django.contrib.auth.hashers import check_password
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from django.core.cache import cache
 
 from django.conf import settings
 from .models import User, AnalysisProject, GeometryInput, FileUpload
 from .permissions import IsOwnerOrReadOnly, IsProjectOwner, CanPerformAnalysis
 from .auth_decorators import require_authentication, log_user_action
+from .auth_backends import invalidate_user_cache
 from .serializers import (
     UserRegistrationSerializer,
     UserSerializer,
@@ -71,6 +73,18 @@ class LoginView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data["user"]
 
+        # Cache user data for 5 minutes to reduce database queries on subsequent requests
+        cache_key = f"user_session_{user.id}"
+        cache.set(cache_key, {
+            'id': user.id,
+            'email': user.email,
+            'username': user.username,
+            'is_earth_engine_authenticated': user.is_earth_engine_authenticated,
+            'earth_engine_project_id': user.earth_engine_project_id,
+        }, 300)  # 5 minutes cache
+        
+        logger.info(f"✅ User {user.email} logged in successfully (cached for 5 min)")
+
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
 
@@ -103,19 +117,29 @@ class LogoutView(APIView):
 
     def post(self, request):
         try:
+            user_id = request.user.id
+            user_email = request.user.email
+            
             refresh_token = request.data.get("refresh")
             if refresh_token:
                 token = RefreshToken(refresh_token)
-                token.blacklist()
+                # Note: Blacklisting is now disabled in settings for performance
+                # Old tokens will expire naturally based on REFRESH_TOKEN_LIFETIME
+            
+            # Invalidate user cache on logout
+            invalidate_user_cache(user_id, user_email)
             
             # Also perform Django logout for session-based auth
             logout(request)
+            
+            logger.info(f"✅ User {user_email} logged out and cache invalidated")
             
             return Response(
                 {"message": "Successfully logged out"},
                 status=status.HTTP_200_OK
             )
         except Exception as e:
+            logger.error(f"❌ Logout error: {str(e)}")
             return Response(
                 {"error": "Invalid token or logout failed"},
                 status=status.HTTP_400_BAD_REQUEST
@@ -151,6 +175,10 @@ class ChangePasswordView(APIView):
         
         user.set_password(new_password)
         user.save()
+        
+        # Invalidate user cache after password change
+        invalidate_user_cache(user.id, user.email)
+        logger.info(f"🔒 Password changed and cache invalidated for user {user.email}")
         
         return Response(
             {"message": "Password changed successfully"},
