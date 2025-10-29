@@ -18,6 +18,75 @@ The Earth Observation Analysis Platform is a full-stack application designed for
 - **Interactive Visualization**: Dynamic maps, time series charts, and data tables
 - **Historical Data**: Analysis from 1988 onwards with multi-mission Landsat harmonization
 - **Export Capabilities**: Data export to CSV and interactive map generation
+- **Security**: Comprehensive security headers (CSP, HSTS, X-Frame-Options)
+- **Cloud Deployment**: Azure deployment with Docker image containerization
+
+## Scientific Methodology
+
+### Analysis Algorithms
+
+This platform implements scientifically validated remote sensing algorithms for environmental monitoring:
+
+#### 1. Normalized Difference Vegetation Index (NDVI)
+
+**Formula** by Rouse et al. (1973):
+
+```
+NDVI = (ρNIR – ρR) / (ρNIR + ρR)
+```
+
+**Where**:
+- `ρNIR` = Near-Infrared spectral reflectance (Landsat 8/9 Band 5)
+- `ρR` = Red spectral reflectance (Landsat 8/9 Band 4)
+
+**Reference**:
+- Rouse, J. W., Haas, R. H., Schell, J. A., & Deering, D. W. (1973). *Monitoring vegetation systems in the Great Plains with ERTS*. Third Earth Resources Technology Satellite-1 Symposium, Vol. 1, pp. 309-317 https://files.core.ac.uk/download/pdf/42887948.pdf.
+
+#### 2. Land Surface Temperature (LST)
+
+**Formula** by Deliry (2023)
+
+```
+LST = (ST_B10 × 0.00341802) + 149.0 - 273.15
+```
+
+**Where**:
+- `ST_B10` = Thermal Infrared Band of Landsat 9 image (Band 10)
+- `0.00341802` = Multiplicative rescaling factor
+- `149.0` = Additive rescaling factor (constant offset value)
+- `273.15` = Conversion from Kelvin to Celsius
+
+
+**Reference**:
+- Deliry, S. I. (2023). Re: Hi, I want to calculate LST from Landsat Collection 2 Level-2? 
+What need I do?. Retrieved from: 
+https://www.researchgate.net/post/Hi_I_want_to_calculate_LST_from_Landsat_Collection_2_Level-2_What_need_I_do/64db3515357c5c4c9c03aaba/citation/download..
+
+### Cloud Masking Methodology
+
+The platform implements two cloud masking strategies for optical imagery:
+
+**Basic Cloud Masking**:
+- Uses QA_PIXEL band thresholding
+- Removes high-confidence clouds and cloud shadows
+- Threshold: `cloudMask < 5%`
+
+**Strict Cloud Masking**:
+- Applies Fmask algorithm
+- Removes all cloud-related pixels including cirrus
+- Combines multiple QA bits for comprehensive filtering
+- Threshold: `cloudMask < 2%`
+
+### Data Sources
+
+| Satellite | Sensors | Spatial Resolution | Temporal Coverage | Analysis Types |
+|-----------|---------|-------------------|-------------------|----------------|
+| **Landsat 5** | TM | 30m (optical), 120m (thermal) | 1984-2013 | NDVI, LST |
+| **Landsat 7** | ETM+ | 30m (optical), 60m (thermal) | 1999-present | NDVI, LST |
+| **Landsat 8** | OLI, TIRS | 30m (optical), 100m (thermal) | 2013-present | NDVI, LST |
+| **Landsat 9** | OLI-2, TIRS-2 | 30m (optical), 100m (thermal) | 2021-present | NDVI, LST |
+| **Sentinel-1** | C-SAR | 10m (IW mode) | 2014-present | SAR Backscatter |
+| **Sentinel-2** | MSI | 10m/20m/60m | 2015-present | NDVI (future) |
 
 ## Prototype Presentation
 
@@ -32,6 +101,13 @@ The video demonstrates:
 - NDVI, LST, and SAR analysis workflows
 - Interactive mapping and data visualization
 - Export and analysis capabilities
+
+## 🌐 Live Deployment
+
+**Access the deployed application:**
+- **Frontend**: [https://earthobservation.azurewebsites.net](https://earthobservation.azurewebsites.net)
+- **Backend API**: [https://earthobservationapi.azurewebsites.net](https://earthobservationapi.azurewebsites.net)
+- **API Documentation**: [https://earthobservationapi.azurewebsites.net/api/swagger](https://earthobservationapi.azurewebsites.net/api/swagger/)
 
 ## 📸 Screenshots
 
@@ -48,8 +124,13 @@ The video demonstrates:
 ![User Dashboard](screenshots/user_dashboard.png)
 *List of User's existing project are here or new project is created from here*
 
+### LST Analysis Results
+![Sample LST Results](screenshots/lst_results.png)
+*Land surface temperature analysis with map and trends*
 
-
+### NDVI Analysis Results
+![Sample NDVI Results](screenshots/ndvi_results.png)
+*NDVI analysis with map and trends*
 
 ### Technology Stack
 
@@ -59,19 +140,25 @@ The video demonstrates:
 - Google Earth Engine API (satellite data processing)
 - GeoPandas & Shapely (geospatial operations)
 - PostgreSQL (database)
+- Redis (Caching)
+- Shapely (Geometry manipulations)
 - Folium (interactive map generation)
 
 **Frontend:**
 - React 18.2.0 with TypeScript
-- Tailwind CSS (styling)
+- Bootstrap CSS (styling)
 - Leaflet & React-Leaflet (interactive maps)
 - Recharts (data visualization)
 - Axios (HTTP client)
+- Framer Motion ()
 
 **Infrastructure:**
 - Docker & Docker Compose (containerization)
-- CORS support for cross-origin requests
-- File upload handling for shapefiles
+- Azure App Service (Cloud hosting)
+- Azure Container Registry (Docker image registry)
+- Azure Blob Storage (File storage)
+- Nginx (Reverse proxy & SSL termination)
+
 
 ## 🚀 Setup Instructions
 
@@ -81,6 +168,7 @@ The video demonstrates:
 - Node.js 18+
 - PostgreSQL 14+
 - Google Earth Engine account with service account credentials
+- Docker 20.10 or higher
 - Git
 
 ### 1. Clone the Repository
@@ -102,22 +190,40 @@ Edit the `.env` file with your configuration:
 ```bash
 # Django Configuration
 DEBUG=True
-SECRET_KEY=your-super-secret-key-change-in-production
+SECRET_KEY=your-super-secret-key-min-50-characters-change-in-production
 ALLOWED_HOSTS=localhost,127.0.0.1,your-domain.com
 
-# Database Configuration
+# Database Configuration (PostgreSQL)
+DATABASE_URL=postgres://username:password@localhost:5432/geoanalysis
 DB_NAME=geoanalysis
 DB_USER=postgres
-DB_PASSWORD=your-password
+DB_PASSWORD=your-secure-password
 DB_HOST=localhost
 DB_PORT=5432
 
 # Earth Engine Configuration
-EARTH_ENGINE_PROJECT_ID=your-ee-project-id
-EARTH_ENGINE_SERVICE_ACCOUNT_KEY=auth/service_account.json
+EARTH_ENGINE_PROJECT=your-ee-project-id
+EARTH_ENGINE_SERVICE_ACCOUNT_KEY=/path/to/service_account.json
+# Or use base64 encoded key:
+EARTH_ENGINE_SERVICE_ACCOUNT_KEY_BASE64=base64-encoded-json-key
+EARTH_ENGINE_USE_SERVICE_ACCOUNT=True
 
 # CORS Configuration
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+
+# Azure Blob Storage
+USE_AZURE_STORAGE=False
+AZURE_ACCOUNT_NAME=your-storage-account
+AZURE_ACCOUNT_KEY=your-storage-key
+AZURE_CONTAINER=media
+
+# Redis (for caching)
+REDIS_URL=redis://localhost:6379
+
+# Security (Production)
+SECURE_SSL_REDIRECT=False
+SESSION_COOKIE_SECURE=False
+CSRF_COOKIE_SECURE=False
 ```
 
 #### Google Earth Engine Setup
@@ -145,6 +251,11 @@ pip install -r requirements.txt
 ```bash
 # Create database (ensure PostgreSQL is running)
 createdb geoanalysis
+
+# Or using psql:
+psql -U postgres
+CREATE DATABASE geoanalysis;
+\q
 
 # Run migrations
 python manage.py makemigrations
@@ -192,7 +303,21 @@ docker build -t earth-observation-frontend .
 docker run -p 3000:3000 earth-observation-frontend
 ```
 
-## 🌐 Deployment Plan
+## 🧪 Testing Strategy
+
+### Test Coverage Summary
+
+| Test Type | Coverage | Tools | Status |
+|-----------|----------|-------|--------|
+| **Unit Tests** | Backend APIs | pytest, Django test | Passing |
+| **Integration Tests** | API workflows | pytest | Passing |
+| **Performance Tests** | Load testing | Locust | Completed |
+| **Security Tests** | OWASP ZAP scan | ZAP Proxy | Hardened |
+| **E2E Tests** | User workflows | Manual testing | Verified |
+
+###
+
+## 🌐 Deployment
 ![Deployment Plan](screenshots/deployment_plan.png)
 
 ### Production Environment Setup
@@ -439,7 +564,7 @@ docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
 - Frontend code splitting and lazy loading
 - Image compression for map outputs
 
-## 📝 Usage
+## Usage
 
 1. **Access the Application**: Navigate to `http://localhost:3000`
 2. **Select Analysis Type**: Choose between NDVI, LST, or SAR analysis
@@ -448,7 +573,7 @@ docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
 5. **Run Analysis**: Execute the analysis and view results in tables and charts
 6. **Export Data**: Download CSV files or interactive maps
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -456,18 +581,36 @@ docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
-## 🆘 Support
+### Third-Party Licenses
+
+- **Google Earth Engine**: [Google Earth Engine Terms of Service](https://earthengine.google.com/terms/)
+- **Landsat Data**: Public domain (U.S. Government)
+- **Sentinel Data**: Copernicus Sentinel data (ESA) - open and free
+- **Leaflet**: BSD 2-Clause License
+- **React**: MIT License
+- **Django**: BSD 3-Clause License
+
+## Support
 
 For support and questions:
+- a.adeleke@alustudent.com
 - Create an issue on GitHub
 - Check the documentation in the `/docs` folder
 - Review the Earth Engine API documentation
 
-## 🔄 Version History
+## 🏆 Acknowledgments
 
-- **v1.0.0**: Initial release with NDVI, LST, and SAR analysis capabilities
-- **v1.1.0**: Added cloud masking and shapefile upload support
+This project was developed as part of academic research on **Earth Observation for Forest Monitoring in Nigeria** in fulfilment of undergraduate Capstone project at the African Leadership University.
+
+**Credits:**
+- **Google Earth Engine Team**: For providing free access to petabytes of satellite data
+- **USGS**: For Landsat mission data
+- **ESA**: For Sentinel mission data
+- **Project Supervisor**: For guidance and support
+- **Open Source Community**: For the amazing tools and libraries
+
+#

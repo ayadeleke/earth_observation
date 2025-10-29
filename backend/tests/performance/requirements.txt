@@ -1,0 +1,14 @@
+# Performance Testing Dependencies
+
+# Load Testing
+locust==2.20.0
+
+# API Testing
+requests==2.31.0
+
+# Data Analysis
+pandas==2.1.4
+matplotlib==3.8.2
+
+# Reporting
+Jinja2==3.1.2

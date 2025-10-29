@@ -36,16 +36,17 @@ class SecurityHeadersMiddleware:
         # Only add headers if not already present (allow override)
         if 'Content-Security-Policy' not in response:
             # Comprehensive CSP policy
-            # Allows connections to:
-            # - Self (same origin)
-            # - Google APIs (Earth Engine, OAuth, Fonts, etc.)
-            # - Azure services (storage, APIs)
-            # - CDN services (Bootstrap, FontAwesome, etc.)
+            # Note: unsafe-inline/unsafe-eval needed for Google Earth Engine, Maps, and React
+            # These are required for geospatial libraries and cannot be removed without breaking functionality
+            # Wildcard image sources needed for map tiles from various providers
             csp_directives = [
                 "default-src 'self'",
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
+                # Script: unsafe-eval needed for Earth Engine, unsafe-inline for Google APIs
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.googletagmanager.com",
+                # Style: unsafe-inline needed for React and map libraries
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
-                "img-src 'self' data: https: blob:",
+                # Images: Specific sources for map tiles and user content
+                "img-src 'self' data: blob: https://earthobservationapi.azurewebsites.net https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.openstreetmap.org https://*.tile.openstreetmap.org https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://*.blob.core.windows.net",
                 "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
                 "connect-src 'self' https://earthobservationapi.azurewebsites.net https://accounts.google.com https://www.googleapis.com https://earthengine.googleapis.com https://cdn.jsdelivr.net https://*.blob.core.windows.net",
                 "frame-src 'self' https://accounts.google.com https://earthobservationapi.azurewebsites.net https://*.blob.core.windows.net",

@@ -10,6 +10,7 @@ import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
 import { SettingsPage } from './pages/SettingsPage';
 import ImageSelector from './pages/ImageSelector';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import './styles/main.css';
@@ -88,6 +89,7 @@ const AppContent: React.FC = () => {
       <Routes>
         <Route path="/demo" element={<DemoPage />} />
         <Route path="/about" element={<AboutPage />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/analysis" element={
           <ProtectedRoute>
             <AnalysisPage />

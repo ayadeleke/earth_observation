@@ -819,7 +819,7 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
             return {
                 "success": False,
                 "error": "No SAR data could be processed",
-                "message": f"No Sentinel-1 data available for {start_date} to {end_date}. Try a different area or date range.",
+                "message": f"No Sentinel-1 data available for {start_date} to {end_date}. Try a different area, date range, polarization, or orbit direction.",
                 "analysis_type": "SAR"
             }
         
