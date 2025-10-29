@@ -748,7 +748,7 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
                         year_collection = chunk_collection.filterDate(year_start, year_end)
                         year_size = year_collection.size().getInfo()
                         
-                        logger.info(f"  Year {year} has {year_size} SAR images")
+                        logger.warning(f"  📊 Year {year} ({year_start} to {year_end}): Found {year_size} {orbit_direction} SAR images")
                         
                         if year_size > 0:
                             chunk_composite = year_collection.mean()
@@ -819,9 +819,15 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
             return {
                 "success": False,
                 "error": "No SAR data could be processed",
-                "message": f"No Sentinel-1 data available for {start_date} to {end_date}. Try a different area or date range.",
+                "message": f"No Sentinel-1 data available for {start_date} to {end_date}. Try a different area, date range, polarization, or orbit direction.",
                 "analysis_type": "SAR"
             }
+        
+        # Calculate actual data availability range
+        actual_start_date = sample_data[0].get('date', start_date)
+        actual_end_date = sample_data[-1].get('date', end_date)
+        logger.warning(f"📅 REQUESTED: {start_date} to {end_date}")
+        logger.warning(f"📅 ACTUAL DATA: {actual_start_date} to {actual_end_date}")
         
         return {
             "success": True,
@@ -846,6 +852,8 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
                 "total_individual_observations": total_acquisitions,
                 "temporal_observations": len(sample_data),
                 "date_range": f"{start_date} to {end_date}",
+                "date_range_requested": f"{start_date} to {end_date}",
+                "date_range_actual": f"{actual_start_date} to {actual_end_date}",
                 "orbit_direction": orbit_direction,
                 "data_type": f"{temporal_resolution.title()} Composites",
                 "num_images": len(sample_data),
@@ -855,7 +863,7 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
                 "chunk_years": chunk_years,
                 "total_chunks_processed": chunk_count
             },
-            "message": f"SAR analysis completed using chunked {temporal_resolution} aggregation: {len(sample_data)} composites from {total_acquisitions} Sentinel-1 acquisitions (memory-optimized for {date_range_years:.1f} year range)",
+            "message": f"SAR analysis completed using chunked {temporal_resolution} aggregation: {len(sample_data)} composites from {total_acquisitions} Sentinel-1 acquisitions (memory-optimized for {date_range_years:.1f} year range). Data available from {actual_start_date} to {actual_end_date}.",
             "timestamp": datetime.now().isoformat(),
         }
         

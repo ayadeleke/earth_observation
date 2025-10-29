@@ -42,4 +42,15 @@ EXPOSE 8000
 RUN pip install --no-cache-dir gunicorn
 
 # Command to run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "geoanalysis.wsgi:application"]
+# Increased timeout to 300s (5 min) for long-running SAR/NDVI analysis
+# Workers=2 for better handling of concurrent requests
+# Max requests with jitter for memory management
+CMD ["gunicorn", \
+     "--bind", "0.0.0.0:8000", \
+     "--workers", "2", \
+     "--timeout", "300", \
+     "--graceful-timeout", "30", \
+     "--max-requests", "1000", \
+     "--max-requests-jitter", "50", \
+     "--worker-class", "sync", \
+     "geoanalysis.wsgi:application"]

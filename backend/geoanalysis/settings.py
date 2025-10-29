@@ -24,9 +24,10 @@ environ.Env.read_env(BASE_DIR / ".env")
 SECRET_KEY = env("SECRET_KEY", default="django-insecure-change-me-in-production")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env("DEBUG", default=True)
+# Default to False for safety - explicitly set DEBUG=True in local .env for development
+DEBUG = env("DEBUG", default=False)
 
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "169.254.131.4"])
 
 # Application definition
 DJANGO_APPS = [
@@ -62,12 +63,14 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "apps.core.middleware.security.SecurityHeadersMiddleware",  # Custom security headers
+    "apps.core.middleware.security.SecureCookieMiddleware",  # Secure cookie attributes
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
-    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # "django.middleware.clickjacking.XFrameOptionsMiddleware",  # Handled by SecurityHeadersMiddleware
 ]
 
 ROOT_URLCONF = "geoanalysis.urls"
@@ -96,6 +99,8 @@ if env("DATABASE_URL", default="").startswith("postgres"):
     # PostgreSQL configuration (supports both local and cloud with SSL)
     db_options = {
         "connect_timeout": 10,
+        # Optimize for Azure App Service - reduce statement timeout for faster failures
+        "options": "-c statement_timeout=30000",  # 30 seconds max query time
     }
     
     # Add SSL configuration for cloud databases (Aiven)
@@ -116,7 +121,11 @@ if env("DATABASE_URL", default="").startswith("postgres"):
             "HOST": env("DB_HOST", default="localhost"),
             "PORT": env("DB_PORT", default="5432"),
             "OPTIONS": db_options,
-            "CONN_MAX_AGE": 600,  # Connection pooling
+            # Optimized connection pooling for Azure
+            # Keep connections alive longer to reduce reconnection overhead
+            "CONN_MAX_AGE": 900,  # 15 minutes (increased from 10 minutes)
+            # Disable persistent connections in development to avoid connection exhaustion
+            "DISABLE_SERVER_SIDE_CURSORS": True,  # Better for connection pooling
         }
     }
 else:
@@ -167,13 +176,16 @@ if USE_AZURE_STORAGE:
     AZURE_ACCOUNT_NAME = env("AZURE_ACCOUNT_NAME")
     AZURE_ACCOUNT_KEY = env("AZURE_ACCOUNT_KEY")
     AZURE_CONTAINER = env("AZURE_CONTAINER", default="media")
+    AZURE_STATIC_CONTAINER = env("AZURE_STATIC_CONTAINER", default="static")
     AZURE_CUSTOM_DOMAIN = env("AZURE_CUSTOM_DOMAIN", default="").strip()
     
     # Media files will be stored in Azure Blob Storage
     if AZURE_CUSTOM_DOMAIN:  # Empty string evaluates to False
         MEDIA_URL = f"https://{AZURE_CUSTOM_DOMAIN}/"
+        STATIC_URL = f"https://{AZURE_CUSTOM_DOMAIN}/static/"
     else:
         MEDIA_URL = f"https://{AZURE_ACCOUNT_NAME}.blob.core.windows.net/{AZURE_CONTAINER}/"
+        STATIC_URL = f"https://{AZURE_ACCOUNT_NAME}.blob.core.windows.net/{AZURE_STATIC_CONTAINER}/"
     
     # Azure Storage connection settings
     AZURE_CONNECTION_STRING = f"DefaultEndpointsProtocol=https;AccountName={AZURE_ACCOUNT_NAME};AccountKey={AZURE_ACCOUNT_KEY};EndpointSuffix=core.windows.net"
@@ -195,11 +207,18 @@ if USE_AZURE_STORAGE:
             },
         },
         "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+            "BACKEND": "storages.backends.azure_storage.AzureStorage",
+            "OPTIONS": {
+                "account_name": AZURE_ACCOUNT_NAME,
+                "account_key": AZURE_ACCOUNT_KEY,
+                "azure_container": AZURE_STATIC_CONTAINER,
+                "azure_ssl": AZURE_SSL,
+            },
         },
     }
     
     logger.info(f"✅ Azure Blob Storage enabled for media files: {MEDIA_URL}")
+    logger.info(f"✅ Azure Blob Storage enabled for static files: {STATIC_URL}")
 else:
     # Local file storage (development)
     MEDIA_URL = "/media/"
@@ -241,12 +260,20 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
+# Authentication backends
+AUTHENTICATION_BACKENDS = [
+    "apps.core.auth_backends.CachedModelBackend",  # Custom cached authentication
+    "django.contrib.auth.backends.ModelBackend",   # Fallback to default
+]
+
 # JWT Configuration
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
+    # Disable token blacklisting for better performance
+    # Trade-off: Old tokens remain valid until expiration, but login is 50-100ms faster
+    "BLACKLIST_AFTER_ROTATION": False,  # Disabled for performance (was True)
     "UPDATE_LAST_LOGIN": True,
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
@@ -321,6 +348,7 @@ SPECTACULAR_SETTINGS = {
 
 # Earth Engine Configuration
 EARTH_ENGINE_SERVICE_ACCOUNT_KEY = env("EARTH_ENGINE_SERVICE_ACCOUNT_KEY", default=None)
+EARTH_ENGINE_SERVICE_ACCOUNT_KEY_BASE64 = env("EARTH_ENGINE_SERVICE_ACCOUNT_KEY_BASE64", default=None)
 EARTH_ENGINE_PROJECT = env("EARTH_ENGINE_PROJECT", default="ee-ayotundenew")
 EARTH_ENGINE_USE_SERVICE_ACCOUNT = env(
     "EARTH_ENGINE_USE_SERVICE_ACCOUNT", default=False, cast=bool
@@ -332,11 +360,14 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024 * 1024  # 16MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024 * 1024  # 16MB
 
 # CORS configuration - properly handle credentials
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",   # React development server
-    "http://127.0.0.1:3000",   # Alternative localhost
-    "https://localhost:3000",  # HTTPS version if used
-]
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=[
+        "http://localhost:3000",   # React development server
+        "http://127.0.0.1:3000",   # Alternative localhost
+        "https://localhost:3000",  # HTTPS version if used
+    ]
+)
 
 # Important: Never use CORS_ALLOW_ALL_ORIGINS=True when using credentials
 CORS_ALLOW_ALL_ORIGINS = False
@@ -375,7 +406,7 @@ CORS_EXPOSE_HEADERS = [
 ]
 
 # Redis Caching Configuration
-REDIS_URL = env("REDIS_URL")
+REDIS_URL = env("REDIS_URL", default="redis://localhost:6379")
 
 CACHES = {
     "default": {
@@ -421,6 +452,11 @@ CACHE_MIDDLEWARE_SECONDS = 300  # 5 minutes
 CACHE_MIDDLEWARE_KEY_PREFIX = 'earth_obs_page'
 
 # Logging
+# Use different log levels based on environment
+# Development: INFO level shows all details
+# Production: WARNING level only shows warnings and errors
+LOG_LEVEL = env("LOG_LEVEL", default="WARNING" if not DEBUG else "INFO")
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -429,34 +465,49 @@ LOGGING = {
             "format": "{levelname} {asctime} {module} {message}",
             "style": "{",
         },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
     },
     "handlers": {
         "file": {
-            "level": "INFO",
+            "level": LOG_LEVEL,
             "class": "logging.FileHandler",
             "filename": BASE_DIR / "logs" / "django.log",
             "formatter": "verbose",
             "encoding": "utf-8",
         },
         "console": {
-            "level": "INFO",
+            "level": LOG_LEVEL,
             "class": "logging.StreamHandler",
-            "formatter": "verbose",
+            "formatter": "simple" if not DEBUG else "verbose",
         },
     },
     "root": {
         "handlers": ["console", "file"],
-        "level": "INFO",
+        "level": LOG_LEVEL,
     },
     "loggers": {
         "django": {
             "handlers": ["console", "file"],
-            "level": "INFO",
+            "level": "WARNING" if not DEBUG else "INFO",  # Reduce Django's verbosity in production
             "propagate": False,
         },
         "apps": {
             "handlers": ["console", "file"],
-            "level": "INFO",
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        # Silence specific noisy loggers in production
+        "django.server": {
+            "handlers": ["console"],
+            "level": "ERROR" if not DEBUG else "INFO",
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console", "file"],
+            "level": "ERROR",  # Only log request errors
             "propagate": False,
         },
     },
@@ -476,3 +527,36 @@ AI_ASSISTANT_ENABLED = env.bool("AI_ASSISTANT_ENABLED", default=True)
 AI_ASSISTANT_MAX_TOKENS = env.int("AI_ASSISTANT_MAX_TOKENS", default=5000)
 AI_ASSISTANT_TEMPERATURE = env.float("AI_ASSISTANT_TEMPERATURE", default=0.7)
 AI_ASSISTANT_MODEL = env("AI_ASSISTANT_MODEL", default="gemini-2.5-flash")  # Gemini model
+
+# ============================================
+# SECURITY SETTINGS
+# ============================================
+# Comprehensive security configuration addressing OWASP ZAP findings
+
+# Cookie Security
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Lax'
+
+# CSRF Trusted Origins
+CSRF_TRUSTED_ORIGINS = [
+    'https://earthobservation.azurewebsites.net',
+    'https://earthobservationapi.azurewebsites.net',
+    'http://localhost:3000',
+    'http://localhost:8000',
+]
+
+# Security Headers
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+SECURE_SSL_REDIRECT = False
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+X_FRAME_OPTIONS = 'SAMEORIGIN'
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
