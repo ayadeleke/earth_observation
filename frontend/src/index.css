@@ -79,3 +79,39 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #10602d !important;
 }
+
+/* Session notification animations */
+@keyframes slideInUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.session-warning {
+  animation: slideInUp 0.3s ease-out;
+}
+
+/* Pulse animation for warning icon */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.session-warning .fa-exclamation-triangle {
+  animation: pulse 2s infinite;
+}
+
+/* Session expired dialog backdrop blur effect */
+.modal-backdrop.show {
+  backdrop-filter: blur(2px);
+}
+

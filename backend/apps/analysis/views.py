@@ -5,7 +5,9 @@ This file acts as the main entry point for all analysis endpoints with caching s
 
 # Import caching utilities
 from .cached_views import CachedAnalysisViewMixin, SmartCacheInvalidator
-from apps.core.caching import AnalysisCache
+from apps.core.caching import AnalysisCache, cache_manager
+import hashlib
+import json
 
 # Import from basic endpoints module (NDVI, LST, SAR)
 from .view_modules.basic_endpoints import (
@@ -343,7 +345,7 @@ def get_image_metadata(request):
 
         # Extract request data - handle both JSON and FormData
         if request.content_type and 'multipart/form-data' in request.content_type:
-            # Handle shapefile upload (FormData)
+            # Handle shapefile upload (FormData) - DON'T CACHE (file uploads)
             data = request.data
             project_id = data.get('project_id', 'ee-ayotundenew')
             satellite = data.get('satellite', 'landsat')
@@ -367,8 +369,11 @@ def get_image_metadata(request):
                     {"success": False, "error": "Failed to process shapefile"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            
+            # File uploads bypass cache
+            use_cache = False
         else:
-            # Handle JSON data
+            # Handle JSON data - CAN CACHE
             data = request.data
             project_id = data.get('project_id', 'ee-ayotundenew')
             satellite = data.get('satellite', 'landsat')
@@ -385,6 +390,7 @@ def get_image_metadata(request):
             logger.info(f"Using cloud cover threshold: {cloud_cover}%")
 
             coordinates = data.get('coordinates')
+            use_cache = True
 
         # Validate required parameters
         if not all([start_date, end_date, coordinates]):
@@ -392,6 +398,26 @@ def get_image_metadata(request):
                 {"success": False, "error": "Missing required parameters: start_date, end_date, coordinates"},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Generate cache key for metadata queries (JSON requests only)
+        if use_cache:
+            # Convert coordinates to string for cache key
+            coords_str = json.dumps(coordinates, sort_keys=True) if isinstance(coordinates, (list, dict)) else str(coordinates)
+            cache_key = cache_manager.get_cache_key(
+                prefix="image_metadata",
+                satellite=satellite,
+                analysis_type=analysis_type,
+                start_date=start_date,
+                end_date=end_date,
+                cloud_cover=cloud_cover,
+                coordinates_hash=hashlib.md5(coords_str.encode()).hexdigest()[:16]
+            )
+            
+            # Try to get from cache
+            cached_result = cache_manager.get_earth_engine_data(cache_key)
+            if cached_result is not None:
+                logger.info(f"🎯 Returning cached metadata for {satellite}")
+                return Response(cached_result)
 
         # Convert coordinates to Earth Engine geometry
         try:
@@ -498,38 +524,21 @@ def get_image_metadata(request):
             end_year = int(end_date.split("-")[0])
             collections = []
 
-            # Initial cloud cover threshold
-            initial_cloud_cover = float(cloud_cover)
-            collections = []
+            # Use EXACT cloud cover threshold specified by user (no relaxation)
+            cloud_cover_threshold = float(cloud_cover)
+            logger.info(f"Using user-specified cloud cover threshold: {cloud_cover_threshold}%")
 
-            # Helper function to create collection with relaxed cloud cover if needed
+            # Helper function to create collection with user's exact parameters
             def create_collection(dataset_id, start_year_coll, end_year_coll, collection_name):
-                nonlocal cloud_cover
-                # First try with original cloud cover
+                # Use EXACT user-specified cloud cover (no automatic relaxation)
                 try:
                     collection = (ee.ImageCollection(dataset_id)
                                   .filterDate(start_date, end_date)
                                   .filterBounds(geometry)
-                                  .filter(ee.Filter.lt("CLOUD_COVER", float(cloud_cover))))
+                                  .filter(ee.Filter.lt("CLOUD_COVER", cloud_cover_threshold)))
 
                     size = collection.size().getInfo()
-                    if size == 0:
-                        # Try with relaxed cloud cover
-                        relaxed_cloud_cover = min(float(cloud_cover) * 2, 100)
-                        logger.info(f"No {collection_name} images found with {cloud_cover}% cloud cover, trying {relaxed_cloud_cover}%")
-
-                        collection = (ee.ImageCollection(dataset_id)
-                                      .filterDate(start_date, end_date)
-                                      .filterBounds(geometry)
-                                      .filter(ee.Filter.lt("CLOUD_COVER", relaxed_cloud_cover)))
-
-                        size = collection.size().getInfo()
-                        if size > 0:
-                            cloud_cover = relaxed_cloud_cover
-                            logger.info(f"Found {size} {collection_name} images with relaxed cloud cover {relaxed_cloud_cover}%")
-                    else:
-                        logger.info(f"Found {size} {collection_name} images with {cloud_cover}% cloud cover")
-
+                    logger.info(f"Found {size} {collection_name} images with {cloud_cover_threshold}% cloud cover")
                     return collection
                 except Exception as e:
                     logger.error(f"Error creating collection for {collection_name}: {e}")
@@ -588,13 +597,10 @@ def get_image_metadata(request):
                         collections.append(l5)
                         logger.info(f"Added Landsat 5 collection for years {start_year}-{l5_end}")
 
-            if cloud_cover > initial_cloud_cover:
-                logger.info(f"Using relaxed cloud cover threshold: {cloud_cover}% (original was {initial_cloud_cover}%)")
-
             if not collections:
                 return Response({
                     "success": False,
-                    "error": f"No Landsat collections available for the specified date range: {start_date} to {end_date}"
+                    "error": f"No Landsat collections available for the specified date range: {start_date} to {end_date} with {cloud_cover_threshold}% cloud cover. Try increasing cloud cover threshold."
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             # Merge collections
@@ -764,7 +770,7 @@ def get_image_metadata(request):
         # Generate recommended selections (first 3 images with lowest cloud cover)
         recommended_indices = [i for i in range(min(3, len(images)))]
 
-        return Response({
+        result = {
             'success': True,
             'images': images,
             'recommended_selections': recommended_indices,
@@ -773,7 +779,15 @@ def get_image_metadata(request):
             'satellite': satellite,
             'analysis_type': analysis_type,
             'date_range': f"{start_date} to {end_date}"
-        })
+        }
+        
+        # Cache the result if it was a JSON request (not file upload)
+        if use_cache:
+            # Cache for 1 hour (3600 seconds) - metadata doesn't change frequently
+            cache_manager.set_earth_engine_data(cache_key, result, timeout=3600)
+            logger.info(f"✅ Cached metadata result for {satellite} ({len(images)} images)")
+        
+        return Response(result)
 
     except Exception as e:
         logger.error(f"Error getting image metadata: {str(e)}")

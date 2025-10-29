@@ -85,7 +85,8 @@ export const AnalysisMapLayer: React.FC<NDVIMapLayerProps> = ({
           }
         }
 
-        const response = await fetch('http://localhost:8000/api/v1/visualization/get_analysis_map/', {
+        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+        const response = await fetch(`${apiUrl}/visualization/get_analysis_map/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
