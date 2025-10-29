@@ -1,4 +1,5 @@
 import ee
+import json
 import logging
 import os
 import tempfile
@@ -27,201 +28,28 @@ except ImportError:
     GEEMAP_AVAILABLE = False
     geemap = None
 
+# Import refactored utility modules
+from .utils import (
+    calculate_ndvi_landsat,
+    calculate_sentinel2_ndvi,
+    calculate_lst_landsat,
+    extract_image_statistics,
+    get_landsat_collection,
+    get_sentinel2_collection,
+    get_sentinel1_collection,
+    filter_for_complete_coverage,
+    process_shapefile_to_coordinates,
+)
+
 logger = logging.getLogger(__name__)
 
-
-def calculate_ndvi_landsat(image, enable_cloud_masking=False, masking_strictness=False):
-    """
-    Calculate NDVI for Landsat image (handles different band names) with optional cloud masking
-    
-    Args:
-        image: Earth Engine image
-        enable_cloud_masking: Whether to apply cloud masking
-        masking_strictness: If True, apply strict masking (more aggressive)
-        
-    Returns:
-        ee.Image: Image with NDVI band added
-    """
-    # Scale factors for Landsat Collection 2 Level 2
-    scale_factor = 0.0000275
-    offset = -0.2
-    
-    # Apply scaling to all bands
-    scaled = image.multiply(scale_factor).add(offset)
-    
-    # Get band names to determine Landsat version
-    band_names = image.bandNames()
-    
-    # For Landsat 4-7: B3=Red, B4=NIR
-    # For Landsat 8-9: B4=Red, B5=NIR
-    nir = ee.Algorithms.If(
-        band_names.contains('SR_B5'),  # Landsat 8-9
-        scaled.select('SR_B5'),
-        scaled.select('SR_B4')  # Landsat 4-7
-    )
-    
-    red = ee.Algorithms.If(
-        band_names.contains('SR_B5'),  # Landsat 8-9  
-        scaled.select('SR_B4'),
-        scaled.select('SR_B3')  # Landsat 4-7
-    )
-    
-    nir = ee.Image(nir)
-    red = ee.Image(red)
-    
-    # Calculate NDVI
-    ndvi = nir.subtract(red).divide(nir.add(red)).rename('NDVI')
-    
-    # Apply cloud masking if enabled
-    if enable_cloud_masking:
-        try:
-            qa_pixel = image.select('QA_PIXEL')
-            
-            if masking_strictness:
-                # Strict masking: Remove clouds, cloud shadows, and dilated clouds
-                # Bit values: 3=cloud, 4=cloud shadow, 1=dilated cloud
-                cloud_mask = qa_pixel.bitwiseAnd(1 << 3).eq(0).And(  # Clear of clouds
-                            qa_pixel.bitwiseAnd(1 << 4).eq(0)).And(  # Clear of cloud shadow
-                            qa_pixel.bitwiseAnd(1 << 1).eq(0))       # Clear of dilated cloud
-            else:
-                # Standard masking: Remove high confidence clouds and cloud shadows
-                cloud_mask = qa_pixel.bitwiseAnd(1 << 3).eq(0).And(  # Clear of clouds
-                            qa_pixel.bitwiseAnd(1 << 4).eq(0))       # Clear of cloud shadow
-            
-            # Apply mask to NDVI
-            ndvi = ndvi.updateMask(cloud_mask)
-        except Exception as e:
-            # If QA_PIXEL band is not available, continue without masking
-            logger.warning(f"QA_PIXEL band not available for cloud masking in Landsat image: {e}")
-    
-    # Add date and NDVI to image
-    return image.addBands(ndvi).set('system:time_start', image.get('system:time_start'))
-
-
-def calculate_lst_landsat(image, enable_cloud_masking=False, masking_strictness=False):
-    """
-    Calculate Land Surface Temperature for Landsat image with optional cloud masking
-    Handles Landsat 5/7 (ST_B6) and Landsat 8/9 (ST_B10) thermal bands
-    
-    Args:
-        image: Earth Engine image with thermal bands
-        enable_cloud_masking: Whether to apply cloud masking
-        masking_strictness: If True, apply strict masking (more aggressive)
-        
-    Returns:
-        ee.Image: Image with LST band added  
-    """
-    # Get band names to determine which thermal band is available
-    band_names = image.bandNames()
-    
-    # Check thermal band availability:
-    # Landsat 8/9: ST_B10
-    # Landsat 5/7: ST_B6
-    has_st_b10 = band_names.contains('ST_B10')
-    has_st_b6 = band_names.contains('ST_B6')
-    
-    # Select the appropriate thermal band
-    st_band = ee.Algorithms.If(
-        has_st_b10,
-        image.select('ST_B10'),  # Landsat 8/9
-        ee.Algorithms.If(
-            has_st_b6,
-            image.select('ST_B6'),   # Landsat 5/7
-            None  # No thermal band available
-        )
-    )
-    
-    st_band = ee.Image(st_band)
-    
-    # Apply scale factor and offset, then convert to Celsius
-    # Scale factor: 0.00341802, Offset: 149.0 (from Landsat Collection 2 docs)
-    lst_celsius = st_band.multiply(0.00341802).add(149.0).subtract(273.15)
-    
-    # Apply cloud masking if enabled
-    if enable_cloud_masking:
-        try:
-            qa_pixel = image.select('QA_PIXEL')
-            
-            if masking_strictness:
-                # Strict masking: Remove clouds, cloud shadows, and dilated clouds
-                cloud_mask = qa_pixel.bitwiseAnd(1 << 3).eq(0).And(  # Clear of clouds
-                            qa_pixel.bitwiseAnd(1 << 4).eq(0)).And(  # Clear of cloud shadow
-                            qa_pixel.bitwiseAnd(1 << 1).eq(0))       # Clear of dilated cloud
-            else:
-                # Standard masking: Remove high confidence clouds and cloud shadows
-                cloud_mask = qa_pixel.bitwiseAnd(1 << 3).eq(0).And(  # Clear of clouds
-                            qa_pixel.bitwiseAnd(1 << 4).eq(0))       # Clear of cloud shadow
-            
-            # Apply mask to LST
-            lst_celsius = lst_celsius.updateMask(cloud_mask)
-        except Exception as e:
-            # If QA_PIXEL band is not available, continue without masking
-            logger.warning(f"QA_PIXEL band not available for cloud masking in LST image: {e}")
-    
-    # Rename and return
-    return image.addBands(lst_celsius.rename('LST'))
-
-
-def calculate_sentinel2_ndvi(image, enable_cloud_masking=False, masking_strictness=False):
-    """
-    Calculate NDVI for Sentinel-2 image with optional cloud masking
-    
-    Args:
-        image: Earth Engine Sentinel-2 image
-        enable_cloud_masking: Whether to apply cloud masking
-        masking_strictness: If True, apply strict masking (more aggressive)
-        
-    Returns:
-        ee.Image: Image with NDVI band added
-    """
-    # Scale factor for Sentinel-2 Surface Reflectance
-    scale_factor = 0.0001  # Sentinel-2 SR is scaled by 10000
-    scaled = image.multiply(scale_factor)
-    
-    nir = scaled.select('B8')  # Near-Infrared
-    red = scaled.select('B4')  # Red
-    
-    # Calculate NDVI
-    ndvi = nir.subtract(red).divide(nir.add(red)).rename("NDVI")
-    
-    # Apply cloud masking if enabled and SCL band is available
-    if enable_cloud_masking:
-        try:
-            # Use Scene Classification Layer (SCL) for cloud masking
-            scl = image.select('SCL')
-            
-            if masking_strictness:
-                # Strict masking: Remove clouds, cloud shadows, medium/high prob clouds, and thin cirrus
-                # SCL values: 3=cloud shadows, 8=medium prob clouds, 9=high prob clouds, 10=thin cirrus
-                cloud_mask = scl.neq(3).And(scl.neq(8)).And(scl.neq(9)).And(scl.neq(10))
-            else:
-                # Standard masking: Remove high probability clouds and cloud shadows
-                cloud_mask = scl.neq(9).And(scl.neq(3))  # Remove high prob clouds and shadows
-            
-            # Apply mask to NDVI
-            ndvi = ndvi.updateMask(cloud_mask)
-        except:
-            # If SCL band is not available, continue without masking
-            logger.warning("SCL band not available for cloud masking in Sentinel-2 image")
-    
-    return image.addBands(ndvi)
-
-
-def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_date=None, satellite='landsat', cloud_cover=20, selected_images=None, cloud_masking_level='disabled', polarization='VV'):
+def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_date=None, satellite='landsat', cloud_cover=20, selected_images=None, cloud_masking_level='disabled', polarization='VV', orbit_direction='BOTH'):
     """
     Create an interactive map with calculated analysis layers 
 
     Args:
         geometry: Earth Engine geometry for the area of interest
-        analysis_type: Type of analysis ('ndvi', 'lst', 'backscatter')
-        start_date: Start date for image collection
-        end_date: End date for image collection
-        satellite: Satellite type ('landsat', 'sentinel1', 'sentinel2')
-        cloud_cover: Maximum cloud cover percentage
-        selected_images: List of pre-selected images (optional)
-        cloud_masking_level: Cloud masking level ('disabled', 'recommended', 'strict')
-        polarization: SAR polarization ('VV' or 'VH')
-        
+
     Returns:
         dict: Map HTML file information and metadata
     """
@@ -232,7 +60,7 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
         
         logger.info(f"Creating interactive map with analysis: {analysis_type}, satellite: {satellite}")
         if analysis_type.lower() in ['sar', 'backscatter']:
-            logger.warning(f"🎯 SAR polarization: {polarization}")
+            logger.warning(f"🎯 SAR polarization: {polarization}, orbit_direction: {orbit_direction}")
         
         # Get center coordinates from geometry
         try:
@@ -250,10 +78,10 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
             center=[center_lat, center_lon],
             zoom=10,
             add_google_map=False,  # Prevent duplicate base layers
-            plugin_LatLngPopup=False,  # Disable unused plugins
+            plugin_LatLngPopup=False,
             plugin_Draw=False,
-            plugin_Fullscreen=False,  # Keep UI minimal
-            control_scale=True  # Add scale for reference
+            plugin_Fullscreen=False,
+            control_scale=True
         )
         
         # Initialize the map with proper layers
@@ -287,21 +115,41 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
         except Exception as e:
             logger.warning(f"Failed to add geometry layer: {e}")
         
-        # Get image collection based on satellite type
-        if 'sentinel2' in satellite.lower():
-            collection = get_sentinel2_collection(geometry, start_date, end_date, cloud_cover)
-        elif 'sentinel1' in satellite.lower() or 'sentinel-1' in satellite.lower():
-            collection = get_sentinel1_collection(geometry, start_date, end_date)
-        else:  # landsat
-            collection = get_landsat_collection(geometry, start_date, end_date, cloud_cover)
+        # OPTIMIZATION: Check if we have image IDs from metadata endpoint
+        has_image_ids = False
+        if selected_images and len(selected_images) > 0:
+            # Check if these are image IDs (strings starting with dataset name) or indices (integers)
+            first_item = selected_images[0]
+            if isinstance(first_item, str) and ('LANDSAT/' in first_item or 'COPERNICUS/' in first_item):
+                has_image_ids = True
+                logger.info(f"🚀 OPTIMIZATION: Using {len(selected_images)} pre-filtered image IDs from metadata endpoint (skipping collection re-filtering)")
         
-        if collection.size().getInfo() == 0:
-            raise ValueError("No images found for the specified criteria")
+        # Only fetch and filter collection if we don't have image IDs
+        if not has_image_ids:
+            # Get image collection based on satellite type
+            if 'sentinel2' in satellite.lower():
+                collection = get_sentinel2_collection(geometry, start_date, end_date, cloud_cover)
+            elif 'sentinel1' in satellite.lower() or 'sentinel-1' in satellite.lower():
+                collection = get_sentinel1_collection(geometry, start_date, end_date, orbit_direction)
+            else:  # landsat
+                collection = get_landsat_collection(geometry, start_date, end_date, cloud_cover)
+            
+            if collection.size().getInfo() == 0:
+                raise ValueError("No images found for the specified criteria")
+        else:
+            collection = None  # Not needed when using image IDs
         
         # Get images for analysis - use selected images if provided, otherwise first few
         if selected_images and len(selected_images) > 0:
-            # Handle special case for analysis page: first and last images only
-            if (len(selected_images) == 1 and 
+            # CASE 1: Using pre-filtered image IDs from metadata endpoint (OPTIMIZED)
+            if has_image_ids:
+                logger.info(f"Using {len(selected_images)} pre-filtered image IDs directly")
+                images = [ee.Image(img_id) for img_id in selected_images]
+                for idx, img_id in enumerate(selected_images):
+                    logger.info(f"Image {idx}: {img_id}")
+                    
+            # CASE 2: Handle special case for analysis page: first and last images only
+            elif (len(selected_images) == 1 and 
                 isinstance(selected_images[0], str) and 
                 selected_images[0] == 'first_last'):
                 
@@ -379,6 +227,11 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
                 logger.error(f"Error getting default images: {e}")
                 raise ValueError("Failed to get default images. Check the date range and parameters.")
         
+        # Extract statistics from selected images for data table
+        logger.info(f"Extracting statistics from {len(images)} selected images")
+        image_statistics = extract_image_statistics(images, geometry, analysis_type, satellite, polarization, cloud_masking_level)
+        logger.info(f"Extracted statistics for {len(image_statistics)} images")
+        
         # Add raw RGB layers FIRST for cloud inspection (first and last images only)
         if len(images) >= 1:
             logger.info(f"About to add raw RGB layers for {len(images)} images")
@@ -403,7 +256,6 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
             # First remove any existing layer control
             map_obj.clear_controls()
             
-            # Add this JavaScript after the map is created
             custom_js = """
             <script>
             // Wait for the map and layers to be ready
@@ -478,27 +330,61 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
         # Center map on the area of interest
         map_obj.centerObject(geometry, zoom=11)
         
-        # Save map to HTML file
+        # Save map to HTML file (first locally, then upload to Azure)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         map_filename = f'interactive_map_{timestamp}.html'
         
         from django.conf import settings
+        from django.core.files.storage import default_storage
+        from django.core.files.base import ContentFile
+        
+        # Save locally first
         static_dir = os.path.join(settings.BASE_DIR, 'static')
         os.makedirs(static_dir, exist_ok=True)
         map_filepath = os.path.join(static_dir, map_filename)
         
-        # Save the map
+        # Save the map to local file
         map_obj.to_html(map_filepath)
-        logger.info(f"Interactive map saved to {map_filepath}")
+        logger.info(f"Interactive map saved locally to {map_filepath}")
         
         # Verify file was created successfully
         if os.path.exists(map_filepath) and os.path.getsize(map_filepath) > 1000:
-            return {
-                'success': True,
-                'map_url': f'/static/{map_filename}',
-                'map_filename': map_filename,
-                'fallback_url': f'/static/{map_filename}'
-            }
+            # Upload to Azure Blob Storage for production access
+            try:
+                with open(map_filepath, 'r', encoding='utf-8') as f:
+                    html_content = f.read()
+                
+                # Use static storage backend for Azure Blob Storage
+                from storages.backends.azure_storage import AzureStorage
+                static_storage = AzureStorage(
+                    account_name=settings.AZURE_ACCOUNT_NAME,
+                    account_key=settings.AZURE_ACCOUNT_KEY,
+                    azure_container=settings.AZURE_STATIC_CONTAINER,
+                    expiration_secs=None
+                )
+                
+                # Save to Azure Blob Storage
+                file_path = static_storage.save(map_filename, ContentFile(html_content.encode('utf-8')))
+                azure_url = static_storage.url(file_path)
+                logger.info(f"Map uploaded to Azure Blob Storage: {azure_url}")
+                
+                return {
+                    'success': True,
+                    'map_url': azure_url,
+                    'map_filename': map_filename,
+                    'fallback_url': f'/static/{map_filename}',
+                    'statistics': image_statistics
+                }
+            except Exception as upload_error:
+                logger.error(f"Failed to upload map to Azure Storage: {upload_error}")
+                # Fall back to local static URL
+                return {
+                    'success': True,
+                    'map_url': f'/static/{map_filename}',
+                    'map_filename': map_filename,
+                    'fallback_url': f'/static/{map_filename}',
+                    'statistics': image_statistics
+                }
         else:
             logger.error("Map file creation failed or file too small")
             return create_simple_html_map_with_analysis(geometry, analysis_type, start_date, end_date, satellite, cloud_cover)
@@ -506,233 +392,6 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
     except Exception as e:
         logger.error(f"Error creating interactive map: {str(e)}")
         return create_simple_html_map_with_analysis(geometry, analysis_type, start_date, end_date, satellite, cloud_cover)
-
-
-def filter_for_complete_coverage(collection, geometry, is_sentinel1=False):
-    """
-    Filter collection to only include images that completely cover the ROI
-    
-    Args:
-        collection: Earth Engine ImageCollection
-        geometry: Earth Engine geometry object (ROI)
-        
-    Returns:
-        ee.ImageCollection: Filtered collection with complete coverage
-    """
-    try:
-        logger.info("Filtering for complete ROI coverage...")
-        
-        def check_coverage(image):
-            # Get the image footprint
-            footprint = image.geometry()
-            
-            # Check if the image footprint completely contains the ROI
-            # This means the ROI is entirely within the image bounds
-            roi_covered = footprint.contains(geometry, ee.ErrorMargin(1))  # 1 meter tolerance
-            
-            # Also check intersection area to ensure good coverage
-            intersection = footprint.intersection(geometry, ee.ErrorMargin(1))
-            intersection_area = intersection.area()
-            roi_area = geometry.area()
-            
-            # Coverage percentage (should be close to 100% for complete coverage)
-            coverage_percent = intersection_area.divide(roi_area).multiply(100)
-            
-            # Set properties for debugging
-            return image.set({
-                'roi_covered': roi_covered,
-                'coverage_percent': coverage_percent,
-                'intersection_area': intersection_area,
-                'roi_area': roi_area
-            })
-        
-        # Add coverage properties to all images
-        collection_with_coverage = collection.map(check_coverage)
-        
-        # Filter for images based on coverage criteria
-        coverage_threshold = 90 if is_sentinel1 else 99
-        complete_coverage = collection_with_coverage.filter(
-            ee.Filter.And(
-                ee.Filter.eq('roi_covered', True),
-                ee.Filter.gte('coverage_percent', coverage_threshold)
-            )
-        )
-        
-        return complete_coverage
-    
-    except Exception as e:
-        logger.error(f"Error in coverage filtering: {str(e)}")
-        return collection  # Return original collection if filtering fails
-
-
-def get_landsat_collection(geometry, start_date, end_date, cloud_cover):
-    """Get Landsat collection for the specified parameters with complete ROI coverage"""
-    try:
-        start_year = int(start_date.split("-")[0])
-        end_year = int(end_date.split("-")[0])
-        collections = []
-        
-        # Log the search parameters
-        logger.info(f"Searching for Landsat images: {start_date} to {end_date}, cloud cover <= {cloud_cover}%")
-        logger.info(f"Area of interest bounds: {geometry.bounds().getInfo()}")
-        
-        # Convert cloud_cover to float and ensure it's a valid number
-        try:
-            cloud_cover = float(cloud_cover)
-        except (TypeError, ValueError):
-            cloud_cover = 20.0
-        
-        # Add available Landsat collections based on date range
-        if end_year >= 2021:
-            # Try Landsat 9 first (newest)
-            l9 = ee.ImageCollection("LANDSAT/LC09/C02/T1_L2") \
-                .filterDate(start_date, end_date) \
-                .filterBounds(geometry) \
-                .filter(ee.Filter.lt("CLOUD_COVER", ee.Number(cloud_cover)))
-            collections.append(l9)
-            logger.info("Added Landsat 9 collection")
-        
-        if end_year >= 2013:
-            # Then Landsat 8
-            l8 = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2") \
-                .filterDate(start_date, end_date) \
-                .filterBounds(geometry) \
-                .filter(ee.Filter.lt("CLOUD_COVER", ee.Number(cloud_cover)))
-            collections.append(l8)
-            logger.info("Added Landsat 8 collection")
-        
-        if start_year <= 2013 or end_year >= 1999:
-            # Then Landsat 7
-            l7 = ee.ImageCollection("LANDSAT/LE07/C02/T1_L2") \
-                .filterDate(start_date, end_date) \
-                .filterBounds(geometry) \
-                .filter(ee.Filter.lt("CLOUD_COVER", ee.Number(cloud_cover)))
-            collections.append(l7)
-            logger.info("Added Landsat 7 collection")
-        
-        if start_year <= 2013:
-            # Finally Landsat 5
-            l5 = ee.ImageCollection("LANDSAT/LT05/C02/T1_L2") \
-                .filterDate(start_date, end_date) \
-                .filterBounds(geometry) \
-                .filter(ee.Filter.lt("CLOUD_COVER", ee.Number(cloud_cover)))
-            collections.append(l5)
-            logger.info("Added Landsat 5 collection")
-
-        if not collections:
-            raise ValueError(f"No Landsat collections available for date range: {start_date} to {end_date}")
-
-        # Merge collections
-        collection = collections[0]
-        for coll in collections[1:]:
-            collection = collection.merge(coll)
-        
-        # Get initial count
-        total_images = collection.size().getInfo()
-        logger.info(f"Total images found: {total_images}")
-        
-        if total_images == 0:
-            # Try with relaxed cloud cover if no images found
-            cloud_cover_relaxed = min(cloud_cover * 2, 100)
-            logger.info(f"No images found, trying with relaxed cloud cover: {cloud_cover_relaxed}%")
-            
-            collection = collection.filter(ee.Filter.lt("CLOUD_COVER", cloud_cover_relaxed))
-            total_images = collection.size().getInfo()
-            logger.info(f"Images found with relaxed cloud cover: {total_images}")
-            
-            if total_images == 0:
-                raise ValueError("No images found even with relaxed cloud cover threshold")
-        
-        # Sort by quality metrics
-        collection = collection.sort('CLOUD_COVER').sort('system:time_start')
-        
-        # Apply coverage filtering but with a fallback
-        try:
-            filtered_collection = filter_for_complete_coverage(collection, geometry)
-            filtered_count = filtered_collection.size().getInfo()
-            logger.info(f"Images after coverage filtering: {filtered_count}")
-            
-            if filtered_count == 0:
-                logger.warning("No images with complete coverage, using partial coverage")
-                return collection  # Return unfiltered collection as fallback
-            return filtered_collection
-        except Exception as e:
-            logger.warning(f"Coverage filtering failed: {e}, using unfiltered collection")
-            return collection
-            
-    except Exception as e:
-        logger.error(f"Error in get_landsat_collection: {e}")
-        raise
-
-
-def get_sentinel2_collection(geometry, start_date, end_date, cloud_cover):
-    """Get Sentinel-2 collection for the specified parameters with complete ROI coverage"""
-    # Use Harmonized Sentinel-2 collection
-    logger.info("Using Harmonized Sentinel-2 collection")
-    collection = (
-        ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
-        .filterDate(start_date, end_date)
-        .filterBounds(geometry)
-    )
-    
-    logger.info(f"Total Sentinel-2 images after initial filtering: {collection.size().getInfo()}")
-    
-    # Filter by quality metrics
-    collection = collection.filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", cloud_cover))\
-        .filter(ee.Filter.lt("NODATA_PIXEL_PERCENTAGE", 10))
-    
-    logger.info(f"Sentinel-2 images after cloud and quality filtering: {collection.size().getInfo()}")
-    
-    # Sort by cloud coverage and acquisition time to get best quality images
-    collection = collection.sort('CLOUDY_PIXEL_PERCENTAGE').sort('system:time_start')
-    
-    # Apply complete coverage filtering
-    filtered_collection = filter_for_complete_coverage(collection, geometry)
-    logger.info(f"Sentinel-2 images after coverage filtering: {filtered_collection.size().getInfo()}")
-    
-    return filtered_collection
-
-
-def get_sentinel1_collection(geometry, start_date, end_date):
-    """Get Sentinel-1 collection for the specified parameters with flexible coverage"""
-    collection = (
-        ee.ImageCollection("COPERNICUS/S1_GRD")
-        .filterDate(start_date, end_date)
-        .filterBounds(geometry)
-        .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
-        .filterMetadata('resolution_meters', 'equals', 10)
-        # Include both ASCENDING and DESCENDING for more images
-        .filter(ee.Filter.inList('orbitProperties_pass', ['ASCENDING', 'DESCENDING']))
-        .filter(ee.Filter.eq('instrumentMode', 'IW'))
-    )
-    
-    logger.info(f"Total Sentinel-1 images before coverage filtering: {collection.size().getInfo()}")
-    
-    try:
-        # Apply more lenient coverage filtering for Sentinel-1
-        def check_coverage_s1(image):
-            footprint = image.geometry()
-            intersection = footprint.intersection(geometry, ee.ErrorMargin(10))  # 10m tolerance for SAR
-            intersection_area = intersection.area()
-            roi_area = geometry.area()
-            coverage_percent = intersection_area.divide(roi_area).multiply(100)
-            return image.set('coverage_percent', coverage_percent)
-        
-        # Add coverage info to images
-        collection_with_coverage = collection.map(check_coverage_s1)
-        
-        # Filter for images with at least 85% coverage (more lenient for SAR)
-        filtered_collection = collection_with_coverage.filter(ee.Filter.gte('coverage_percent', 85))
-        filtered_count = filtered_collection.size().getInfo()
-        logger.info(f"Sentinel-1 images after coverage filtering: {filtered_count}")
-        
-        if filtered_count == 0:
-            logger.warning("No images with sufficient coverage, using unfiltered collection")
-            return collection
-        return filtered_collection
-    except Exception as e:
-        logger.warning(f"Coverage filtering failed for Sentinel-1: {e}, using unfiltered collection")
-        return collection
 
 
 def add_raw_rgb_layers(map_obj, images, geometry, satellite):
@@ -799,7 +458,7 @@ def add_raw_rgb_layers(map_obj, images, geometry, satellite):
                             'max': 18000,
                             'gamma': 1.8
                         }
-                
+
                 # Create descriptive layer name that will appear at the top of the layer list
                 if idx == 0:
                     layer_name = f' First Image Orthomosaic {date_info}'
@@ -819,7 +478,7 @@ def add_raw_rgb_layers(map_obj, images, geometry, satellite):
                         logger.info(f"Added raw RGB layer with explicit parameters: {layer_name}")
                     except Exception as e2:
                         logger.error(f"All addLayer attempts failed for {layer_name}: {e2}")
-                
+
             except Exception as e:
                 logger.warning(f"Failed to add raw RGB layer for image {idx}: {e}")
                 # Try with simplified parameters if the above fails
@@ -855,6 +514,12 @@ def add_ndvi_layers(map_obj, images, geometry, satellite, collection, cloud_mask
         masking_strictness = cloud_masking_level == 'strict'
         
         logger.info(f"Adding NDVI layers for {satellite}, cloud masking: {cloud_masking_level}")
+        
+        # OPTIMIZATION FIX: If collection is None (using pre-filtered image IDs),
+        # create an ImageCollection from the individual images
+        if collection is None:
+            logger.info("Collection is None (optimization path) - creating ImageCollection from images")
+            collection = ee.ImageCollection.fromImages(images)
         
         # Calculate NDVI for the collection and get median
         if satellite.lower() == 'sentinel2':
@@ -969,6 +634,12 @@ def add_lst_layers(map_obj, images, geometry, satellite, collection, cloud_maski
         
         logger.info(f"Adding LST layers for {satellite}, cloud masking: {cloud_masking_level}")
         
+        # OPTIMIZATION FIX: If collection is None (using pre-filtered image IDs),
+        # create an ImageCollection from the individual images
+        if collection is None:
+            logger.info("Collection is None (optimization path) - creating ImageCollection from images")
+            collection = ee.ImageCollection.fromImages(images)
+        
         # Calculate LST for the collection and get median
         lst_collection = collection.map(lambda img: calculate_lst_landsat(img, enable_cloud_masking, masking_strictness))
         lst_median = lst_collection.select('LST').median().clip(geometry)
@@ -1047,6 +718,12 @@ def add_backscatter_layers(map_obj, images, geometry, collection, polarization='
     """Add Sentinel-1 backscatter layers to the map"""
     try:
         logger.info(f"Adding Sentinel-1 backscatter layers for {polarization} polarization")
+        
+        # OPTIMIZATION FIX: If collection is None (using pre-filtered image IDs),
+        # create an ImageCollection from the individual images
+        if collection is None:
+            logger.info("Collection is None (optimization path) - creating ImageCollection from images")
+            collection = ee.ImageCollection.fromImages(images)
         
         # Get median backscatter
         median_image = collection.median().clip(geometry)
@@ -1184,24 +861,37 @@ def create_simple_html_map_with_analysis(geometry, analysis_type, start_date, en
             center_lat, center_lon = 52.5, 13.4
         
         # Generate Earth Engine tile URL for the analysis
-        if analysis_type.lower() == 'ndvi':
-            if satellite.lower() == 'sentinel2':
-                result = generate_sentinel2_visualization(geometry, start_date, end_date, satellite, cloud_cover)
+        try:
+            if analysis_type.lower() == 'ndvi':
+                if satellite.lower() == 'sentinel2':
+                    result = generate_sentinel2_visualization(geometry, start_date, end_date, satellite, cloud_cover)
+                else:
+                    result = generate_ndvi_visualization(geometry, start_date, end_date, satellite, cloud_cover)
+            elif analysis_type.lower() == 'lst':
+                result = generate_lst_visualization(geometry, start_date, end_date, satellite, cloud_cover)
             else:
-                result = generate_ndvi_visualization(geometry, start_date, end_date, satellite, cloud_cover)
-        elif analysis_type.lower() == 'lst':
-            result = generate_lst_visualization(geometry, start_date, end_date, satellite, cloud_cover)
-        else:
-            # Basic RGB visualization
-            collection = get_landsat_collection(geometry, start_date, end_date, cloud_cover)
-            image = collection.median().clip(geometry)
-            vis_params = {'bands': ['SR_B4', 'SR_B3', 'SR_B2'], 'min': 0.0, 'max': 0.3}
-            map_id_dict = ee.Image(image).getMapId(vis_params)
-            tile_url = f"https://earthengine.googleapis.com/v1alpha/projects/earthengine-legacy/maps/{map_id_dict['mapid']}/tiles/{{z}}/{{x}}/{{y}}?token={map_id_dict['token']}"
-            result = Response({'tile_url': tile_url, 'bounds': geometry.bounds().getInfo()})
+                # Basic RGB visualization
+                collection = get_landsat_collection(geometry, start_date, end_date, cloud_cover)
+                image = collection.median().clip(geometry)
+                vis_params = {'bands': ['SR_B4', 'SR_B3', 'SR_B2'], 'min': 0.0, 'max': 0.3}
+                map_id_dict = ee.Image(image).getMapId(vis_params)
+                tile_url = f"https://earthengine.googleapis.com/v1alpha/projects/earthengine-legacy/maps/{map_id_dict['mapid']}/tiles/{{z}}/{{x}}/{{y}}?token={map_id_dict['token']}"
+                result = Response({'tile_url': tile_url, 'bounds': geometry.bounds().getInfo()})
+            
+            response_data = result.data if hasattr(result, 'data') else result
+            tile_url = response_data.get('tile_url', '')
+            
+            if not tile_url:
+                logger.error(f"⚠️ Failed to extract tile_url from response. Response data: {response_data}")
+        except Exception as e:
+            logger.error(f"Error generating Earth Engine visualization: {e}", exc_info=True)
+            tile_url = ''
         
-        response_data = result.data if hasattr(result, 'data') else result
-        tile_url = response_data.get('tile_url', '')
+        # Log tile URL for debugging
+        if tile_url:
+            logger.info(f"✅ Generated tile URL: {tile_url[:100]}...")
+        else:
+            logger.warning("⚠️ No tile URL generated - map will be empty!")
         
         # Create HTML content
         html_content = f"""
@@ -1293,20 +983,51 @@ def create_simple_html_map_with_analysis(geometry, analysis_type, start_date, en
         map_filename = f'simple_analysis_map_{timestamp}.html'
         
         from django.conf import settings
-        static_dir = os.path.join(settings.BASE_DIR, 'static')
-        os.makedirs(static_dir, exist_ok=True)
-        map_filepath = os.path.join(static_dir, map_filename)
         
-        with open(map_filepath, 'w', encoding='utf-8') as f:
-            f.write(html_content)
-        
-        logger.info(f"Simple analysis map saved to {map_filepath}")
+        # Check if Azure Storage is enabled
+        if getattr(settings, 'USE_AZURE_STORAGE', False):
+            # Upload to Azure Blob Storage (static container)
+            from storages.backends.azure_storage import AzureStorage
+            
+            static_storage = AzureStorage(
+                account_name=settings.AZURE_ACCOUNT_NAME,
+                account_key=settings.AZURE_ACCOUNT_KEY,
+                azure_container=settings.AZURE_STATIC_CONTAINER,
+            )
+            
+            try:
+                from django.core.files.base import ContentFile
+                # Save to Azure Blob Storage
+                file_path = static_storage.save(map_filename, ContentFile(html_content.encode('utf-8')))
+                map_url = static_storage.url(file_path)
+                logger.info(f"Simple analysis map saved to Azure Blob Storage: {file_path}")
+                logger.info(f"Map URL: {map_url}")
+            except Exception as storage_error:
+                logger.error(f"Error saving to Azure Blob Storage: {storage_error}")
+                # Fallback to local storage
+                static_dir = getattr(settings, 'STATIC_ROOT', None) or os.path.join(settings.BASE_DIR, 'static')
+                os.makedirs(static_dir, exist_ok=True)
+                map_filepath = os.path.join(static_dir, map_filename)
+                with open(map_filepath, 'w', encoding='utf-8') as f:
+                    f.write(html_content)
+                map_url = f'/static/{map_filename}'
+                logger.info(f"Simple analysis map saved to fallback location: {map_filepath}")
+        else:
+            # Local storage
+            static_dir = getattr(settings, 'STATIC_ROOT', None) or os.path.join(settings.BASE_DIR, 'static')
+            os.makedirs(static_dir, exist_ok=True)
+            map_filepath = os.path.join(static_dir, map_filename)
+            with open(map_filepath, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            map_url = f'/static/{map_filename}'
+            logger.info(f"Simple analysis map saved locally: {map_filepath}")
+            logger.info(f"Simple analysis map saved to fallback location: {map_filepath}")
         
         return {
             'success': True,
-            'map_url': f'/static/{map_filename}',
+            'map_url': map_url,
             'map_filename': map_filename,
-            'fallback_url': f'/static/{map_filename}'
+            'fallback_url': map_url
         }
         
     except Exception as e:
@@ -1316,93 +1037,6 @@ def create_simple_html_map_with_analysis(geometry, analysis_type, start_date, en
             'error': str(e)
         }
 
-
-def process_shapefile_to_coordinates(shapefile_obj):
-    """
-    Process uploaded shapefile and extract coordinates as WKT
-    
-    Args:
-        shapefile_obj: Django uploaded file object
-        
-    Returns:
-        str or None: WKT polygon string or None if failed
-    """
-    if not GEOPANDAS_AVAILABLE:
-        logger.error("GeoPandas not available for shapefile processing")
-        return None
-    
-    try:
-        logger.info(f"Processing shapefile: {shapefile_obj.name}")
-        
-        # Create temporary directory for extraction
-        with tempfile.TemporaryDirectory() as temp_dir:
-            zip_path = os.path.join(temp_dir, shapefile_obj.name)
-            
-            # Save uploaded file
-            with open(zip_path, 'wb+') as destination:
-                for chunk in shapefile_obj.chunks():
-                    destination.write(chunk)
-            
-            # Extract ZIP file
-            try:
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(temp_dir)
-                    
-                    # Find all extracted files
-                    extracted_files = []
-                    for root, dirs, files in os.walk(temp_dir):
-                        for file in files:
-                            rel_path = os.path.relpath(os.path.join(root, file), temp_dir)
-                            extracted_files.append(rel_path)
-                    
-            except zipfile.BadZipFile:
-                logger.error("Invalid ZIP file")
-                return None
-            
-            # Find shapefile components
-            shp_files = [f for f in extracted_files if f.lower().endswith('.shp')]
-            
-            if not shp_files:
-                logger.error("No .shp file found in the uploaded ZIP")
-                return None
-            
-            if len(shp_files) > 1:
-                logger.error(f"Multiple .shp files found: {shp_files}")
-                return None
-            
-            shp_file = shp_files[0]
-            shp_path = os.path.join(temp_dir, shp_file)
-            
-            # Read shapefile
-            try:
-                gdf = gpd.read_file(shp_path)
-                
-                if gdf.empty:
-                    logger.error("Shapefile is empty")
-                    return None
-                
-                # Convert to WGS84 if needed
-                if gdf.crs != 'EPSG:4326':
-                    gdf = gdf.to_crs('EPSG:4326')
-                
-                # Use the first feature if multiple features exist
-                if len(gdf) > 1:
-                    gdf = gdf.iloc[:1]
-                
-                # Get geometry as WKT
-                geom = gdf.geometry.iloc[0]
-                wkt = geom.wkt
-                
-                logger.info(f"Successfully extracted WKT: {wkt[:100]}...")
-                return wkt
-                
-            except Exception as e:
-                logger.error(f"Error reading shapefile: {str(e)}")
-                return None
-    
-    except Exception as e:
-        logger.error(f"Error processing shapefile: {str(e)}")
-        return None
 
 @api_view(["GET"])
 def health_check(request):
@@ -1541,8 +1175,6 @@ def generate_ndvi_visualization(geometry, start_date, end_date, satellite, cloud
         # Get band names to determine Landsat version
         band_names = image.bandNames()
         
-        # For Landsat 4-7: B3=Red, B4=NIR
-        # For Landsat 8-9: B4=Red, B5=NIR
         nir = ee.Algorithms.If(
             band_names.contains('SR_B5'),  # Landsat 8-9
             scaled.select('SR_B5'),
@@ -1612,7 +1244,6 @@ def generate_sentinel2_visualization(geometry, start_date, end_date, satellite, 
         image = collection.median()
         
         # Calculate NDVI for Sentinel-2: B8=NIR, B4=Red
-        # Scale factor for Sentinel-2 Surface Reflectance
         scale_factor = 0.0001  # Sentinel-2 SR is scaled by 10000
         scaled = image.multiply(scale_factor)
         
@@ -1811,8 +1442,25 @@ def create_custom_map(request):
             start_date = data.get('start_date')
             end_date = data.get('end_date')
             cloud_cover = int(data.get('cloud_cover', 20))
-            selected_indices = data.get('selected_indices', '').split(',') if data.get('selected_indices') else []
+            
+            # Parse selected_indices - it comes as JSON string from FormData
+            selected_indices_raw = data.get('selected_indices', '')
+            if selected_indices_raw:
+                try:
+                    # Try parsing as JSON first (from FormData with JSON.stringify)
+                    selected_indices = json.loads(selected_indices_raw) if isinstance(selected_indices_raw, str) else selected_indices_raw
+                    logger.info(f"✅ Parsed {len(selected_indices)} selected_indices from JSON: {selected_indices[:2] if len(selected_indices) > 2 else selected_indices}")
+                except json.JSONDecodeError:
+                    # Fallback to comma-separated string format
+                    selected_indices = selected_indices_raw.split(',') if selected_indices_raw else []
+                    logger.warning(f"⚠️ Parsed {len(selected_indices)} selected_indices from comma-separated string (fallback)")
+            else:
+                selected_indices = []
+            
             cloud_masking_level = data.get('cloud_masking_level', 'disabled')
+            polarization = data.get('polarization', 'VV')  # Default polarization for SAR
+            orbit_direction = data.get('orbit_direction', 'BOTH')  # Default orbit direction for SAR
+            logger.warning(f"🎯 VISUALIZATION REQUEST (FormData): polarization={polarization}, orbit_direction={orbit_direction}, analysis_type={analysis_type}")
             
             # Convert use_cloud_masking parameter to cloud_masking_level for compatibility
             use_cloud_masking = data.get('use_cloud_masking')
@@ -1868,7 +1516,8 @@ def create_custom_map(request):
                 selected_indices = selected_indices_raw
             cloud_masking_level = data.get('cloud_masking_level', 'disabled')
             polarization = data.get('polarization', 'VV')
-            logger.warning(f"🎯 VISUALIZATION REQUEST (JSON): polarization={polarization}, analysis_type={analysis_type}")
+            orbit_direction = data.get('orbit_direction', 'BOTH')
+            logger.warning(f"🎯 VISUALIZATION REQUEST (JSON): polarization={polarization}, orbit_direction={orbit_direction}, analysis_type={analysis_type}")
             
             # Convert use_cloud_masking parameter to cloud_masking_level for compatibility
             use_cloud_masking = data.get('use_cloud_masking')
@@ -1898,10 +1547,6 @@ def create_custom_map(request):
         # Convert coordinates to Earth Engine geometry
         try:
             if isinstance(coordinates, str) and coordinates.startswith('POLYGON'):
-                # Parse WKT format: Handle various formats like:
-                # POLYGON((-74.0059 40.7128, -74.0059 40.7628, ...))
-                # POLYGON ((-74.0059 40.7128, -74.0059 40.7628, ...))
-                # POLYGON(((-74.0059 40.7128, -74.0059 40.7628, ...)))
                 
                 # Remove POLYGON prefix and normalize
                 coords_str = coordinates.upper().replace('POLYGON', '').strip()
@@ -2019,7 +1664,8 @@ def create_custom_map(request):
                 cloud_cover=cloud_cover,
                 selected_images=selected_indices,
                 cloud_masking_level=cloud_masking_level,
-                polarization=polarization
+                polarization=polarization,
+                orbit_direction=orbit_direction
             )
             
             if map_result.get('success'):
@@ -2030,6 +1676,7 @@ def create_custom_map(request):
                     'fallback_url': map_result.get('fallback_url'),
                     'analysis_type': analysis_type,
                     'satellite': satellite,
+                    'statistics': map_result.get('statistics', []),
                     'message': f'{analysis_type.upper()} interactive map created successfully with calculated layers'
                 })
             else:

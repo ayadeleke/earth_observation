@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -7,6 +7,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet-draw';
+import { useAuth } from '../contexts/AuthContext';
 
 interface MockFormData {
   coordinates: string;
@@ -50,6 +51,7 @@ interface MockStatistics {
 
 const DemoPage: React.FC = () => {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   
   const [formData, setFormData] = useState<MockFormData>({
     coordinates: '',
@@ -76,121 +78,139 @@ const DemoPage: React.FC = () => {
   const mapRef = useRef<any>(null);
   const featureGroupRef = useRef<any>(null);
 
-  // Custom Map Component with Drawing Controls
-  const MapWithDrawingControls: React.FC = () => {
-    useEffect(() => {
-      // Delay to ensure map and feature group are ready
-      const timer = setTimeout(() => {
-        if (mapRef.current && featureGroupRef.current) {
-          const map = mapRef.current;
-          const featureGroup = featureGroupRef.current;
+  // Handle Get Full Access / Upgrade button click
+  const handleUpgradeClick = () => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    } else {
+      navigate('/register');
+    }
+  };
 
-          // Configure draw controls
-          const drawControl = new L.Control.Draw({
-            edit: {
-              featureGroup: featureGroup,
-            },
-            draw: {
-              polygon: {
-                allowIntersection: false,
-                showArea: true,
-                drawError: {
-                  color: '#e1e100',
-                  message: '<strong>Oh snap!</strong> you can\'t draw that!'
+  // Stable callback for updating coordinates
+  const updateCoordinates = useCallback((wkt: string) => {
+    setFormData(prev => ({
+      ...prev,
+      coordinates: wkt
+    }));
+  }, []);
+
+  // Custom Map Component with Drawing Controls - Memoized to prevent re-renders
+  const MapWithDrawingControls = useMemo(() => {
+    const MapComponent: React.FC = () => {
+      const hasInitialized = useRef(false);
+
+      useEffect(() => {
+        // Prevent multiple initializations
+        if (hasInitialized.current) return;
+
+        // Delay to ensure map and feature group are ready
+        const timer = setTimeout(() => {
+          if (mapRef.current && featureGroupRef.current) {
+            hasInitialized.current = true;
+            const map = mapRef.current;
+            const featureGroup = featureGroupRef.current;
+
+            // Configure draw controls
+            const drawControl = new L.Control.Draw({
+              edit: {
+                featureGroup: featureGroup,
+              },
+              draw: {
+                polygon: {
+                  allowIntersection: false,
+                  showArea: true,
+                  drawError: {
+                    color: '#e1e100',
+                    message: '<strong>Oh snap!</strong> you can\'t draw that!'
+                  },
+                  shapeOptions: {
+                    color: '#2563eb',
+                    weight: 2,
+                    fillOpacity: 0.2
+                  }
                 },
-                shapeOptions: {
-                  color: '#2563eb',
-                  weight: 2,
-                  fillOpacity: 0.2
-                }
-              },
-              rectangle: {
-                shapeOptions: {
-                  color: '#2563eb',
-                  weight: 2,
-                  fillOpacity: 0.2
-                }
-              },
-              circle: false,
-              circlemarker: false,
-              marker: false,
-              polyline: false
-            }
-          });
+                rectangle: {
+                  shapeOptions: {
+                    color: '#2563eb',
+                    weight: 2,
+                    fillOpacity: 0.2
+                  }
+                },
+                circle: false,
+                circlemarker: false,
+                marker: false,
+                polyline: false
+              }
+            });
 
-          map.addControl(drawControl);
+            map.addControl(drawControl);
 
-          // Handle draw events
-          map.on(L.Draw.Event.CREATED, (event: any) => {
-            const layer = event.layer;
-            // Keep existing layers and add new one (area will persist on map)
-            featureGroup.addLayer(layer);
-            
-            // Convert to WKT format
-            const coordinates = layer.getLatLngs()[0].map((latlng: any) => 
-              `${latlng.lng} ${latlng.lat}`
-            ).join(', ');
-            
-            const wkt = `POLYGON((${coordinates}, ${layer.getLatLngs()[0][0].lng} ${layer.getLatLngs()[0][0].lat}))`;
-            
-            setFormData(prev => ({
-              ...prev,
-              coordinates: wkt
-            }));
-          });
-
-          map.on(L.Draw.Event.EDITED, (event: any) => {
-            const layers = event.layers;
-            layers.eachLayer((layer: any) => {
+            // Handle draw events
+            map.on(L.Draw.Event.CREATED, (event: any) => {
+              const layer = event.layer;
+              // Keep existing layers and add new one (area will persist on map)
+              featureGroup.addLayer(layer);
+              
+              // Convert to WKT format
               const coordinates = layer.getLatLngs()[0].map((latlng: any) => 
                 `${latlng.lng} ${latlng.lat}`
               ).join(', ');
               
               const wkt = `POLYGON((${coordinates}, ${layer.getLatLngs()[0][0].lng} ${layer.getLatLngs()[0][0].lat}))`;
               
-              setFormData(prev => ({
-                ...prev,
-                coordinates: wkt
-              }));
+              updateCoordinates(wkt);
             });
-          });
 
-          map.on(L.Draw.Event.DELETED, () => {
-            setFormData(prev => ({
-              ...prev,
-              coordinates: ''
-            }));
-          });
+            map.on(L.Draw.Event.EDITED, (event: any) => {
+              const layers = event.layers;
+              layers.eachLayer((layer: any) => {
+                const coordinates = layer.getLatLngs()[0].map((latlng: any) => 
+                  `${latlng.lng} ${latlng.lat}`
+                ).join(', ');
+                
+                const wkt = `POLYGON((${coordinates}, ${layer.getLatLngs()[0][0].lng} ${layer.getLatLngs()[0][0].lat}))`;
+                
+                updateCoordinates(wkt);
+              });
+            });
 
-          return () => {
-            map.removeControl(drawControl);
-          };
-        }
-      }, 500); // 500ms delay to ensure map is fully ready
+            map.on(L.Draw.Event.DELETED, () => {
+              updateCoordinates('');
+            });
 
-      return () => {
-        clearTimeout(timer);
-      };
-    }, []);
+            return () => {
+              map.removeControl(drawControl);
+            };
+          }
+        }, 500); // 500ms delay to ensure map is fully ready
 
-    return (
-      <MapContainer
-        ref={mapRef}
-        center={[52.5, 13.4]}
-        zoom={8}
-        style={{ height: '400px', width: '100%' }}
-        whenReady={() => {
+        return () => {
+          clearTimeout(timer);
+        };
+      }, []);
 
-        }}
-      >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        />
-        <FeatureGroup ref={featureGroupRef} />
-      </MapContainer>
-    );
-  };
+      return (
+        <MapContainer
+          ref={mapRef}
+          center={[52.5, 13.4]}
+          zoom={8}
+          style={{ height: '400px', width: '100%' }}
+          whenReady={() => {
+
+          }}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          />
+          <FeatureGroup ref={featureGroupRef} />
+        </MapContainer>
+      );
+    };
+
+    return MapComponent;
+  }, [updateCoordinates]);
 
   // Generate mock data based on coordinates and analysis type
   const generateMockData = (analysisType: string, coordinates: string): { data: MockDataPoint[], statistics: MockStatistics } => {
@@ -656,9 +676,11 @@ const DemoPage: React.FC = () => {
                 </button>
                 <button 
                   className="btn btn-outline-light" 
-                  onClick={() => navigate('/register')}
+                  onClick={handleUpgradeClick}
                 >
-                  <i className="fas fa-user-plus"></i> <span className="d-none d-sm-inline">Get Full Access</span><span className="d-sm-none">Access</span>
+                  <i className={isAuthenticated ? "fas fa-tachometer-alt" : "fas fa-user-plus"}></i> 
+                  <span className="d-none d-sm-inline">{isAuthenticated ? 'Go to Dashboard' : 'Get Full Access'}</span>
+                  <span className="d-sm-none">{isAuthenticated ? 'Dashboard' : 'Access'}</span>
                 </button>
               </div>
             </div>
@@ -1185,10 +1207,10 @@ const DemoPage: React.FC = () => {
                     </ul>
                     <button 
                       className="btn btn-success btn-sm mt-2"
-                      onClick={() => navigate('/register')}
+                      onClick={handleUpgradeClick}
                     >
-                      <i className="fas fa-arrow-right me-1"></i>
-                      Upgrade Now
+                      <i className={isAuthenticated ? "fas fa-tachometer-alt me-1" : "fas fa-arrow-right me-1"}></i>
+                      {isAuthenticated ? 'Go to Dashboard' : 'Upgrade Now'}
                     </button>
                   </div>
                 </div>

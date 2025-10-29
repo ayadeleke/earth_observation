@@ -249,7 +249,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           // Custom Comprehensive Map (like ImageSelector)
           <div className="h-full w-full">
             <iframe 
-              src={`http://localhost:8000${customMapUrl}`}
+              src={`${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}${customMapUrl}`}
               className="h-full w-full border-none"
               title="Comprehensive Satellite Analysis Map"
             />
