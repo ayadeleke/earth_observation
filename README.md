@@ -1,8 +1,8 @@
-# Earth Observation Analysis Platform
+# Project Prototype (MVP) - Earth Observation Analysis Platform
 
-A comprehensive web-based platform for analyzing satellite data using Google Earth Engine, providing NDVI (Normalized Difference Vegetation Index), LST (Land Surface Temperature), and SAR (Synthetic Aperture Radar) backscatter analysis capabilities.
+This project is the prototype (initial version) of my web-based platform used for analyzing satellite data using Google Earth Engine, providing NDVI (Normalized Difference Vegetation Index), LST (Land Surface Temperature), and SAR (Synthetic Aperture Radar) backscatter analysis capabilities. It represents a Minimum Viable Product (MVP) that demonstrates the core functionality of the application. While not feature-complete, it provides a working version of the UI, backend, and database integration.
 
-## 🌍 Description
+## Description
 
 The Earth Observation Analysis Platform is a full-stack application designed for geospatial analysis and environmental monitoring. It integrates multiple satellite data sources including Landsat, Sentinel-1, and Sentinel-2 to provide comprehensive Earth observation capabilities.
 
@@ -88,9 +88,11 @@ The platform implements two cloud masking strategies for optical imagery:
 | **Sentinel-1** | C-SAR | 10m (IW mode) | 2014-present | SAR Backscatter |
 | **Sentinel-2** | MSI | 10m/20m/60m | 2015-present | NDVI (future) |
 
+**[Link to project GitHub repo](https://github.com/ayadeleke/earth_observation.git)**
+
 ## Prototype Presentation
 
-Watch our comprehensive prototype demonstration showcasing the platform's capabilities:
+Watch project prototype demonstration showcasing the platform's capabilities:
 
 [![Earth Observation Platform Prototype Demo](https://img.youtube.com/vi/DW72FsNV2z4/maxresdefault.jpg)](https://youtu.be/DW72FsNV2z4)
 
@@ -160,7 +162,7 @@ The video demonstrates:
 - Nginx (Reverse proxy & SSL termination)
 
 
-## 🚀 Setup Instructions
+## Setup Instructions
 
 ### Prerequisites
 
@@ -550,7 +552,8 @@ docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
 - API rate limiting
 - Input validation and sanitization
 
-#### 7. Scaling Considerations
+#### 7. Conclusion & Scaling Considerations
+- This prototype demonstrates the core functionality of the Earth Observation App. Future work will focus on expanding features and scaling deployment.
 
 **Horizontal Scaling:**
 - Load balancer for multiple backend instances
@@ -599,7 +602,6 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 For support and questions:
 - a.adeleke@alustudent.com
 - Create an issue on GitHub
-- Check the documentation in the `/docs` folder
 - Review the Earth Engine API documentation
 
 ## 🏆 Acknowledgments
