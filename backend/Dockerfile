@@ -31,6 +31,7 @@ COPY apps/ /app/apps/
 COPY auth/ /app/auth/
 COPY tests/ /app/tests/
 COPY support/ /app/support/
+COPY templates/ /app/templates/
 
 # Create directories for runtime
 RUN mkdir -p /app/staticfiles /app/media /app/logs
