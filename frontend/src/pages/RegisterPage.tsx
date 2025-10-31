@@ -119,23 +119,6 @@ const RegisterPage: React.FC = () => {
     <div className="min-vh-100" style={{ 
       background: 'linear-gradient(135deg, #1f2937 0%, #065f46 50%, #1e3a8a 100%)' 
     }}>
-      {/* Header */}
-      <div className="bg-dark bg-opacity-20">
-        <div className="container py-4">
-          <div className="row align-items-center">
-            <div className="col-4">
-              <Link to="/" className="text-white text-decoration-none d-flex align-items-center">
-                <ArrowLeft style={{ width: '20px', height: '20px' }} className="me-2" />
-                Back to Home
-              </Link>
-            </div>
-            <div className="col-4 text-center">
-              <h1 className="h3 fw-bold text-white mb-0">Create Account</h1>
-            </div>
-            <div className="col-4"></div>
-          </div>
-        </div>
-      </div>
 
       <div className="container">
         <div className="row justify-content-center">

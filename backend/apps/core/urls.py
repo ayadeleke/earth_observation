@@ -15,6 +15,10 @@ urlpatterns = [
     path("profile/", views.UserProfileView.as_view(), name="profile"),
     path("auth/google/", views.GoogleOAuthView.as_view(), name="google_oauth"),
     
+    # Password reset endpoints
+    path("auth/password-reset/", views.PasswordResetRequestView.as_view(), name="password_reset"),
+    path("auth/password-reset-confirm/", views.PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
+    
     # JWT Token management
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("token/verify/", TokenVerifyView.as_view(), name="token_verify"),
