@@ -1,5 +1,9 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
+from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 
 # from django.contrib.gis.geos import GEOSGeometry  # Commented out for
 # development
@@ -153,3 +157,74 @@ class FileUploadSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data["user"] = self.context["request"].user
         return super().create(validated_data)
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    """
+    Serializer for requesting a password reset email
+    """
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        """
+        Validate that the email exists in the database
+        """
+        if not User.objects.filter(email=value).exists():
+            # Don't reveal whether the email exists for security
+            # But we still validate the format
+            pass
+        return value.lower()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    """
+    Serializer for confirming password reset with token
+    """
+    uid = serializers.CharField()
+    token = serializers.CharField()
+    new_password = serializers.CharField(write_only=True)
+    confirm_password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        """
+        Validate token and passwords
+        """
+        # Validate passwords match
+        if attrs['new_password'] != attrs['confirm_password']:
+            raise serializers.ValidationError({
+                "confirm_password": "Passwords do not match."
+            })
+
+        # Validate password strength
+        try:
+            validate_password(attrs['new_password'])
+        except Exception as e:
+            raise serializers.ValidationError({
+                "new_password": list(e.messages)
+            })
+
+        # Decode uid and validate token
+        try:
+            uid = urlsafe_base64_decode(attrs['uid']).decode()
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            raise serializers.ValidationError({
+                "uid": "Invalid reset link."
+            })
+
+        if not default_token_generator.check_token(user, attrs['token']):
+            raise serializers.ValidationError({
+                "token": "Invalid or expired reset link."
+            })
+
+        attrs['user'] = user
+        return attrs
+
+    def save(self):
+        """
+        Set the new password
+        """
+        user = self.validated_data['user']
+        user.set_password(self.validated_data['new_password'])
+        user.save()
+        return user
