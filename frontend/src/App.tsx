@@ -8,6 +8,8 @@ import AboutPage from './pages/AboutPage';
 import AnalysisPage from './pages/AnalysisPage';
 import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import { SettingsPage } from './pages/SettingsPage';
 import ImageSelector from './pages/ImageSelector';
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -96,6 +98,9 @@ const AppContent: React.FC = () => {
           </ProtectedRoute>
         } />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password/:uid/:token" element={<ResetPasswordPage />} />
         <Route path="/dashboard" element={
           <ProtectedRoute>
             <DashboardPage />
@@ -111,7 +116,6 @@ const AppContent: React.FC = () => {
             <SettingsPage />
           </ProtectedRoute>
         } />
-        <Route path="/login" element={<LoginPage />} />
         <Route path="/advanced-image-analysis" element={
           <ProtectedRoute>
             <ImageSelector />
