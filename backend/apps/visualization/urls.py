@@ -2,6 +2,8 @@ from django.urls import path
 from . import views
 from . import plot_views
 
+app_name = 'visualization'
+
 urlpatterns = [
     path('health/', views.health_check, name='visualization_health'),
     path('get_analysis_map/', views.get_analysis_map, name='get_analysis_map'),

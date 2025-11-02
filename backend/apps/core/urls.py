@@ -7,6 +7,8 @@ from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from . import views
 from . import ai_views
 
+app_name = 'core'
+
 urlpatterns = [
     # Authentication endpoints
     path("register/", views.RegisterView.as_view(), name="register"),
