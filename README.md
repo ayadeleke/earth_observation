@@ -1,4 +1,4 @@
-## Earth Observation Analysis Platform
+# Earth Observation Analysis Platform
 
 The Earth Observation Analysis Platform is a full-stack application designed for geospatial analysis and environmental monitoring using Google Earth Engine, providing NDVI (Normalized Difference Vegetation Index), LST (Land Surface Temperature), and SAR (Synthetic Aperture Radar) backscatter analysis capabilities.. It integrates multiple satellite data sources including Landsat, Sentinel-1, and Sentinel-2 to provide comprehensive Earth observation capabilities.
 
