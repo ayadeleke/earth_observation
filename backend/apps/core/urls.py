@@ -7,6 +7,8 @@ from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from . import views
 from . import ai_views
 
+app_name = 'core'
+
 urlpatterns = [
     # Authentication endpoints
     path("register/", views.RegisterView.as_view(), name="register"),
@@ -14,6 +16,10 @@ urlpatterns = [
     path("logout/", views.LogoutView.as_view(), name="logout"),
     path("profile/", views.UserProfileView.as_view(), name="profile"),
     path("auth/google/", views.GoogleOAuthView.as_view(), name="google_oauth"),
+    
+    # Password reset endpoints
+    path("auth/password-reset/", views.PasswordResetRequestView.as_view(), name="password_reset"),
+    path("auth/password-reset-confirm/", views.PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
     
     # JWT Token management
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
