@@ -6,6 +6,8 @@ All analysis endpoints now require authentication.
 from django.urls import path
 from . import views
 
+app_name = 'analysis'
+
 # Apply authentication to all analysis endpoints
 urlpatterns = [
     # Health check (public)
