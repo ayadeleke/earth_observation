@@ -78,7 +78,7 @@ ROOT_URLCONF = "geoanalysis.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -559,4 +559,42 @@ SECURE_SSL_REDIRECT = False
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+# ============================================
+# EMAIL SETTINGS
+# ============================================
+# Email configuration for password reset and notifications
+
+# Frontend URL for password reset links
+FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
+
+# Email backend - Allow override via environment variable
+# Set EMAIL_BACKEND=smtp in .env to send real emails even in DEBUG mode
+EMAIL_BACKEND_TYPE = env('EMAIL_BACKEND', default='auto')
+
+if EMAIL_BACKEND_TYPE == 'smtp':
+    # Force SMTP (real emails)
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+elif EMAIL_BACKEND_TYPE == 'console':
+    # Force console (print to terminal)
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    # Auto: console in DEBUG, SMTP in production
+    if DEBUG:
+        EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    else:
+        EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+# SMTP Configuration
+EMAIL_HOST = env('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
+EMAIL_USE_SSL = env.bool('EMAIL_USE_SSL', default=False)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='')
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# Password reset settings
+PASSWORD_RESET_TIMEOUT = env.int('PASSWORD_RESET_TIMEOUT', default=7200)  # 2 hours in seconds
 

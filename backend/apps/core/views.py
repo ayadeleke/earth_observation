@@ -33,6 +33,8 @@ from .serializers import (
     AnalysisProjectSerializer,
     GeometryInputSerializer,
     FileUploadSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetConfirmSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -812,3 +814,83 @@ class GoogleOAuthView(APIView):
                 {"error": "Authentication failed"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class PasswordResetRequestView(APIView):
+    """
+    Request a password reset email
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            
+            try:
+                user = User.objects.get(email=email)
+                
+                # Generate password reset token
+                from django.contrib.auth.tokens import default_token_generator
+                from django.utils.encoding import force_bytes
+                from django.utils.http import urlsafe_base64_encode
+                from django.core.mail import send_mail
+                from django.template.loader import render_to_string
+                
+                uid = urlsafe_base64_encode(force_bytes(user.pk))
+                token = default_token_generator.make_token(user)
+                
+                # Build reset URL (frontend URL)
+                frontend_url = settings.FRONTEND_URL if hasattr(settings, 'FRONTEND_URL') else 'http://localhost:3000'
+                reset_url = f"{frontend_url}/reset-password/{uid}/{token}"
+                
+                # Send email
+                subject = 'Reset Your Password - Earth Observation Platform'
+                message = render_to_string('password_reset_email.html', {
+                    'user': user,
+                    'reset_url': reset_url,
+                    'protocol': 'https' if not settings.DEBUG else 'http',
+                })
+                
+                send_mail(
+                    subject,
+                    message,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [email],
+                    fail_silently=False,
+                    html_message=message
+                )
+                
+                logger.info(f"Password reset email sent to {email}")
+                
+            except User.DoesNotExist:
+                # Don't reveal that the user doesn't exist
+                logger.warning(f"Password reset requested for non-existent email: {email}")
+                pass
+            
+            # Always return success to prevent user enumeration
+            return Response({
+                'message': 'If an account with that email exists, a password reset link has been sent.'
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PasswordResetConfirmView(APIView):
+    """
+    Confirm password reset with token
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            
+            logger.info(f"Password reset successful for user {user.email}")
+            
+            return Response({
+                'message': 'Password has been reset successfully. You can now login with your new password.'
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

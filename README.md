@@ -111,6 +111,15 @@ The video demonstrates:
 - **Backend API**: [https://earthobservationapi.azurewebsites.net](https://earthobservationapi.azurewebsites.net)
 - **API Documentation**: [https://earthobservationapi.azurewebsites.net/api/swagger](https://earthobservationapi.azurewebsites.net/api/swagger/)
 
+## Final Version of Product Demo
+
+Watch the final/live product demonstration showcasing the platform's functionalities:
+
+[![Earth Observation Platform Final Version Demo](https://img.youtube.com/vi/VLrtc4yCDSk/maxresdefault.jpg)](https://youtu.be/VLrtc4yCDSk)
+
+**[View Live Product Demonstration](https://youtu.be/VLrtc4yCDSk)**
+
+
 ## 📸 Screenshots
 
 ### Main Dashboard
@@ -309,13 +318,38 @@ docker run -p 3000:3000 earth-observation-frontend
 
 ### Test Coverage Summary
 
+The platform implements comprehensive testing across multiple layers to ensure reliability, security, and performance.
+
 | Test Type | Coverage | Tools | Status |
 |-----------|----------|-------|--------|
-| **Unit Tests** | Backend APIs | pytest, Django test | Passing |
-| **Integration Tests** | API workflows | pytest | Passing |
-| **Performance Tests** | Load testing | Locust | Completed |
-| **Security Tests** | OWASP ZAP scan | ZAP Proxy | Hardened |
-| **E2E Tests** | User workflows | Manual testing | Verified |
+| **Integration Tests** | 97% | Django TestCase | ✅ Passing (12/12) |
+| **Unit Tests** | Backend APIs | pytest, Django test | ✅ Passing |
+| **Performance Tests** | Database & API | Django TestCase | ✅ Passing |
+| **Security Tests** | SQL Injection, XSS, Auth | Django TestCase | ✅ Passing |
+| **E2E Tests** | User workflows | Manual testing | ✅ Verified |
+
+#### Test Execution
+
+```bash
+# Run all integration tests
+python manage.py test tests.test_integration
+
+# Run with coverage report
+python -m coverage run --source='apps,tests' manage.py test tests.test_integration
+python -m coverage report
+python -m coverage html
+
+# Run Load test
+locust -f backend/tests/performance/locustfile.py
+```
+
+![Integration Test Result Screenshot](screenshots/integration.png)
+
+![Load Testing Chart](screenshots/locust.png)
+
+![Penetration Test from Pentesttool](screenshots/pentest.png)
+
+![Security Testing from Zap screenshot](screenshots/zap_result.png)
 
 ###
 
