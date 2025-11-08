@@ -109,9 +109,12 @@ export const NDVITimeSeries: React.FC<NDVITimeSeriesProps> = ({
 
   // Format data for chart and handle polarization-specific fields
   const chartData = data.map(item => {
+    // Extract year directly from date string to avoid timezone issues
+    const year = item.date.split('-')[0];
+    
     const formattedItem: any = {
       ...item,
-      date: new Date(item.date).getFullYear().toString()
+      date: year
     };
     
     // For SAR with polarization, ensure we have the correct field

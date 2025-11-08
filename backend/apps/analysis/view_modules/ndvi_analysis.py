@@ -13,7 +13,7 @@ from apps.core.caching import cache_analysis_result, cache_earth_engine_data, An
 logger = logging.getLogger(__name__)
 
 
-def get_cloud_cover_with_masking_info(collection, geometry, use_cloud_masking=False, strict_masking=False, max_images=100):
+def get_cloud_cover_with_masking_info(collection, geometry, use_cloud_masking=False, strict_masking=False, max_images=200):
     """
     Extract cloud cover information including effective cloud cover when masking is applied
     """
@@ -322,7 +322,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                     return calculate_ndvi_landsat(image)
 
                 # Calculate NDVI and cloud info together for each image
-                sorted_collection = original_collection.sort('system:time_start').limit(100)
+                sorted_collection = original_collection.sort('system:time_start').limit(200)
 
                 def calculate_ndvi_with_cloud_info(image):
                     """Calculate NDVI using harmonized bands - avoiding client-side variables in server-side operations"""

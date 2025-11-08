@@ -31,7 +31,7 @@ def calculate_ndvi_landsat(image, enable_cloud_masking=False, masking_strictness
     
     # Get band names to determine Landsat version
     band_names = image.bandNames()
-    
+
     # For Landsat 4-7: B3=Red, B4=NIR
     # For Landsat 8-9: B4=Red, B5=NIR
     nir = ee.Algorithms.If(
@@ -39,16 +39,16 @@ def calculate_ndvi_landsat(image, enable_cloud_masking=False, masking_strictness
         scaled.select('SR_B5'),
         scaled.select('SR_B4')  # Landsat 4-7
     )
-    
+
     red = ee.Algorithms.If(
-        band_names.contains('SR_B5'),  # Landsat 8-9  
+        band_names.contains('SR_B5'),  # Landsat 8-9
         scaled.select('SR_B4'),
         scaled.select('SR_B3')  # Landsat 4-7
     )
-    
+
     nir = ee.Image(nir)
     red = ee.Image(red)
-    
+
     # Calculate NDVI with proper handling of division by zero
     denominator = nir.add(red)
     ndvi = nir.subtract(red).divide(denominator).rename('NDVI')
