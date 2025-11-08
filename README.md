@@ -100,7 +100,7 @@ The video demonstrates:
 - Interactive mapping and data visualization
 - Export and analysis capabilities
 
-## 🌐 Live Deployment
+## Live Deployment
 
 **Access the deployed application:**
 - **Frontend**: [https://earthobservation.azurewebsites.net](https://earthobservation.azurewebsites.net)
@@ -116,7 +116,7 @@ Watch the final/live product demonstration showcasing the platform's functionali
 **[View Live Product Demonstration](https://youtu.be/VLrtc4yCDSk)**
 
 
-## 📸 Screenshots
+## Screenshots
 
 ### Main Dashboard
 ![Landing Page](screenshots/landing_page.png)
@@ -310,7 +310,7 @@ docker build -t earth-observation-frontend .
 docker run -p 3000:3000 earth-observation-frontend
 ```
 
-## 🧪 Testing Strategy
+## Testing Strategy
 
 ### Test Coverage Summary
 
@@ -318,11 +318,11 @@ The platform implements comprehensive testing across multiple layers to ensure r
 
 | Test Type | Coverage | Tools | Status |
 |-----------|----------|-------|--------|
-| **Integration Tests** | 97% | Django TestCase | ✅ Passing (12/12) |
-| **Unit Tests** | Backend APIs | pytest, Django test | ✅ Passing |
-| **Performance Tests** | Database & API | Django TestCase | ✅ Passing |
-| **Security Tests** | SQL Injection, XSS, Auth | Django TestCase | ✅ Passing |
-| **E2E Tests** | User workflows | Manual testing | ✅ Verified |
+| **Integration Tests** | 97% | Django TestCase | Passing (12/12) |
+| **Unit Tests** | Backend APIs | pytest, Django test | Passing |
+| **Performance Tests** | Database & API | Django TestCase | Passing |
+| **Security Tests** | SQL Injection, XSS, Auth | Django TestCase | Passing |
+| **E2E Tests** | User workflows | Manual testing | Verified |
 
 #### Test Execution
 
@@ -349,7 +349,7 @@ locust -f backend/tests/performance/locustfile.py
 
 ###
 
-## 🌐 Deployment
+## Deployment
 ![Deployment Plan](screenshots/deployment_plan.png)
 
 ### Production Environment Setup
