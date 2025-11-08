@@ -14,7 +14,8 @@ const RegisterPage: React.FC = () => {
     password: '',
     confirmPassword: '',
     organization: '',
-    researchArea: ''
+    researchArea: '',
+    acceptPrivacyPolicy: false
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -33,8 +34,14 @@ const RegisterPage: React.FC = () => {
   ];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+    
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
+    
     // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
@@ -61,6 +68,7 @@ const RegisterPage: React.FC = () => {
     }
     if (!formData.organization.trim()) newErrors.organization = 'Organization is required';
     if (!formData.researchArea) newErrors.researchArea = 'Research area is required';
+    if (!formData.acceptPrivacyPolicy) newErrors.acceptPrivacyPolicy = 'You must accept the privacy policy to continue';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -119,6 +127,24 @@ const RegisterPage: React.FC = () => {
     <div className="min-vh-100" style={{ 
       background: 'linear-gradient(135deg, #1f2937 0%, #065f46 50%, #1e3a8a 100%)' 
     }}>
+      {/* Global styles for placeholder visibility */}
+      <style>{`
+        .form-control::placeholder,
+        .form-select option[value=""] {
+          color: rgba(255, 255, 255, 0.5) !important;
+          opacity: 1 !important;
+        }
+        .form-control:focus::placeholder {
+          color: rgba(255, 255, 255, 0.4) !important;
+        }
+        .form-select {
+          color: white !important;
+        }
+        .form-select option {
+          background-color: #1f2937 !important;
+          color: white !important;
+        }
+      `}</style>
 
       <div className="container">
         <div className="row justify-content-center">
@@ -337,6 +363,48 @@ const RegisterPage: React.FC = () => {
                     ))}
                   </select>
                   {errors.researchArea && <div className="text-danger small mt-1">{errors.researchArea}</div>}
+                </div>
+
+                {/* Privacy Policy Checkbox */}
+                <div className="mb-4">
+                  <div className="form-check">
+                    <input
+                      type="checkbox"
+                      name="acceptPrivacyPolicy"
+                      id="acceptPrivacyPolicy"
+                      checked={formData.acceptPrivacyPolicy}
+                      onChange={handleChange}
+                      className={`form-check-input ${
+                        errors.acceptPrivacyPolicy ? 'is-invalid' : ''
+                      }`}
+                      style={{ 
+                        cursor: 'pointer',
+                        width: '18px',
+                        height: '18px'
+                      }}
+                    />
+                    <label 
+                      className="form-check-label text-white ms-2" 
+                      htmlFor="acceptPrivacyPolicy"
+                      style={{ cursor: 'pointer' }}
+                    >
+                      I agree to the{' '}
+                      <a 
+                        href="/privacy-policy" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-info text-decoration-underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Privacy Policy
+                      </a>
+                    </label>
+                  </div>
+                  {errors.acceptPrivacyPolicy && (
+                    <div className="text-danger small mt-1">
+                      {errors.acceptPrivacyPolicy}
+                    </div>
+                  )}
                 </div>
 
                 {/* Submit Button */}

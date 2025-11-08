@@ -284,13 +284,13 @@ const PrivacyPolicy: React.FC = () => {
                   privacy policy or how your data is handled:
                 </p>
                 <div className="d-flex gap-3 flex-wrap">
-                  <button 
+                  <a 
+                    href="mailto:earthobservationplatform@gmail.com?subject=Privacy Policy Inquiry"
                     className="btn btn-primary"
-                    onClick={() => navigate('/contact')}
                   >
                     <i className="fas fa-paper-plane me-2"></i>
                     Contact Us
-                  </button>
+                  </a>
                   <button 
                     className="btn btn-outline-secondary"
                     onClick={() => navigate('/settings')}

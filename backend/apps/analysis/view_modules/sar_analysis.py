@@ -107,7 +107,7 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
                 }
 
             # Use a more memory-efficient sampling approach for SAR data
-            max_samples = min(20, original_collection_size)  # Even more conservative for SAR
+            max_samples = min(50, original_collection_size)  # Balanced limit for good annual coverage
             logger.warning(f"✅ Processing {max_samples} sampled Sentinel-1 images from {original_collection_size} total available")
 
             # Use temporal sampling instead of trying to get all metadata at once

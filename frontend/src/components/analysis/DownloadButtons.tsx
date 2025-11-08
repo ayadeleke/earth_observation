@@ -133,7 +133,8 @@ export const DownloadButtons: React.FC<DownloadButtonsProps> = ({
           title: `${(data.analysisType || 'ndvi').toUpperCase()} Time Series Analysis`,
           satellite: data.satellite || 'landsat',
           start_date: data.startDate || '',
-          end_date: data.endDate || ''
+          end_date: data.endDate || '',
+          polarization: data.polarization || data.statistics?.selected_polarization || 'VV'
         })
       });
 

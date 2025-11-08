@@ -58,6 +58,41 @@ const AOILayer: React.FC<{ geometry?: any }> = ({ geometry }) => {
     let aoiLayer: L.GeoJSON;
 
     try {
+      // Ensure geometry is in proper GeoJSON format
+      let validGeometry = geometry;
+      
+      // If geometry is a string (WKT), convert to GeoJSON
+      if (typeof geometry === 'string' && geometry.startsWith('POLYGON')) {
+        const coordString = geometry.match(/POLYGON\(\(([^)]+)\)\)/)?.[1];
+        if (coordString) {
+          const coordinates = coordString.split(', ').map(pair => {
+            const [lng, lat] = pair.trim().split(' ').map(Number);
+            return [lng, lat];
+          });
+          validGeometry = {
+            type: 'Polygon',
+            coordinates: [coordinates]
+          };
+        }
+      }
+      
+      // If geometry has coordinates but no type, ensure it's a proper GeoJSON Polygon
+      if (validGeometry && typeof validGeometry === 'object' && validGeometry.coordinates && !validGeometry.type) {
+        validGeometry = {
+          type: 'Polygon',
+          coordinates: validGeometry.coordinates
+        };
+      }
+      
+      // Validate that we have proper GeoJSON before creating layer
+      if (!validGeometry || 
+          !validGeometry.type || 
+          !validGeometry.coordinates || 
+          !Array.isArray(validGeometry.coordinates)) {
+        console.warn('Invalid geometry format, skipping AOI layer');
+        return;
+      }
+
       const aoiStyle = {
         color: 'red',
         weight: 3,
@@ -66,7 +101,7 @@ const AOILayer: React.FC<{ geometry?: any }> = ({ geometry }) => {
         opacity: 0.8
       };
 
-      aoiLayer = L.geoJSON(geometry, { style: aoiStyle }).addTo(map);
+      aoiLayer = L.geoJSON(validGeometry, { style: aoiStyle }).addTo(map);
       
       // Fit map to AOI bounds
       const bounds = aoiLayer.getBounds();
@@ -74,7 +109,7 @@ const AOILayer: React.FC<{ geometry?: any }> = ({ geometry }) => {
         map.fitBounds(bounds, { padding: [20, 20] });
       }
     } catch (error) {
-
+      console.warn('Could not display AOI on map:', error);
     }
 
     return () => {

@@ -27,7 +27,6 @@ export const DataTable: React.FC<DataTableProps> = ({
 
   React.useEffect(() => {
     if (data && data.length > 0) {
-
     }
   }, [data]);
 
@@ -139,9 +138,9 @@ export const DataTable: React.FC<DataTableProps> = ({
   return (
     <div className="card border-0 shadow-sm mb-2 mt-4">
       <div className="card-header bg-white">
-        <h3 className="h5 fw-semibold text-dark mb-1">{analysisType.toUpperCase()} Data Table</h3>
+        <h3 className="h5 fw-semibold text-dark mb-1">{analysisType.toUpperCase()} Individual Observations</h3>
         <div className="small text-muted">
-          Showing {paginatedData.length} of {data.length} observations
+          Showing {paginatedData.length} of {data.length} individual observations (Chart displays annual means)
         </div>
       </div>
       
@@ -225,13 +224,19 @@ export const DataTable: React.FC<DataTableProps> = ({
           </thead>
           <tbody>
             {paginatedData.map((row, index) => {
-              const dayOfYear = new Date(row.date).getDate();
+              // Parse date without timezone issues
+              const dateParts = row.date.split('-');
+              const year = dateParts[0];
+              const month = dateParts[1];
+              const day = dateParts[2];
+              const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+              const dayOfYear = parseInt(day);
               const value = row[valueColumn.key];
               
               return (
                 <tr key={index}>
                   <td className="px-3 py-2 small text-primary fw-medium">
-                    {new Date(row.date).toLocaleDateString()}
+                    {dateObj.toLocaleDateString()}
                   </td>
                   <td className="px-3 py-2 small text-muted font-monospace">
                     {row.imageId}
