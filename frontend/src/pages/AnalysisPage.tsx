@@ -645,7 +645,7 @@ const AnalysisPage: React.FC = () => {
         padding: '2rem 0',
         marginBottom: '1rem'
       }}>
-        <div className="container">
+        <div className="container-fluid">
           <div className="row align-items-center">
             <div className="col-12">
               <div className="d-flex align-items-center mb-3 flex-column flex-md-row text-center text-md-start">
@@ -687,7 +687,7 @@ const AnalysisPage: React.FC = () => {
       
       {/* Saved Analyses Panel */}
       {projectId && projectAnalyses.length > 0 && (
-        <div className="container mb-4">
+        <div className="container-fluid mb-4">
           <div className="card border-0 shadow-sm">
             <div className="card-header bg-light d-flex justify-content-between align-items-center">
               <h5 className="mb-0">
@@ -805,7 +805,7 @@ const AnalysisPage: React.FC = () => {
         </div>
       )}
 
-      <div className="container">
+      <div className="container-fluid">
         {/* Error Alert */}
         <div className="row">
           <div className="col-12 mb-3">
@@ -847,7 +847,7 @@ const AnalysisPage: React.FC = () => {
           {/* Interactive Map */}
           <div className="col-lg-7">
             <div className="card border-0 shadow-lg" style={{
-              borderRadius: '1.5rem',
+              borderRadius: '1rem',
               overflow: 'hidden'
             }}>
               <div className="card-header bg-white border-0" style={{ padding: '1.5rem 2rem' }}>
@@ -863,7 +863,7 @@ const AnalysisPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className="card-body p-0" style={{ height: '600px', position: 'relative' }}>
+              <div className="card-body p-0" style={{ height: '820px', position: 'relative' }}>
                 <InteractiveMap 
                   onAreaSelect={handleAreaSelect} 
                   clearLayers={clearMapLayers}
