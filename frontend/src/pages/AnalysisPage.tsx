@@ -468,7 +468,8 @@ const AnalysisPage: React.FC = () => {
       const date = new Date(item.date || item.time || '2020-01-01');
       const result: any = {
         date: date.toISOString().split('T')[0],
-        time: date.getTime()
+        time: date.getTime(),
+        year: date.getFullYear()
       };
       
       switch (analysisType.toLowerCase()) {
@@ -493,8 +494,52 @@ const AnalysisPage: React.FC = () => {
       
       return result;
     });
-    
-    return transformed;
+
+    // Group by year and calculate mean values
+    const groupedByYear = transformed.reduce((acc: any, item: any) => {
+      const year = item.year;
+      if (!acc[year]) {
+        acc[year] = [];
+      }
+      acc[year].push(item);
+      return acc;
+    }, {});
+
+    // Calculate means for each year
+    const yearlyMeans = Object.keys(groupedByYear).map(year => {
+      const yearData = groupedByYear[year];
+      const count = yearData.reduce((sum: number, item: any) => sum + (item.count || 1), 0);
+      
+      const result: any = {
+        date: `${year}-01-01`,
+        time: new Date(`${year}-01-01`).getTime(),
+        year: parseInt(year),
+        count: count
+      };
+
+      switch (analysisType.toLowerCase()) {
+        case 'ndvi':
+          result.ndvi = yearData.reduce((sum: number, item: any) => sum + item.ndvi, 0) / yearData.length;
+          break;
+        case 'lst':
+          result.lst = yearData.reduce((sum: number, item: any) => sum + item.lst, 0) / yearData.length;
+          break;
+        case 'sar':
+          result.backscatter = yearData.reduce((sum: number, item: any) => sum + item.backscatter, 0) / yearData.length;
+          result.backscatter_vv = yearData.reduce((sum: number, item: any) => sum + (item.backscatter_vv || 0), 0) / yearData.length;
+          result.backscatter_vh = yearData.reduce((sum: number, item: any) => sum + (item.backscatter_vh || 0), 0) / yearData.length;
+          result.vv_backscatter = yearData.reduce((sum: number, item: any) => sum + (item.vv_backscatter || 0), 0) / yearData.length;
+          result.vh_backscatter = yearData.reduce((sum: number, item: any) => sum + (item.vh_backscatter || 0), 0) / yearData.length;
+          break;
+        default:
+          result.value = yearData.reduce((sum: number, item: any) => sum + (item.value || 0), 0) / yearData.length;
+      }
+
+      return result;
+    });
+
+    // Sort by year
+    return yearlyMeans.sort((a, b) => a.year - b.year);
   };
 
   const transformStatistics = (stats: any, analysisType: string) => {
@@ -600,7 +645,7 @@ const AnalysisPage: React.FC = () => {
         padding: '2rem 0',
         marginBottom: '1rem'
       }}>
-        <div className="container">
+        <div className="container-fluid">
           <div className="row align-items-center">
             <div className="col-12">
               <div className="d-flex align-items-center mb-3 flex-column flex-md-row text-center text-md-start">
@@ -642,7 +687,7 @@ const AnalysisPage: React.FC = () => {
       
       {/* Saved Analyses Panel */}
       {projectId && projectAnalyses.length > 0 && (
-        <div className="container mb-4">
+        <div className="container-fluid mb-4">
           <div className="card border-0 shadow-sm">
             <div className="card-header bg-light d-flex justify-content-between align-items-center">
               <h5 className="mb-0">
@@ -760,7 +805,7 @@ const AnalysisPage: React.FC = () => {
         </div>
       )}
 
-      <div className="container">
+      <div className="container-fluid">
         {/* Error Alert */}
         <div className="row">
           <div className="col-12 mb-3">
@@ -802,7 +847,7 @@ const AnalysisPage: React.FC = () => {
           {/* Interactive Map */}
           <div className="col-lg-7">
             <div className="card border-0 shadow-lg" style={{
-              borderRadius: '1.5rem',
+              borderRadius: '1rem',
               overflow: 'hidden'
             }}>
               <div className="card-header bg-white border-0" style={{ padding: '1.5rem 2rem' }}>
@@ -818,7 +863,7 @@ const AnalysisPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className="card-body p-0" style={{ height: '600px', position: 'relative' }}>
+              <div className="card-body p-0" style={{ height: '820px', position: 'relative' }}>
                 <InteractiveMap 
                   onAreaSelect={handleAreaSelect} 
                   clearLayers={clearMapLayers}

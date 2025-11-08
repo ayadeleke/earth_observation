@@ -73,6 +73,7 @@
     "ajv": "^6.12.6",
     "ajv-keywords": "^3.5.2",
     "cross-env": "^10.1.0",
+    "cypress": "^15.5.0",
     "eslint": "^8.49.0",
     "prettier": "^3.0.3"
   },

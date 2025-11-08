@@ -91,7 +91,7 @@ const AppContent: React.FC = () => {
       <Routes>
         <Route path="/demo" element={<DemoPage />} />
         <Route path="/about" element={<AboutPage />} />
-        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/analysis" element={
           <ProtectedRoute>
             <AnalysisPage />
