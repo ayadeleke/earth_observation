@@ -477,7 +477,11 @@ def process_common_request_setup(request, analysis_type):
             if key not in field_mapping:
                 # Check if it's already a backend field
                 if key in ['aoi_data', 'start_date', 'end_date', 'satellite', 'cloud_cover', 'analysis_type']:
-                    mapped_data[key] = value
+                    # Normalize satellite name to lowercase
+                    if key == 'satellite' and isinstance(value, str):
+                        mapped_data[key] = value.lower()
+                    else:
+                        mapped_data[key] = value
                 else:
                     # Keep additional fields like projectId, dateRangeType, etc.
                     mapped_data[key] = value
@@ -584,12 +588,14 @@ def extract_common_parameters(data, analysis_type):
             params['satellite'] = data.get('satellite', 'landsat').lower()
 
         if analysis_type.lower() == 'sar':
-            params['orbit_direction'] = data.get('orbit_direction', 'DESCENDING')
+            params['satellite'] = data.get('satellite', 'sentinel1').lower()
+            params['orbit_direction'] = data.get('orbit_direction', 'BOTH')
             params['polarization'] = data.get('polarization', 'VV')
 
         if analysis_type.lower() == 'comprehensive':
             params['analysis_types'] = data.get('analysis_types', ['ndvi', 'lst'])
             params['polarization'] = data.get('polarization', 'VV')
+            params['orbit_direction'] = data.get('orbit_direction', 'BOTH')
 
         if analysis_type.lower() == 'trends':
             params['analysis_type'] = data.get('analysis_type', 'ndvi')

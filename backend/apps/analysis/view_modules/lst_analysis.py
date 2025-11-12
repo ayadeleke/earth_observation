@@ -135,7 +135,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
             logger.error(f"🔍 LST: Cloud masking with use_cloud_masking={use_cloud_masking}")
 
             # Use harmonized collection (already processed above) to ensure we get proper thermal bands
-            sorted_collection = harmonized_collection.sort('system:time_start').limit(200)
+            sorted_collection = harmonized_collection.sort('system:time_start').limit(100)
 
             def calculate_lst_with_cloud_info(image):
                 """Calculate LST and cloud cover info for each image in collection"""

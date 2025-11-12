@@ -47,7 +47,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
     enableCloudMasking: false,
     maskingStrictness: 'false',
     polarization: 'VV',
-    orbitDirection: 'DESCENDING',
+    orbitDirection: 'BOTH',
     ...initialData
   });
 
@@ -106,6 +106,14 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
       }
       // Auto-select landsat for LST analysis (only supported by Landsat)
       else if (name === 'analysisType' && value === 'lst') {
+        newData.satellite = 'landsat';
+      }
+      // For NDVI, default to Landsat if Sentinel-1 SAR is selected
+      else if (name === 'analysisType' && value === 'ndvi' && prev.satellite === 'sentinel1') {
+        newData.satellite = 'landsat';
+      }
+      // For comprehensive analysis, ensure valid satellite is selected
+      else if (name === 'analysisType' && value === 'comprehensive' && prev.satellite === 'sentinel1') {
         newData.satellite = 'landsat';
       }
       
@@ -448,9 +456,15 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                 (e.target as HTMLSelectElement).style.boxShadow = 'none';
               }}
             >
-              <option value="landsat">Landsat (30m resolution)</option>
-              <option value="sentinel2">Sentinel-2 (10m resolution)</option>
-              <option value="sentinel1">Sentinel-1 SAR (10m resolution)</option>
+              <option value="landsat" disabled={formData.analysisType === 'sar'}>
+                Landsat (30m resolution)
+              </option>
+              <option value="sentinel2" disabled={formData.analysisType === 'lst' || formData.analysisType === 'sar'}>
+                Sentinel-2 (10m resolution)
+              </option>
+              <option value="sentinel1" disabled={formData.analysisType === 'ndvi' || formData.analysisType === 'lst'}>
+                Sentinel-1 SAR (10m resolution)
+              </option>
             </select>
             <div className="form-text fst-italic">
               <span>{getSatelliteDescription()}</span>
@@ -657,11 +671,12 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                   (e.target as HTMLSelectElement).style.boxShadow = 'none';
                 }}
               >
+                <option value="BOTH">BOTH - Include all orbit directions</option>
                 <option value="DESCENDING">DESCENDING - Satellite moving South</option>
                 <option value="ASCENDING">ASCENDING - Satellite moving North</option>
               </select>
               <div className="form-text fst-italic">
-                Orbit direction affects the look angle and illumination geometry. DESCENDING passes typically occur in the evening (local time).
+                Orbit direction affects the look angle and illumination geometry. BOTH includes ascending and descending passes for maximum coverage.
               </div>
             </div>
             </>

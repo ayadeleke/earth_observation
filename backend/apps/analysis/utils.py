@@ -306,14 +306,14 @@ def generate_image_id(date, satellite, analysis_type):
         return f"IMG_{date.replace('-', '')}_{analysis_type.upper()}"
 
 
-def get_actual_cloud_cover_from_gee(collection, geometry, max_images=200):
+def get_actual_cloud_cover_from_gee(collection, geometry, max_images=100):
     """
     Extract actual cloud cover values from Google Earth Engine image collection.
 
     Args:
         collection: Earth Engine ImageCollection
         geometry: Earth Engine geometry for the area of interest
-        max_images: Maximum number of images to extract metadata from (default: 200)
+        max_images: Maximum number of images to extract metadata from (default: 100)
 
     Returns:
         list: List of dictionaries with date, image_id, and cloud_cover
