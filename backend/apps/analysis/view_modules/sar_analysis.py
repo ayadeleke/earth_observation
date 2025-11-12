@@ -14,7 +14,7 @@ import re
 logger = logging.getLogger(__name__)
 
 
-def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCENDING", polarization="VV"):
+def process_sar_analysis(geometry, start_date, end_date, orbit_direction="BOTH", polarization="VV"):
     """Process SAR analysis using Sentinel-1 data with memory optimization"""
     try:
         logger.info(f"Processing SAR analysis for {start_date} to {end_date}")
@@ -107,7 +107,7 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
                 }
 
             # Use a more memory-efficient sampling approach for SAR data
-            max_samples = min(50, original_collection_size)  # Balanced limit for good annual coverage
+            max_samples = min(20, original_collection_size)  # Even more conservative for SAR
             logger.warning(f"✅ Processing {max_samples} sampled Sentinel-1 images from {original_collection_size} total available")
 
             # Use temporal sampling instead of trying to get all metadata at once
@@ -300,7 +300,7 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCEND
         raise
 
 
-def get_sentinel1_collection(geometry, start_date, end_date, orbit_direction="DESCENDING"):
+def get_sentinel1_collection(geometry, start_date, end_date, orbit_direction="BOTH"):
     """Get Sentinel-1 SAR collection for the specified parameters"""
     try:
         logger.info(f"Getting Sentinel-1 collection for {start_date} to {end_date}")
@@ -314,12 +314,16 @@ def get_sentinel1_collection(geometry, start_date, end_date, orbit_direction="DE
             .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
             .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
             .filter(ee.Filter.eq('instrumentMode', 'IW'))
-            # Filter by user-selected orbit direction
-            .filter(ee.Filter.eq('orbitProperties_pass', orbit_direction))
-            .sort('system:time_start')
         )
         
-        logger.info(f"🛰️ Filtering Sentinel-1 collection by orbit direction: {orbit_direction}")
+        # Filter by orbit direction only if not "BOTH"
+        if orbit_direction != "BOTH":
+            collection = collection.filter(ee.Filter.eq('orbitProperties_pass', orbit_direction))
+            logger.info(f"🛰️ Filtering Sentinel-1 collection by orbit direction: {orbit_direction}")
+        else:
+            logger.info(f"🛰️ Including BOTH orbit directions (ASCENDING + DESCENDING)")
+        
+        collection = collection.sort('system:time_start')
 
         # Apply minimal preprocessing to keep original data integrity
         def preprocess_sar_image(image):
@@ -343,7 +347,7 @@ def get_sentinel1_collection(geometry, start_date, end_date, orbit_direction="DE
         raise
 
 
-def calculate_change_detection(geometry, date1, date2, orbit_direction="DESCENDING"):
+def calculate_change_detection(geometry, date1, date2, orbit_direction="BOTH"):
     """Calculate change detection between two dates using SAR data"""
     try:
         logger.info(f"Calculating SAR change detection between {date1} and {date2}")
@@ -500,7 +504,6 @@ def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_
                 logger.debug(f"Processing SAR annual composite for {year}: {year_start} to {year_end}")
                 
                 # Create collection for this year
-                # Accept both orbit directions for maximum data coverage
                 annual_collection = (
                     ee.ImageCollection('COPERNICUS/S1_GRD')
                     .filterBounds(geometry)
@@ -508,9 +511,14 @@ def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_
                     .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
                     .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
                     .filter(ee.Filter.eq('instrumentMode', 'IW'))
-                    # Filter by user-selected orbit direction
-                    .filter(ee.Filter.eq('orbitProperties_pass', orbit_direction))
                 )
+                
+                # Filter by orbit direction only if not "BOTH"
+                if orbit_direction != "BOTH":
+                    annual_collection = annual_collection.filter(ee.Filter.eq('orbitProperties_pass', orbit_direction))
+                    logger.debug(f"Filtering by orbit direction: {orbit_direction}")
+                else:
+                    logger.debug(f"Including both ASCENDING and DESCENDING orbits")
                 
                 # Check if this year has data
                 annual_size = annual_collection.size().getInfo()
@@ -713,11 +721,17 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
                 )
                 total_before_orbit_filter = chunk_collection_all_orbits.size().getInfo()
                 
-                # Create collection for this chunk with aggressive filtering
-                # Filter by user-selected orbit direction
-                chunk_collection = chunk_collection_all_orbits.filter(
-                    ee.Filter.eq('orbitProperties_pass', orbit_direction)
-                )
+                # Create collection for this chunk
+                chunk_collection = chunk_collection_all_orbits
+                
+                # Filter by orbit direction only if not "BOTH"
+                if orbit_direction != "BOTH":
+                    chunk_collection = chunk_collection.filter(
+                        ee.Filter.eq('orbitProperties_pass', orbit_direction)
+                    )
+                    logger.debug(f"Filtering chunk by orbit direction: {orbit_direction}")
+                else:
+                    logger.debug(f"Including both ASCENDING and DESCENDING orbits in chunk")
                 
                 # Check collection size for this chunk
                 chunk_size = chunk_collection.size().getInfo()
@@ -882,7 +896,7 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
         }
 
 
-def calculate_coherence(geometry, start_date, end_date, orbit_direction="DESCENDING"):
+def calculate_coherence(geometry, start_date, end_date, orbit_direction="BOTH"):
     """Calculate interferometric coherence using Sentinel-1 SLC data"""
     try:
         logger.info(f"Calculating SAR coherence for {start_date} to {end_date}")
