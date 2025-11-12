@@ -10,10 +10,12 @@ from datetime import datetime, timedelta
 import math
 import random
 import re
+from apps.core.caching import cache_analysis_result, cache_earth_engine_data
 
 logger = logging.getLogger(__name__)
 
 
+@cache_analysis_result(timeout=3600, key_prefix="sar_analysis")
 def process_sar_analysis(geometry, start_date, end_date, orbit_direction="BOTH", polarization="VV"):
     """Process SAR analysis using Sentinel-1 data with memory optimization"""
     try:

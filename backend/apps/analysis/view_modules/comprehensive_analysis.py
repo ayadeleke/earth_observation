@@ -11,10 +11,12 @@ from .earth_engine import get_landsat_collection, get_sentinel2_collection, vali
 from .ndvi_analysis import process_landsat_ndvi_analysis, process_sentinel2_ndvi_analysis
 from .lst_analysis import process_lst_analysis
 from .sar_analysis import process_sar_analysis
+from apps.core.caching import cache_analysis_result, cache_earth_engine_data
 
 logger = logging.getLogger(__name__)
 
 
+@cache_analysis_result(timeout=3600, key_prefix="comprehensive_analysis")
 def process_comprehensive_analysis(geometry, start_date, end_date, analysis_types=['ndvi', 'lst'], satellite="landsat", cloud_cover=20, use_cloud_masking=False, strict_masking=False, polarization='VV', orbit_direction='BOTH'):
     """Process comprehensive analysis combining multiple indicators"""
     try:
