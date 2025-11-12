@@ -348,7 +348,6 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                     # Return feature with basic values (no client-side variables)
                     feature = ee.Feature(None, {
                         'date': ee.Date(image.get('system:time_start')).format('YYYY-MM-dd'),
-                        'doy': ee.Date(image.get('system:time_start')).getRelative('day', 'year').add(1),  # DoY (1-based)
                         'image_id': image_id,
                         'original_cloud_cover': original_cloud_cover,
                         'ndvi': ndvi_mean
@@ -384,9 +383,16 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                             # Extract basic data from Earth Engine
                             original_cloud_cover = props.get('original_cloud_cover', 0)
                             date_str = props['date']
-                            doy = props.get('doy', 1)  # Day of Year from Earth Engine
                             image_id = props.get('image_id', 'Unknown')
                             ndvi_value = props['ndvi']
+                            
+                            # Calculate DOY in Python from the date string
+                            from datetime import datetime
+                            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                            doy = date_obj.timetuple().tm_yday
+                            
+                            # Debug: Log the date parsing
+                            logger.error(f"📅 Date: {date_str} -> DOY: {doy} (Month: {date_obj.month}, Day: {date_obj.day})")
 
                             # Apply cloud masking logic CLIENT-SIDE (simple and reliable)
                             if use_cloud_masking:
@@ -687,7 +693,6 @@ def process_sentinel2_ndvi_analysis(geometry, start_date, end_date, cloud_cover=
                 # Return feature with values
                 return ee.Feature(None, {
                     'date': ee.Date(image.get('system:time_start')).format('YYYY-MM-dd'),
-                    'doy': ee.Date(image.get('system:time_start')).getRelative('day', 'year').add(1),
                     'image_id': image_id,
                     'original_cloud_cover': original_cloud_cover,
                     'ndvi': ndvi_mean
@@ -703,9 +708,13 @@ def process_sentinel2_ndvi_analysis(geometry, start_date, end_date, cloud_cover=
                     if props.get('ndvi') is not None:
                         original_cloud_cover = props.get('original_cloud_cover', 0)
                         date_str = props['date']
-                        doy = props.get('doy', 1)
                         image_id = props.get('image_id', 'Unknown')
                         ndvi_value = props['ndvi']
+                        
+                        # Calculate DOY in Python from the date string
+                        from datetime import datetime
+                        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                        doy = date_obj.timetuple().tm_yday
 
                         # Apply cloud masking logic client-side
                         if use_cloud_masking:

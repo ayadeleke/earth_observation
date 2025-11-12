@@ -547,6 +547,10 @@ def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_
                 if vv_value is not None and vh_value is not None:
                     # Use mid-year date for annual mean
                     date_str = f"{year}-06-15"
+                    # Calculate DOY for June 15 (166 in non-leap years, 167 in leap years)
+                    from datetime import datetime
+                    mid_year_date = datetime(year, 6, 15)
+                    doy = mid_year_date.timetuple().tm_yday
                     
                     vv_db = round(float(vv_value), 2)
                     vh_db = round(float(vh_value), 2)
@@ -554,6 +558,7 @@ def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_
                     
                     sample_data.append({
                         "date": date_str,
+                        "doy": doy,
                         "backscatter_vv": vv_db,
                         "backscatter_vh": vh_db,
                         "vv_backscatter": vv_db,
@@ -769,6 +774,7 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
                         if year_size > 0:
                             chunk_composite = year_collection.mean()
                             composite_date = datetime(year, 6, 15)  # Mid-year
+                            doy = composite_date.timetuple().tm_yday  # Calculate DOY for June 15
                             
                             logger.info(f"  Processing {year_size} images for year {year}...")
                             
@@ -794,6 +800,7 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
                                 
                                 sample_data.append({
                                     "date": composite_date.strftime('%Y-%m-%d'),
+                                    "doy": doy,
                                     "backscatter_vv": vv_db,
                                     "backscatter_vh": vh_db,
                                     "vv_backscatter": vv_db,
