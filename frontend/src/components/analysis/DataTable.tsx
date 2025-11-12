@@ -225,7 +225,13 @@ export const DataTable: React.FC<DataTableProps> = ({
           </thead>
           <tbody>
             {paginatedData.map((row, index) => {
-              const dayOfYear = new Date(row.date).getDate();
+              // Calculate day of year (1-366)
+              const date = new Date(row.date);
+              const start = new Date(date.getFullYear(), 0, 0);
+              const diff = date.getTime() - start.getTime();
+              const oneDay = 1000 * 60 * 60 * 24;
+              const dayOfYear = Math.floor(diff / oneDay);
+              
               const value = row[valueColumn.key];
               
               return (

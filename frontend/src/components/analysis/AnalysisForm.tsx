@@ -298,8 +298,8 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                 <div className="tab-pane fade show active">
                   <ShapefileUpload 
                     onFileUpload={(result: any) => {
-
-                      if (result.bounds) {
+                      // Check if result is not null before accessing bounds
+                      if (result && result.bounds) {
                         const coords = result.bounds;
                         handleAreaSelect(coords, result.wkt || '', 'shapefile');
                       }
