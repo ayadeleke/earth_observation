@@ -8,6 +8,7 @@ import ee
 from datetime import datetime
 from collections import defaultdict
 from .earth_engine import get_landsat_collection_for_lst, harmonize_landsat_bands
+from apps.core.caching import cache_analysis_result, cache_earth_engine_data
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ def calculate_annual_lst_means(sample_data):
         return sample_data  # Return original data if calculation fails
 
 
+@cache_analysis_result(timeout=3600, key_prefix="lst_analysis")
 def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_cloud_masking=False, strict_masking=False):
     """Process Land Surface Temperature analysis using Landsat thermal bands"""
     try:
