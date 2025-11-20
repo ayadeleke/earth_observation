@@ -59,7 +59,7 @@ const AboutPage: React.FC = () => {
         background: 'linear-gradient(135deg, #141917 0%, #073317 50%, #064e3b 100%)',
         minHeight: '60vh'
       }}>
-        <div className="container py-5">
+        <div className="container-fluid py-5">
           <div className="row align-items-center min-vh-50">
             <div className="col-lg-8 mx-auto text-center">
               <div className="mb-4">
