@@ -638,7 +638,7 @@ const AnalysisPage: React.FC = () => {
       
       {/* Saved Analyses Panel */}
       {projectId && projectAnalyses.length > 0 && (
-        <div className="container mb-4">
+        <div className="container-fluid mb-4">
           <div className="card border-0 shadow-sm">
             <div className="card-header bg-light d-flex justify-content-between align-items-center">
               <h5 className="mb-0">
@@ -664,8 +664,8 @@ const AnalysisPage: React.FC = () => {
             </div>
             <div className="card-body">
               <div className="row">
-                {(showAllAnalyses ? projectAnalyses : projectAnalyses.slice(0, 6)).map((analysis) => (
-                  <div key={analysis.id} className="col-md-6 col-lg-4 mb-3">
+                {(showAllAnalyses ? projectAnalyses : projectAnalyses.slice(0, 8)).map((analysis) => (
+                  <div key={analysis.id} className="col-md-6 col-lg-3 mb-3">
                     <div className={`card ${selectedAnalysis?.id === analysis.id ? 'border-primary' : 'border-light'}`}>
                       <div className="card-body p-3">
                         <h6 className="card-title">{analysis.analysis_type.toUpperCase()} Analysis</h6>
@@ -740,14 +740,14 @@ const AnalysisPage: React.FC = () => {
               </div>
               
               {/* See More / See Less Button */}
-              {projectAnalyses.length > 6 && (
+              {projectAnalyses.length > 8 && (
                 <div className="text-center mt-3">
                   <button
                     className="btn btn-outline-primary btn-sm"
                     onClick={() => setShowAllAnalyses(!showAllAnalyses)}
                   >
                     <i className={`fas fa-chevron-${showAllAnalyses ? 'up' : 'down'} me-2`}></i>
-                    {showAllAnalyses ? 'Show Less' : `See More (${projectAnalyses.length - 6} more)`}
+                    {showAllAnalyses ? 'Show Less' : `See More (${projectAnalyses.length - 8} more)`}
                   </button>
                 </div>
               )}
