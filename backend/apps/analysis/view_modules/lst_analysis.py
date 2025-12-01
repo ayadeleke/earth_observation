@@ -8,6 +8,7 @@ import ee
 from datetime import datetime
 from collections import defaultdict
 from .earth_engine import get_landsat_collection_for_lst, harmonize_landsat_bands
+from apps.core.caching import cache_analysis_result, cache_earth_engine_data
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ def calculate_annual_lst_means(sample_data):
         return sample_data  # Return original data if calculation fails
 
 
+@cache_analysis_result(timeout=3600, key_prefix="lst_analysis")
 def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_cloud_masking=False, strict_masking=False):
     """Process Land Surface Temperature analysis using Landsat thermal bands"""
     try:
@@ -135,7 +137,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
             logger.error(f"🔍 LST: Cloud masking with use_cloud_masking={use_cloud_masking}")
 
             # Use harmonized collection (already processed above) to ensure we get proper thermal bands
-            sorted_collection = harmonized_collection.sort('system:time_start').limit(200)
+            sorted_collection = harmonized_collection.sort('system:time_start').limit(100)
 
             def calculate_lst_with_cloud_info(image):
                 """Calculate LST and cloud cover info for each image in collection"""
@@ -189,6 +191,11 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
                         date_str = props['date']
                         image_id = props.get('image_id', 'Unknown')
                         lst_value = props['lst']
+                        
+                        # Calculate DOY in Python from the date string
+                        from datetime import datetime
+                        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                        doy = date_obj.timetuple().tm_yday
 
                         # Apply cloud masking logic CLIENT-SIDE (same as NDVI)
                         if use_cloud_masking:
@@ -212,6 +219,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
 
                         sample_data.append({
                             "date": date_str,
+                            "doy": doy,
                             "lst": round(float(lst_value), 2),
                             "lat": round(lat, 6),
                             "lon": round(lon, 6),

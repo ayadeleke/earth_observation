@@ -34,7 +34,7 @@ const ProjectsPage: React.FC = () => {
 
   return (
     <div className="min-vh-100" style={{ backgroundColor: '#f8f9fa' }}>
-      <div className="container py-5">
+      <div className="container-fluid py-5">
         {/* Header */}
         <div className="row mb-4">
           <div className="col-12">
