@@ -55,7 +55,7 @@ export const NDVITimeSeries: React.FC<NDVITimeSeriesProps> = ({
     return (
       <div className="bg-white rounded shadow-sm p-4">
         <h2 className="fs-5 fw-semibold mb-3">
-          📈 {analysisType.toUpperCase()} Time Series
+          📈 {analysisType.toUpperCase()} Time Series (Annual Means)
         </h2>
         <div className="d-flex align-items-center justify-content-center text-muted" style={{ height: '16rem' }}>
           <div className="text-center">
@@ -107,30 +107,47 @@ export const NDVITimeSeries: React.FC<NDVITimeSeriesProps> = ({
   const color = getColor();
   const yAxisLabel = getYAxisLabel();
 
-  // Format data for chart and handle polarization-specific fields
-  const chartData = data.map(item => {
-    // Extract year directly from date string to avoid timezone issues
-    const year = item.date.split('-')[0];
+  // Aggregate data by year to ensure only one point per year (annual means)
+  const aggregateByYear = (data: TimeSeriesDataPoint[]) => {
+    const yearMap = new Map<string, { values: number[], count: number, dates: string[] }>();
     
-    const formattedItem: any = {
-      ...item,
-      date: year
-    };
-    
-    // For SAR with polarization, ensure we have the correct field
-    if ((analysisType.toLowerCase() === 'sar' || analysisType.toLowerCase() === 'backscatter') && polarization) {
-      const polarizationLower = polarization.toLowerCase();
-      const primaryKey = `backscatter_${polarizationLower}`;
-      const altKey = `${polarizationLower}_backscatter`;
+    data.forEach(item => {
+      const year = new Date(item.date).getFullYear().toString();
+      const value = (analysisType.toLowerCase() === 'sar' || analysisType.toLowerCase() === 'backscatter') && polarization
+        ? item[`backscatter_${polarization.toLowerCase()}` as keyof TimeSeriesDataPoint] || 
+          item[`${polarization.toLowerCase()}_backscatter` as keyof TimeSeriesDataPoint] ||
+          item.backscatter
+        : item[dataKey as keyof TimeSeriesDataPoint];
       
-      // Use the appropriate field, with fallback
-      if (!formattedItem[primaryKey] && formattedItem[altKey]) {
-        formattedItem[primaryKey] = formattedItem[altKey];
+      if (value !== undefined && value !== null) {
+        if (!yearMap.has(year)) {
+          yearMap.set(year, { values: [], count: 0, dates: [] });
+        }
+        const yearData = yearMap.get(year)!;
+        yearData.values.push(Number(value));
+        yearData.count += (item.count || 1);
+        yearData.dates.push(item.date);
       }
-    }
+    });
     
-    return formattedItem;
-  });
+    // Calculate mean for each year
+    const aggregated: any[] = [];
+    yearMap.forEach((yearData, year) => {
+      const meanValue = yearData.values.reduce((sum, val) => sum + val, 0) / yearData.values.length;
+      aggregated.push({
+        date: year,
+        [dataKey]: Number(meanValue.toFixed(2)),
+        count: yearData.count,
+        originalDates: yearData.dates
+      });
+    });
+    
+    // Sort by year
+    return aggregated.sort((a, b) => a.date.localeCompare(b.date));
+  };
+
+  // Format data for chart and aggregate by year
+  const chartData = aggregateByYear(data);
 
   // Calculate date range for subtitle
   const dateRange = data.length > 0 
