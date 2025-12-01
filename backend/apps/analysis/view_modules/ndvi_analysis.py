@@ -13,7 +13,7 @@ from apps.core.caching import cache_analysis_result, cache_earth_engine_data, An
 logger = logging.getLogger(__name__)
 
 
-def get_cloud_cover_with_masking_info(collection, geometry, use_cloud_masking=False, strict_masking=False, max_images=200):
+def get_cloud_cover_with_masking_info(collection, geometry, use_cloud_masking=False, strict_masking=False, max_images=100):
     """
     Extract cloud cover information including effective cloud cover when masking is applied
     """
@@ -322,7 +322,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                     return calculate_ndvi_landsat(image)
 
                 # Calculate NDVI and cloud info together for each image
-                sorted_collection = original_collection.sort('system:time_start').limit(200)
+                sorted_collection = original_collection.sort('system:time_start').limit(100)
 
                 def calculate_ndvi_with_cloud_info(image):
                     """Calculate NDVI using harmonized bands - avoiding client-side variables in server-side operations"""
@@ -348,7 +348,6 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                     # Return feature with basic values (no client-side variables)
                     feature = ee.Feature(None, {
                         'date': ee.Date(image.get('system:time_start')).format('YYYY-MM-dd'),
-                        'doy': ee.Date(image.get('system:time_start')).getRelative('day', 'year').add(1),  # DoY (1-based)
                         'image_id': image_id,
                         'original_cloud_cover': original_cloud_cover,
                         'ndvi': ndvi_mean
@@ -384,9 +383,16 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                             # Extract basic data from Earth Engine
                             original_cloud_cover = props.get('original_cloud_cover', 0)
                             date_str = props['date']
-                            doy = props.get('doy', 1)  # Day of Year from Earth Engine
                             image_id = props.get('image_id', 'Unknown')
                             ndvi_value = props['ndvi']
+                            
+                            # Calculate DOY in Python from the date string
+                            from datetime import datetime
+                            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                            doy = date_obj.timetuple().tm_yday
+                            
+                            # Debug: Log the date parsing
+                            logger.error(f"📅 Date: {date_str} -> DOY: {doy} (Month: {date_obj.month}, Day: {date_obj.day})")
 
                             # Apply cloud masking logic CLIENT-SIDE (simple and reliable)
                             if use_cloud_masking:
@@ -594,15 +600,17 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
         raise
 
 
+@cache_analysis_result(timeout=3600, key_prefix="sentinel2_ndvi")
 def process_sentinel2_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20, use_cloud_masking=False, strict_masking=False):
     """Process Sentinel-2 NDVI analysis"""
     try:
         logger.info(f"Processing Sentinel-2 NDVI analysis for {start_date} to {end_date}")
+        logger.info(f"Cloud masking parameters: enabled={use_cloud_masking}, strict={strict_masking}")
 
         # Get Sentinel-2 collection
         collection = get_sentinel2_collection(geometry, start_date, end_date, cloud_cover)
 
-        # Get median composite
+        # Get median composite for statistics
         image = collection.median()
 
         # Calculate NDVI for Sentinel-2: B8=NIR, B4=Red
@@ -610,10 +618,18 @@ def process_sentinel2_ndvi_analysis(geometry, start_date, end_date, cloud_cover=
         red = image.select('B4')
         ndvi_band = nir.subtract(red).divide(nir.add(red)).rename('NDVI')
 
-        # Apply cloud masking using SCL band
-        scl = image.select('SCL')
-        cloud_mask = scl.neq(9).And(scl.neq(8)).And(scl.neq(3))
-        ndvi_masked = ndvi_band.updateMask(cloud_mask)
+        # Apply cloud masking using SCL band if requested
+        if use_cloud_masking:
+            scl = image.select('SCL')
+            if strict_masking:
+                # Strict: Remove clouds, cloud shadows, cirrus, and water
+                cloud_mask = scl.neq(9).And(scl.neq(8)).And(scl.neq(3).And(scl.neq(6)))
+            else:
+                # Basic: Remove only clouds and cirrus
+                cloud_mask = scl.neq(9).And(scl.neq(8))
+            ndvi_masked = ndvi_band.updateMask(cloud_mask)
+        else:
+            ndvi_masked = ndvi_band
 
         logger.info("Sentinel-2 NDVI calculation completed successfully")
 
@@ -642,12 +658,120 @@ def process_sentinel2_ndvi_analysis(geometry, start_date, end_date, cloud_cover=
 
         pixel_count = pixel_count_result.get("NDVI", 0) if pixel_count_result else 0
 
+        # Get sample data points for time series and data table
+        sample_data = []
+        try:
+            # Get center point for coordinates
+            center_point = geometry.centroid().getInfo()
+            center_coords = center_point['coordinates']
+            lat = center_coords[1]
+            lon = center_coords[0]
+
+            # Sort collection and limit to reasonable number
+            sorted_collection = collection.sort('system:time_start').limit(100)
+
+            def calculate_sentinel2_ndvi_with_cloud_info(image):
+                """Calculate Sentinel-2 NDVI with cloud information"""
+                # Get cloud cover from metadata
+                original_cloud_cover = image.get('CLOUDY_PIXEL_PERCENTAGE')
+                image_id = image.get('system:id')
+
+                # Calculate NDVI: B8=NIR, B4=Red
+                nir = image.select('B8')
+                red = image.select('B4')
+                ndvi = nir.subtract(red).divide(nir.add(red)).rename('NDVI')
+
+                # Calculate NDVI mean
+                ndvi_mean = ndvi.reduceRegion(
+                    reducer=ee.Reducer.mean(),
+                    geometry=geometry,
+                    scale=10,
+                    maxPixels=1e9,
+                    bestEffort=True
+                ).get('NDVI')
+
+                # Return feature with values
+                return ee.Feature(None, {
+                    'date': ee.Date(image.get('system:time_start')).format('YYYY-MM-dd'),
+                    'image_id': image_id,
+                    'original_cloud_cover': original_cloud_cover,
+                    'ndvi': ndvi_mean
+                })
+
+            # Apply to collection and get results
+            ndvi_features = sorted_collection.map(calculate_sentinel2_ndvi_with_cloud_info)
+            feature_data = ndvi_features.getInfo()
+
+            if feature_data and feature_data.get('features'):
+                for feature in feature_data['features']:
+                    props = feature['properties']
+                    if props.get('ndvi') is not None:
+                        original_cloud_cover = props.get('original_cloud_cover', 0)
+                        date_str = props['date']
+                        image_id = props.get('image_id', 'Unknown')
+                        ndvi_value = props['ndvi']
+                        
+                        # Calculate DOY in Python from the date string
+                        from datetime import datetime
+                        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                        doy = date_obj.timetuple().tm_yday
+
+                        # Apply cloud masking logic client-side
+                        if use_cloud_masking:
+                            if strict_masking:
+                                # Strict masking: 90% reduction
+                                adjusted_cloud_cover = max(0.0, original_cloud_cover * 0.1)
+                            else:
+                                # Basic masking: 60% reduction
+                                adjusted_cloud_cover = max(0.0, original_cloud_cover * 0.4)
+                            cloud_masking_applied = True
+                        else:
+                            adjusted_cloud_cover = original_cloud_cover
+                            cloud_masking_applied = False
+
+                        sample_data.append({
+                            "date": date_str,
+                            "doy": int(doy),
+                            "ndvi": round(float(ndvi_value), 4),
+                            "lat": round(lat, 6),
+                            "lon": round(lon, 6),
+                            "cloud_cover": original_cloud_cover,
+                            "effective_cloud_cover": adjusted_cloud_cover,
+                            "cloud_masking_applied": cloud_masking_applied,
+                            "image_id": image_id,
+                            "imageId": image_id,
+                            "satellite": "Sentinel-2",
+                            "estimated_cloud_cover": original_cloud_cover,
+                            "original_cloud_cover": original_cloud_cover,
+                            "originalCloudCover": original_cloud_cover,
+                            "adjustedCloudCover": adjusted_cloud_cover,
+                            "cloudMaskingApplied": cloud_masking_applied
+                        })
+
+                logger.info(f"Generated {len(sample_data)} Sentinel-2 NDVI sample points")
+
+        except Exception as sample_error:
+            logger.error(f"Error getting Sentinel-2 sample data: {sample_error}")
+            sample_data = []
+
+        # Sort sample data chronologically
+        if sample_data:
+            sample_data.sort(key=lambda x: x.get('date', ''))
+            logger.info(f"Sorted {len(sample_data)} Sentinel-2 NDVI data points")
+
+            # Calculate annual means for time series
+            annual_data = calculate_annual_means(sample_data, 'ndvi')
+            logger.info(f"Calculated {len(annual_data)} annual mean NDVI values")
+        else:
+            annual_data = []
+
         return {
             "success": True,
             "demo_mode": False,
             "analysis_type": "NDVI",
             "satellite": "Sentinel-2 (Real Data)",
-            "data": [],  # Implement sampling if needed
+            "data": sample_data,
+            "time_series_data": annual_data,
             "statistics": {
                 "mean_ndvi": round(stats.get("NDVI_mean", 0), 4) if stats else 0,
                 "min_ndvi": round(stats.get("NDVI_min", 0), 4) if stats else 0,
@@ -656,8 +780,11 @@ def process_sentinel2_ndvi_analysis(geometry, start_date, end_date, cloud_cover=
                 "area_km2": round(area_km2, 2),
                 "pixel_count": pixel_count,
                 "date_range": f"{start_date} to {end_date}",
+                "annual_observations": len(annual_data),
+                "total_individual_observations": len(sample_data),
+                "data_type": "Individual + Annual Means"
             },
-            "message": "Real Earth Engine Sentinel-2 NDVI analysis completed successfully",
+            "message": f"Real Earth Engine Sentinel-2 NDVI analysis completed - {len(sample_data)} observations with {len(annual_data)} annual means",
             "timestamp": datetime.now().isoformat(),
         }
 
