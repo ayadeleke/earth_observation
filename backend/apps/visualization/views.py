@@ -43,6 +43,71 @@ from .utils import (
 
 logger = logging.getLogger(__name__)
 
+
+def get_color_scale_legend_html(analysis_type, satellite):
+    """
+    Generate HTML for color scale legend based on analysis type.
+    Returns HTML string to be injected into the map.
+    """
+    if analysis_type.lower() == 'ndvi':
+        # NDVI: Red (low vegetation) -> Yellow -> Green (high vegetation)
+        gradient_colors = '#8B0000, #FF6347, #FFFF00, #90EE90, #006400'
+        title = 'NDVI Scale'
+        min_label = '-1.0<br><span style="font-size:10px;">No Vegetation</span>'
+        max_label = '1.0<br><span style="font-size:10px;">Dense Vegetation</span>'
+        
+    elif analysis_type.lower() == 'lst':
+        # LST: Blue (cold) -> Cyan -> Yellow -> Red (hot)
+        gradient_colors = '#0000FF, #00FFFF, #FFFF00, #FF0000'
+        title = 'LST Scale (°C)'
+        min_label = 'Cold'
+        max_label = 'Hot'
+        
+    elif analysis_type.lower() in ['sar', 'backscatter']:
+        # SAR: Black (low backscatter) -> White (high backscatter)
+        gradient_colors = '#000000, #808080, #FFFFFF'
+        title = 'SAR Backscatter (dB)'
+        min_label = 'Low'
+        max_label = 'High'
+    else:
+        return ''
+    
+    legend_html = f'''
+    <div style="
+        position: fixed;
+        bottom: 30px;
+        right: 10px;
+        width: 180px;
+        background-color: white;
+        border: 2px solid rgba(0,0,0,0.2);
+        border-radius: 5px;
+        padding: 10px;
+        font-family: Arial, sans-serif;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        z-index: 1000;
+    ">
+        <div style="font-weight: bold; margin-bottom: 5px; font-size: 12px;">
+            {title}
+        </div>
+        <div style="
+            height: 20px;
+            background: linear-gradient(to right, {gradient_colors});
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            margin-bottom: 5px;
+        "></div>
+        <div style="display: flex; justify-content: space-between; font-size: 10px;">
+            <span>{min_label}</span>
+            <span>{max_label}</span>
+        </div>
+        <div style="margin-top: 5px; font-size: 9px; color: #666;">
+            {satellite.upper()}
+        </div>
+    </div>
+    '''
+    return legend_html
+
+
 def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_date=None, satellite='landsat', cloud_cover=20, selected_images=None, cloud_masking_level='disabled', polarization='VV', orbit_direction='BOTH'):
     """
     Create an interactive map with calculated analysis layers 
@@ -346,6 +411,27 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
         # Save the map to local file
         map_obj.to_html(map_filepath)
         logger.info(f"Interactive map saved locally to {map_filepath}")
+        
+        # Inject color scale legend into the HTML
+        try:
+            legend_html = get_color_scale_legend_html(analysis_type, satellite)
+            if legend_html:
+                with open(map_filepath, 'r', encoding='utf-8') as f:
+                    html_content = f.read()
+                
+                # Inject legend before closing body tag
+                if '</body>' in html_content:
+                    html_content = html_content.replace('</body>', f'{legend_html}</body>')
+                    
+                    # Write back the modified HTML
+                    with open(map_filepath, 'w', encoding='utf-8') as f:
+                        f.write(html_content)
+                    
+                    logger.info(f"Injected color scale legend for {analysis_type} analysis")
+                else:
+                    logger.warning("Could not find </body> tag to inject legend")
+        except Exception as legend_error:
+            logger.warning(f"Failed to inject legend: {legend_error}")
         
         # Verify file was created successfully
         if os.path.exists(map_filepath) and os.path.getsize(map_filepath) > 1000:

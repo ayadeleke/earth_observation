@@ -308,10 +308,6 @@ const AnalysisPage: React.FC = () => {
         // Add form data
         Object.keys(formData).forEach(key => {
           let value = formData[key as keyof typeof formData];
-          // Convert sentinel1 to sentinel for backend compatibility
-          if (key === 'satellite' && value === 'sentinel1') {
-            value = 'sentinel';
-          }
           requestData.append(key, String(value));
         });
 
@@ -331,7 +327,7 @@ const AnalysisPage: React.FC = () => {
         const requestBody: any = {
           coordinates: formData.coordinates,
           analysis_type: formData.analysisType,
-          satellite: formData.satellite === 'sentinel1' ? 'sentinel' : formData.satellite, // Backend expects 'sentinel' for SAR
+          satellite: formData.satellite,
           project_id: projectId || undefined, // Use actual project ID
           date_range_type: dateRangeType
         };
@@ -349,7 +345,7 @@ const AnalysisPage: React.FC = () => {
         if (formData.satellite !== 'sentinel1' && ['ndvi', 'lst', 'comprehensive'].includes(formData.analysisType)) {
           requestBody.cloud_cover = parseInt(formData.cloudCover.toString());
           requestBody.use_cloud_masking = formData.enableCloudMasking;
-          requestBody.strict_masking = formData.maskingStrictness === 'strict';
+          requestBody.strict_masking = formData.maskingStrictness === 'true';
         }
 
         // Add polarization and orbit direction for SAR analyses
@@ -468,8 +464,7 @@ const AnalysisPage: React.FC = () => {
       const date = new Date(item.date || item.time || '2020-01-01');
       const result: any = {
         date: date.toISOString().split('T')[0],
-        time: date.getTime(),
-        year: date.getFullYear()
+        time: date.getTime()
       };
       
       switch (analysisType.toLowerCase()) {
@@ -494,52 +489,8 @@ const AnalysisPage: React.FC = () => {
       
       return result;
     });
-
-    // Group by year and calculate mean values
-    const groupedByYear = transformed.reduce((acc: any, item: any) => {
-      const year = item.year;
-      if (!acc[year]) {
-        acc[year] = [];
-      }
-      acc[year].push(item);
-      return acc;
-    }, {});
-
-    // Calculate means for each year
-    const yearlyMeans = Object.keys(groupedByYear).map(year => {
-      const yearData = groupedByYear[year];
-      const count = yearData.reduce((sum: number, item: any) => sum + (item.count || 1), 0);
-      
-      const result: any = {
-        date: `${year}-01-01`,
-        time: new Date(`${year}-01-01`).getTime(),
-        year: parseInt(year),
-        count: count
-      };
-
-      switch (analysisType.toLowerCase()) {
-        case 'ndvi':
-          result.ndvi = yearData.reduce((sum: number, item: any) => sum + item.ndvi, 0) / yearData.length;
-          break;
-        case 'lst':
-          result.lst = yearData.reduce((sum: number, item: any) => sum + item.lst, 0) / yearData.length;
-          break;
-        case 'sar':
-          result.backscatter = yearData.reduce((sum: number, item: any) => sum + item.backscatter, 0) / yearData.length;
-          result.backscatter_vv = yearData.reduce((sum: number, item: any) => sum + (item.backscatter_vv || 0), 0) / yearData.length;
-          result.backscatter_vh = yearData.reduce((sum: number, item: any) => sum + (item.backscatter_vh || 0), 0) / yearData.length;
-          result.vv_backscatter = yearData.reduce((sum: number, item: any) => sum + (item.vv_backscatter || 0), 0) / yearData.length;
-          result.vh_backscatter = yearData.reduce((sum: number, item: any) => sum + (item.vh_backscatter || 0), 0) / yearData.length;
-          break;
-        default:
-          result.value = yearData.reduce((sum: number, item: any) => sum + (item.value || 0), 0) / yearData.length;
-      }
-
-      return result;
-    });
-
-    // Sort by year
-    return yearlyMeans.sort((a, b) => a.year - b.year);
+    
+    return transformed;
   };
 
   const transformStatistics = (stats: any, analysisType: string) => {
@@ -713,8 +664,8 @@ const AnalysisPage: React.FC = () => {
             </div>
             <div className="card-body">
               <div className="row">
-                {(showAllAnalyses ? projectAnalyses : projectAnalyses.slice(0, 6)).map((analysis) => (
-                  <div key={analysis.id} className="col-md-6 col-lg-4 mb-3">
+                {(showAllAnalyses ? projectAnalyses : projectAnalyses.slice(0, 8)).map((analysis) => (
+                  <div key={analysis.id} className="col-md-6 col-lg-3 mb-3">
                     <div className={`card ${selectedAnalysis?.id === analysis.id ? 'border-primary' : 'border-light'}`}>
                       <div className="card-body p-3">
                         <h6 className="card-title">{analysis.analysis_type.toUpperCase()} Analysis</h6>
@@ -789,14 +740,14 @@ const AnalysisPage: React.FC = () => {
               </div>
               
               {/* See More / See Less Button */}
-              {projectAnalyses.length > 6 && (
+              {projectAnalyses.length > 8 && (
                 <div className="text-center mt-3">
                   <button
                     className="btn btn-outline-primary btn-sm"
                     onClick={() => setShowAllAnalyses(!showAllAnalyses)}
                   >
                     <i className={`fas fa-chevron-${showAllAnalyses ? 'up' : 'down'} me-2`}></i>
-                    {showAllAnalyses ? 'Show Less' : `See More (${projectAnalyses.length - 6} more)`}
+                    {showAllAnalyses ? 'Show Less' : `See More (${projectAnalyses.length - 8} more)`}
                   </button>
                 </div>
               )}
@@ -806,30 +757,6 @@ const AnalysisPage: React.FC = () => {
       )}
 
       <div className="container-fluid">
-        {/* Error Alert */}
-        <div className="row">
-          <div className="col-12 mb-3">
-            {error && (
-              <div className="alert alert-danger" role="alert">
-                <i className="fas fa-exclamation-triangle me-2"></i>
-                {error}
-              </div>
-            )}
-            {loadedAnalysisMessage && (
-              <div className={`alert ${loadedAnalysisMessage.includes('duplicate') || loadedAnalysisMessage.includes('existing') ? 'alert-warning' : 'alert-success'}`} role="alert">
-                <i className={`fas ${loadedAnalysisMessage.includes('duplicate') || loadedAnalysisMessage.includes('existing') ? 'fa-info-circle' : 'fa-check-circle'} me-2`}></i>
-                {loadedAnalysisMessage}
-                <button
-                  type="button"
-                  className="btn-close float-end"
-                  onClick={() => setLoadedAnalysisMessage('')}
-                  aria-label="Close"
-                ></button>
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Main Content */}
         <div className="row g-4">
           {/* Analysis Form */}
@@ -847,7 +774,7 @@ const AnalysisPage: React.FC = () => {
           {/* Interactive Map */}
           <div className="col-lg-7">
             <div className="card border-0 shadow-lg" style={{
-              borderRadius: '1rem',
+              borderRadius: '1.5rem',
               overflow: 'hidden'
             }}>
               <div className="card-header bg-white border-0" style={{ padding: '1.5rem 2rem' }}>
@@ -915,6 +842,30 @@ const AnalysisPage: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+
+      {/* Error Alert */}
+        <div className="row">
+          <div className="col-12">
+            {error && (
+              <div className="alert alert-danger" role="alert">
+                <i className="fas fa-exclamation-triangle me-2"></i>
+                {error}
+              </div>
+            )}
+            {loadedAnalysisMessage && (
+              <div className={`alert ${loadedAnalysisMessage.includes('duplicate') || loadedAnalysisMessage.includes('existing') ? 'alert-warning' : 'alert-success'}`} role="alert">
+                <i className={`fas ${loadedAnalysisMessage.includes('duplicate') || loadedAnalysisMessage.includes('existing') ? 'fa-info-circle' : 'fa-check-circle'} me-2`}></i>
+                {loadedAnalysisMessage}
+                <button
+                  type="button"
+                  className="btn-close float-end"
+                  onClick={() => setLoadedAnalysisMessage('')}
+                  aria-label="Close"
+                ></button>
+              </div>
+            )}
           </div>
         </div>
 

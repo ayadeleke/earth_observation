@@ -91,7 +91,8 @@ def process_comprehensive(request):
             cloud_cover=params['cloud_cover'],
             use_cloud_masking=params.get('use_cloud_masking', False),
             strict_masking=params.get('strict_masking', False),
-            polarization=params.get('polarization', 'VV')
+            polarization=params.get('polarization', 'VV'),
+            orbit_direction=params.get('orbit_direction', 'BOTH')
         )
 
         # Add processed geometry to response for frontend map display

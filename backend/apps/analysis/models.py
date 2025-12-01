@@ -17,6 +17,8 @@ class AnalysisRequest(models.Model):
     SATELLITE_CHOICES = [
         ("landsat", "Landsat"),
         ("sentinel", "Sentinel"),
+        ("sentinel1", "Sentinel-1 SAR"),
+        ("sentinel2", "Sentinel-2 MSI"),
     ]
 
     STATUS_CHOICES = [

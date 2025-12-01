@@ -114,16 +114,6 @@ const LoginPage: React.FC = () => {
     <div className="min-vh-100" style={{ 
       background: 'linear-gradient(135deg, #1f2937 0%, #065f46 50%, #1e3a8a 100%)' 
     }}>
-      {/* Global styles for placeholder visibility */}
-      <style>{`
-        .form-control::placeholder {
-          color: rgba(255, 255, 255, 0.5) !important;
-          opacity: 1 !important;
-        }
-        .form-control:focus::placeholder {
-          color: rgba(255, 255, 255, 0.4) !important;
-        }
-      `}</style>
 
       <div className="container">
         <div className="row justify-content-center">

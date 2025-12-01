@@ -11,16 +11,18 @@ from .earth_engine import get_landsat_collection, get_sentinel2_collection, vali
 from .ndvi_analysis import process_landsat_ndvi_analysis, process_sentinel2_ndvi_analysis
 from .lst_analysis import process_lst_analysis
 from .sar_analysis import process_sar_analysis
+from apps.core.caching import cache_analysis_result, cache_earth_engine_data
 
 logger = logging.getLogger(__name__)
 
 
-def process_comprehensive_analysis(geometry, start_date, end_date, analysis_types=['ndvi', 'lst'], satellite="landsat", cloud_cover=20, use_cloud_masking=False, strict_masking=False, polarization='VV'):
+@cache_analysis_result(timeout=3600, key_prefix="comprehensive_analysis")
+def process_comprehensive_analysis(geometry, start_date, end_date, analysis_types=['ndvi', 'lst'], satellite="landsat", cloud_cover=20, use_cloud_masking=False, strict_masking=False, polarization='VV', orbit_direction='BOTH'):
     """Process comprehensive analysis combining multiple indicators"""
     try:
         logger.info(f"Processing comprehensive analysis: {analysis_types} using {satellite}")
         if 'sar' in analysis_types:
-            logger.info(f"SAR analysis will use polarization: {polarization}")
+            logger.info(f"SAR analysis will use polarization: {polarization}, orbit_direction: {orbit_direction}")
 
         results = {
             "success": True,
@@ -60,7 +62,7 @@ def process_comprehensive_analysis(geometry, start_date, end_date, analysis_type
 
         if 'sar' in analysis_types:
             try:
-                sar_result = process_sar_analysis(geometry, start_date, end_date, orbit_direction="ASCENDING", polarization=polarization)
+                sar_result = process_sar_analysis(geometry, start_date, end_date, orbit_direction=orbit_direction, polarization=polarization)
                 component_results['sar'] = sar_result
                 logger.info("SAR component completed successfully")
             except Exception as e:
