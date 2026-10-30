@@ -442,10 +442,15 @@ def process_common_request_setup(request, analysis_type):
         # Fall back to coordinates field if shapefile processing didn't work
         if not coordinates_processed and 'coordinates' in data and data['coordinates']:
             coordinates_str = data['coordinates']
-            logger.info(f"Converting coordinates: {coordinates_str[:100]}...")
+            
+            # Log coordinates preview safely (handle both string and dict)
+            if isinstance(coordinates_str, str):
+                logger.info(f"Converting coordinates: {coordinates_str[:100]}...")
+            else:
+                logger.info(f"Converting coordinates: {str(coordinates_str)[:100]}...")
 
             # Check if it's WKT format or already GeoJSON
-            if coordinates_str.strip().startswith('POLYGON') or coordinates_str.strip().startswith('POINT'):
+            if isinstance(coordinates_str, str) and (coordinates_str.strip().startswith('POLYGON') or coordinates_str.strip().startswith('POINT')):
                 # Convert WKT to GeoJSON format
                 try:
                     from shapely import wkt

@@ -86,8 +86,13 @@ def get_color_scale_legend_html(analysis_type, satellite):
         box-shadow: 0 2px 4px rgba(0,0,0,0.3);
         z-index: 1000;
     ">
-        <div style="font-weight: bold; margin-bottom: 5px; font-size: 12px;">
-            {title}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+            <div style="font-weight: bold; font-size: 12px;">
+                {title}
+            </div>
+            <div style="font-size: 9px; color: #666;">
+                {satellite.upper()}
+            </div>
         </div>
         <div style="
             height: 20px;
@@ -96,12 +101,9 @@ def get_color_scale_legend_html(analysis_type, satellite):
             border-radius: 3px;
             margin-bottom: 5px;
         "></div>
-        <div style="display: flex; justify-content: space-between; font-size: 10px;">
-            <span>{min_label}</span>
-            <span>{max_label}</span>
-        </div>
-        <div style="margin-top: 5px; font-size: 9px; color: #666;">
-            {satellite.upper()}
+        <div style="display: flex; justify-content: space-between; font-size: 10px; position: relative;">
+            <span style="position: absolute; left: 0; text-align: left;">{min_label}</span>
+            <span style="position: absolute; right: 0; text-align: right;">{max_label}</span>
         </div>
     </div>
     '''

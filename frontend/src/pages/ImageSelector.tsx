@@ -6,6 +6,7 @@ import 'leaflet-draw/dist/leaflet.draw.css';
 // Leaflet imports
 import L from 'leaflet';
 import 'leaflet-draw';
+import { API_BASE_URL, resolveBackendUrl } from '../config/api.config';
 
 // Fix Leaflet default markers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -384,7 +385,7 @@ const ImageSelector: React.FC = () => {
         };
       }
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+      const apiUrl = API_BASE_URL;
       const response = await fetch(`${apiUrl}/analysis/get_image_metadata/`, requestOptions);
       const data = await response.json();
 
@@ -512,7 +513,7 @@ const ImageSelector: React.FC = () => {
         };
       }
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+      const apiUrl = API_BASE_URL;
       const response = await fetch(`${apiUrl}/visualization/create_custom_map/`, requestOptions);
       const data = await response.json();
 
@@ -1158,7 +1159,7 @@ const ImageSelector: React.FC = () => {
               </div>
               <div className="card-body p-0">
                 <iframe 
-                  src={mapUrl.startsWith('http://') || mapUrl.startsWith('https://') ? mapUrl : `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}${mapUrl.startsWith('/') ? mapUrl : `/${mapUrl}`}`}
+                  src={resolveBackendUrl(mapUrl)}
                   style={{ width: '100%', height: '800px', border: 'none' }}
                   title="Advanced Satellite Analysis Map"
                 />

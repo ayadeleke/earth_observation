@@ -5,7 +5,14 @@ Optimized for running tests quickly and safely.
 
 import os
 import tempfile
-from .settings import *  # noqa
+
+# settings.py refuses the insecure default key when DEBUG is off, so provide one first
+os.environ.setdefault(
+    "SECRET_KEY",
+    os.environ.get("DJANGO_SECRET_KEY", "django-insecure-test-key-only-for-testing-purposes"),
+)
+
+from .settings import *  # noqa: E402
 
 # Use in-memory SQLite database for faster tests
 DATABASES = {
@@ -52,6 +59,7 @@ CACHES = {
         "BACKEND": "django.core.cache.backends.dummy.DummyCache",
     }
 }
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
 
 # Don't create media files during tests
 MEDIA_ROOT = tempfile.mkdtemp(prefix="test_media_")

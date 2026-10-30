@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, LayersControl, FeatureGroup, useMap } from 're
 import L from 'leaflet';
 import { AnalysisMapLayer } from '../map/AnalysisMapLayer';
 import 'leaflet/dist/leaflet.css';
+import { API_BASE_URL, resolveBackendUrl } from '../../config/api.config';
 
 // Legend Component
 const Legend: React.FC<{
@@ -173,7 +174,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         cloud_masking_level: cloudMaskingLevel
       };
 
-      const response = await fetch('/api/v1/visualization/create_custom_map/', {
+      const response = await fetch(`${API_BASE_URL}/visualization/create_custom_map/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -249,7 +250,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           // Custom Comprehensive Map (like ImageSelector)
           <div className="h-full w-full">
             <iframe 
-              src={`${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}${customMapUrl}`}
+              src={resolveBackendUrl(customMapUrl)}
               className="h-full w-full border-none"
               title="Comprehensive Satellite Analysis Map"
             />
