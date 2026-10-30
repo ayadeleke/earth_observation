@@ -325,9 +325,6 @@ const AnalysisPage: React.FC = () => {
       return;
     }
 
-    // Store form data for use in results dashboard
-    setLastFormData(formData);
-
     setLoading(true);
     setError('');
     setLoadedAnalysisMessage('');
@@ -445,6 +442,8 @@ const AnalysisPage: React.FC = () => {
           }, 7000);
         }
         
+        // Set with the results, because the dashboard builds a map whenever these values change
+        setLastFormData(formData);
         setResults(result);
         setShowResults(true);
         setError('');
