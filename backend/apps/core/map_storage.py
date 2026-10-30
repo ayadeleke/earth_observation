@@ -26,10 +26,11 @@ def _object_url(filename):
 
 
 def _headers():
-    return {
-        "apikey": settings.SUPABASE_SERVICE_KEY,
-        "Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}",
-    }
+    headers = {"apikey": settings.SUPABASE_SERVICE_KEY}
+    # Secret keys (sb_secret_...) aren't JWTs and are rejected in Authorization; legacy service_role keys need it
+    if not settings.SUPABASE_SERVICE_KEY.startswith("sb_"):
+        headers["Authorization"] = f"Bearer {settings.SUPABASE_SERVICE_KEY}"
+    return headers
 
 
 def publish_map(filename, path):
