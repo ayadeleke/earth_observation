@@ -6,6 +6,7 @@ import { AnalysisForm } from '../components/analysis/AnalysisForm';
 import authService from '../services/authService';
 import '../styles/AnalysisPage.css';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
+import { API_BASE_URL } from '../config/api.config';
 
 const AnalysisPage: React.FC = () => {
   const navigate = useNavigate();
@@ -46,7 +47,7 @@ const AnalysisPage: React.FC = () => {
     // Remove the window.confirm - now handled by ConfirmDialog
     try {
       const token = authService.getAccessToken();
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+      const apiUrl = API_BASE_URL;
       const response = await fetch(`${apiUrl}/analysis/delete/${analysisId}/`, {
         method: 'DELETE',
         headers: {

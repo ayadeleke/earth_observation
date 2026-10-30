@@ -5,6 +5,7 @@ Django settings for geoanalysis project.
 from datetime import timedelta
 import os
 import environ
+from django.core.exceptions import ImproperlyConfigured
 from pathlib import Path
 import logging
 
@@ -21,13 +22,22 @@ env = environ.Env(DEBUG=(bool, False))
 environ.Env.read_env(BASE_DIR / ".env")
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env("SECRET_KEY", default="django-insecure-change-me-in-production")
+INSECURE_SECRET_KEY = "django-insecure-change-me-in-production"
+SECRET_KEY = env("SECRET_KEY", default="") or INSECURE_SECRET_KEY
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Default to False for safety - explicitly set DEBUG=True in local .env for development
 DEBUG = env("DEBUG", default=False)
 
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "169.254.131.4"])
+if not DEBUG and SECRET_KEY == INSECURE_SECRET_KEY:
+    raise ImproperlyConfigured("SECRET_KEY must be set when DEBUG is False")
+
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+
+# Render sets this to the service's public hostname (e.g. myapp.onrender.com)
+RENDER_EXTERNAL_HOSTNAME = env("RENDER_EXTERNAL_HOSTNAME", default="")
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 # Application definition
 DJANGO_APPS = [
@@ -48,6 +58,7 @@ THIRD_PARTY_APPS = [
     "django_filters",
     "drf_spectacular",
     "storages",  # Django storages for Azure Blob Storage
+    "anymail",  # Transactional email over HTTP APIs (Brevo)
     # "cachalot",  # Database query caching - disabled for development
 ]
 
@@ -63,6 +74,7 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # Serve collected static files
     "apps.core.middleware.security.SecurityHeadersMiddleware",  # Custom security headers
     "apps.core.middleware.security.SecureCookieMiddleware",  # Secure cookie attributes
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -94,48 +106,21 @@ TEMPLATES = [
 WSGI_APPLICATION = "geoanalysis.wsgi.application"
 
 # Database
-# Support both PostgreSQL and SQLite based on environment variables
-if env("DATABASE_URL", default="").startswith("postgres"):
-    # PostgreSQL configuration (supports both local and cloud with SSL)
-    db_options = {
+# A single DATABASE_URL (e.g. postgres://user:pass@host:5432/dbname); SQLite when unset or empty
+# (env.db() would try to parse an empty value instead of using its default)
+DATABASE_URL = env("DATABASE_URL", default="") or f"sqlite:///{BASE_DIR / 'db.sqlite3'}"
+DATABASES = {"default": env.db_url_config(DATABASE_URL)}
+
+if DATABASES["default"]["ENGINE"] == "django.db.backends.postgresql":
+    DATABASES["default"]["OPTIONS"] = {
         "connect_timeout": 10,
-        # Optimize for Azure App Service - reduce statement timeout for faster failures
-        "options": "-c statement_timeout=30000",  # 30 seconds max query time
+        "sslmode": env("DB_SSLMODE", default="require"),
     }
-    
-    # Add SSL configuration for cloud databases (Aiven)
-    if "aivencloud.com" in env("DB_HOST", default="localhost"):
-        db_options.update({
-            "sslmode": "require",
-            "sslcert": None,
-            "sslkey": None,
-            "sslrootcert": None,
-        })
-    
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": env("DB_NAME", default="geoanalysis"),
-            "USER": env("DB_USER", default="postgres"),
-            "PASSWORD": env("DB_PASSWORD", default=""),
-            "HOST": env("DB_HOST", default="localhost"),
-            "PORT": env("DB_PORT", default="5432"),
-            "OPTIONS": db_options,
-            # Optimized connection pooling for Azure
-            # Keep connections alive longer to reduce reconnection overhead
-            "CONN_MAX_AGE": 900,  # 15 minutes (increased from 10 minutes)
-            # Disable persistent connections in development to avoid connection exhaustion
-            "DISABLE_SERVER_SIDE_CURSORS": True,  # Better for connection pooling
-        }
-    }
-else:
-    # SQLite fallback (for development)
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
+    # Keep connections alive to reduce reconnection overhead
+    DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE", default=600)
+    DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+    # Required when connecting through a transaction-mode pooler (PgBouncer)
+    DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -229,7 +214,7 @@ else:
             "BACKEND": "django.core.files.storage.FileSystemStorage",
         },
         "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+            "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
         },
     }
     
@@ -350,10 +335,12 @@ SPECTACULAR_SETTINGS = {
 EARTH_ENGINE_SERVICE_ACCOUNT_KEY = env("EARTH_ENGINE_SERVICE_ACCOUNT_KEY", default=None)
 EARTH_ENGINE_SERVICE_ACCOUNT_KEY_BASE64 = env("EARTH_ENGINE_SERVICE_ACCOUNT_KEY_BASE64", default=None)
 EARTH_ENGINE_PROJECT = env("EARTH_ENGINE_PROJECT", default="ee-ayotundenew")
-EARTH_ENGINE_USE_SERVICE_ACCOUNT = env(
-    "EARTH_ENGINE_USE_SERVICE_ACCOUNT", default=False, cast=bool
+# Defaults to True when a base64 key is provided, so setting the key alone is enough
+EARTH_ENGINE_USE_SERVICE_ACCOUNT = env.bool(
+    "EARTH_ENGINE_USE_SERVICE_ACCOUNT",
+    default=bool(EARTH_ENGINE_SERVICE_ACCOUNT_KEY_BASE64),
 )
-EARTH_ENGINE_USE_APP_DEFAULT = env("EARTH_ENGINE_USE_APP_DEFAULT", default=True)
+EARTH_ENGINE_USE_APP_DEFAULT = env.bool("EARTH_ENGINE_USE_APP_DEFAULT", default=True)
 
 # File Upload Settings
 FILE_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024 * 1024  # 16MB
@@ -405,43 +392,67 @@ CORS_EXPOSE_HEADERS = [
     'Authorization',
 ]
 
-# Redis Caching Configuration
-REDIS_URL = env("REDIS_URL", default="redis://localhost:6379")
+# Caching Configuration
+# Redis is used only when REDIS_URL is set; otherwise per-process LocMemCache
+REDIS_URL = env("REDIS_URL", default="")
 
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_URL,  # Full Redis Cloud URL
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "SSL": False,  # Redis Cloud port 17903 uses plain TCP (SSL available on other ports)
-            "IGNORE_EXCEPTIONS": True,
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,  # Full Redis Cloud URL
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "SSL": False,  # Redis Cloud port 17903 uses plain TCP (SSL available on other ports)
+                "IGNORE_EXCEPTIONS": True,
+            },
+            "TIMEOUT": 3600,
         },
-        "TIMEOUT": 3600,
-    },
-    "sessions": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_URL,  # Full Redis Cloud URL
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "SSL": False,
+        "sessions": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,  # Full Redis Cloud URL
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "SSL": False,
+            },
+            "TIMEOUT": 86400,
         },
-        "TIMEOUT": 86400,
-    },
-    "analysis": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_URL,  # Full Redis Cloud URL
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "SSL": False,
+        "analysis": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,  # Full Redis Cloud URL
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "SSL": False,
+            },
+            "TIMEOUT": 7200,
         },
-        "TIMEOUT": 7200,
-    },
-}
+    }
 
-# Sessions
-SESSION_ENGINE = "django.contrib.sessions.backends.cache"
-SESSION_CACHE_ALIAS = "sessions"
+    # Sessions
+    SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+    SESSION_CACHE_ALIAS = "sessions"
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "default",
+            "TIMEOUT": 3600,
+        },
+        "sessions": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "sessions",
+            "TIMEOUT": 86400,
+        },
+        "analysis": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "analysis",
+            "TIMEOUT": 7200,
+        },
+    }
+
+    # Sessions (database-backed so they survive restarts without Redis)
+    SESSION_ENGINE = "django.contrib.sessions.backends.db"
+
 SESSION_COOKIE_AGE = 86400
 SESSION_SAVE_EVERY_REQUEST = False
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
@@ -542,12 +553,15 @@ CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 
 # CSRF Trusted Origins
-CSRF_TRUSTED_ORIGINS = [
-    'https://earthobservation.azurewebsites.net',
-    'https://earthobservationapi.azurewebsites.net',
-    'http://localhost:3000',
-    'http://localhost:8000',
-]
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=[
+        'http://localhost:3000',
+        'http://localhost:8000',
+    ]
+)
+if RENDER_EXTERNAL_HOSTNAME:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
 
 # Security Headers
 SECURE_BROWSER_XSS_FILTER = True
@@ -569,29 +583,29 @@ SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
 
 # Email backend - Allow override via environment variable
-# Set EMAIL_BACKEND=smtp in .env to send real emails even in DEBUG mode
+# Outbound SMTP ports are blocked on Render's free tier, so real email goes
+# through Brevo's HTTP API via django-anymail.
+# Set EMAIL_BACKEND=brevo in .env to send real emails even in DEBUG mode
 EMAIL_BACKEND_TYPE = env('EMAIL_BACKEND', default='auto')
 
-if EMAIL_BACKEND_TYPE == 'smtp':
-    # Force SMTP (real emails)
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+if EMAIL_BACKEND_TYPE == 'brevo':
+    # Force Brevo (real emails)
+    EMAIL_BACKEND = 'anymail.backends.brevo.EmailBackend'
 elif EMAIL_BACKEND_TYPE == 'console':
     # Force console (print to terminal)
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 else:
-    # Auto: console in DEBUG, SMTP in production
+    # Auto: console in DEBUG, Brevo in production
     if DEBUG:
         EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
     else:
-        EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+        EMAIL_BACKEND = 'anymail.backends.brevo.EmailBackend'
 
-# SMTP Configuration
-EMAIL_HOST = env('EMAIL_HOST', default='smtp.gmail.com')
-EMAIL_PORT = env.int('EMAIL_PORT', default=587)
-EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
-EMAIL_USE_SSL = env.bool('EMAIL_USE_SSL', default=False)
-EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+ANYMAIL = {
+    "BREVO_API_KEY": env('BREVO_API_KEY', default=''),
+}
+
+# Must be a sender address verified in Brevo
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='')
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 

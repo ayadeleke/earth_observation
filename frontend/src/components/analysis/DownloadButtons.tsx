@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE_URL } from '../../config/api.config';
 
 interface DownloadButtonsProps {
   data?: any;
@@ -88,7 +89,6 @@ export const DownloadButtons: React.FC<DownloadButtonsProps> = ({
     if (!data?.timeSeriesData) return;
     
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
       
       // Transform analysis type for backend compatibility
       let backendAnalysisType = data.analysisType || 'ndvi';
