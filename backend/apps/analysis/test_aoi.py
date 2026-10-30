@@ -40,7 +40,7 @@ class AnalysisScaleTest(SimpleTestCase):
         return geometry
 
     def test_small_area_keeps_native_resolution(self):
-        self.assertEqual(analysis_scale(self.geometry(50), 30), 30)
+        self.assertEqual(analysis_scale(self.geometry(50), 30), (30, 1))
 
     def test_large_area_is_sampled_more_coarsely(self):
-        self.assertEqual(analysis_scale(self.geometry(240000), 30), 98)
+        self.assertEqual(analysis_scale(self.geometry(240000), 30), (98, 4))
