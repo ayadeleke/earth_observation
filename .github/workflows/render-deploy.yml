@@ -1,0 +1,21 @@
+# Render does not pick up pushes for this service, so trigger its Deploy Hook instead.
+# RENDER_DEPLOY_HOOK_URL is the URL from Render > Settings > Deploy Hook.
+name: Deploy API to Render
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "render.yaml"
+      - ".github/workflows/render-deploy.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: curl --fail --silent --show-error --max-time 30 -X POST "$RENDER_DEPLOY_HOOK_URL"
