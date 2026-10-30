@@ -589,6 +589,7 @@ SUPABASE_MAPS_BUCKET = env('SUPABASE_MAPS_BUCKET', default='maps')
 
 # Analyses and maps running at once per process; each can use over 100 MB on top of the app
 ANALYSIS_CONCURRENCY = env.int('ANALYSIS_CONCURRENCY', default=1)
+EE_REQUEST_TIMEOUT_SECONDS = env.int('EE_REQUEST_TIMEOUT_SECONDS', default=120)
 
 # Email backend - Allow override via environment variable
 # Outbound SMTP ports are blocked on Render's free tier, so real email goes

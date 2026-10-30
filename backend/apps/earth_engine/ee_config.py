@@ -13,6 +13,12 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+
+def _set_request_deadline():
+    # Without a deadline, one oversized request holds the analysis queue for about 10 minutes
+    ee.data.setDeadline(settings.EE_REQUEST_TIMEOUT_SECONDS * 1000)
+
+
 # Global flag to track initialization status
 _ee_initialized = False
 
@@ -90,6 +96,7 @@ def initialize_earth_engine():
                         None, key_file=str(key_file_path)
                     )
                 ee.Initialize(credentials, project=project_id)
+                _set_request_deadline()
                 logger.info(
                     f"[SUCCESS] Earth Engine initialized with service account for project: {project_id}"
                 )
@@ -104,6 +111,7 @@ def initialize_earth_engine():
         # Fallback to default authentication (for development)
         try:
             ee.Initialize(project=project_id)
+            _set_request_deadline()
             logger.info(
                 f"[SUCCESS] Earth Engine initialized with default authentication for project: {project_id}"
             )

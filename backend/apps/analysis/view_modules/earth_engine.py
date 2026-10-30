@@ -7,10 +7,23 @@ import json
 import logging
 import ee
 from datetime import datetime
+from math import ceil, sqrt
 from apps.earth_engine.ee_config import initialize_earth_engine
 from apps.core.caching import cache_earth_engine_data, monitor_performance
 
+MAX_PIXELS_PER_REDUCTION = 2.5e7
+
 logger = logging.getLogger(__name__)
+
+
+def analysis_scale(geometry, native_scale):
+    """Return a sampling scale in metres that keeps large areas within Earth Engine's limits.
+
+    Small areas keep the satellite's native resolution, which covers about 2,000 km2 at 10 m
+    and 22,000 km2 at 30 m.
+    """
+    area_m2 = geometry.area(maxError=1000).getInfo()
+    return max(native_scale, ceil(sqrt(area_m2 / MAX_PIXELS_PER_REDUCTION)))
 
 
 def wkt_to_ee_geometry(wkt_string):
