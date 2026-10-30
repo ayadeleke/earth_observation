@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 import folium  # For enhanced layer control
-from apps.core.concurrency import limit_to_analysis_slot
+from apps.core.concurrency import isolate_map_widgets, limit_to_analysis_slot
 from apps.core.map_storage import fetch_map, publish_map
 
 try:
@@ -116,6 +116,7 @@ def get_color_scale_legend_html(analysis_type, satellite):
 
 
 @limit_to_analysis_slot
+@isolate_map_widgets
 def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_date=None, satellite='landsat', cloud_cover=20, selected_images=None, cloud_masking_level='disabled', polarization='VV', orbit_direction='BOTH'):
     """
     Create an interactive map with calculated analysis layers 
