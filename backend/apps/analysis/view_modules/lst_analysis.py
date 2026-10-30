@@ -7,7 +7,7 @@ import logging
 import ee
 from datetime import datetime
 from collections import defaultdict
-from .earth_engine import REDUCTION_TILE_SCALE, analysis_scale, get_landsat_collection_for_lst, harmonize_landsat_bands
+from .earth_engine import analysis_scale, get_landsat_collection_for_lst, harmonize_landsat_bands
 from apps.core.caching import cache_analysis_result, cache_earth_engine_data
 
 logger = logging.getLogger(__name__)
@@ -103,7 +103,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
         # Process thermal bands for LST calculation
         lst_image = calculate_landsat_lst(median_image)
 
-        scale = analysis_scale(geometry, 30)
+        scale, tile_scale = analysis_scale(geometry, 30)
 
         # Get statistics
         stats = lst_image.reduceRegion(
@@ -113,7 +113,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
             geometry=geometry,
             scale=scale,
             maxPixels=1e9,
-            tileScale=REDUCTION_TILE_SCALE,
+            tileScale=tile_scale,
         ).getInfo()
 
         # Calculate area statistics
@@ -125,7 +125,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
                 geometry=geometry,
                 scale=scale,
                 maxPixels=1e9,
-                tileScale=REDUCTION_TILE_SCALE,
+                tileScale=tile_scale,
             )
             .getInfo()
         )
@@ -161,7 +161,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
                     geometry=geometry,
                     scale=scale,
                     maxPixels=1e9,
-                    tileScale=REDUCTION_TILE_SCALE,
+                    tileScale=tile_scale,
                     bestEffort=True
                 ).get('LST')
 
