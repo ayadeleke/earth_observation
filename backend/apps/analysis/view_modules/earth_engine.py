@@ -11,7 +11,8 @@ from math import ceil, sqrt
 from apps.earth_engine.ee_config import initialize_earth_engine
 from apps.core.caching import cache_earth_engine_data, monitor_performance
 
-MAX_PIXELS_PER_REDUCTION = 2.5e7
+MAX_PIXELS_PER_REDUCTION = 1e7
+MAX_SERIES_IMAGES = 100
 # Splitting reductions into smaller tiles avoids Earth Engine memory errors, but slows small areas
 LARGE_AREA_KM2 = 1000
 LARGE_AREA_TILE_SCALE = 4
@@ -22,13 +23,19 @@ logger = logging.getLogger(__name__)
 def analysis_scale(geometry, native_scale):
     """Return the scale in metres and tileScale that keep an area within Earth Engine's limits.
 
-    Small areas keep the satellite's native resolution, which covers about 2,000 km2 at 10 m
-    and 22,000 km2 at 30 m.
+    Small areas keep the satellite's native resolution, which covers about 1,000 km2 at 10 m
+    and 9,000 km2 at 30 m.
     """
     area_m2 = geometry.area(maxError=1000).getInfo()
     scale = max(native_scale, ceil(sqrt(area_m2 / MAX_PIXELS_PER_REDUCTION)))
     tile_scale = LARGE_AREA_TILE_SCALE if area_m2 > LARGE_AREA_KM2 * 1e6 else 1
     return scale, tile_scale
+
+
+def series_images(collection):
+    """Pick images for a time series, spread across the date range rather than only the earliest."""
+    shuffled = ee.ImageCollection(collection.randomColumn("series_order", 0)).sort("series_order")
+    return shuffled.limit(MAX_SERIES_IMAGES).sort("system:time_start")
 
 
 def wkt_to_ee_geometry(wkt_string):

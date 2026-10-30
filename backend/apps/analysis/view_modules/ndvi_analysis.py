@@ -7,7 +7,7 @@ import logging
 import ee
 from datetime import datetime
 from collections import defaultdict
-from .earth_engine import analysis_scale, get_landsat_collection, get_sentinel2_collection
+from .earth_engine import analysis_scale, get_landsat_collection, get_sentinel2_collection, series_images
 from apps.core.caching import cache_analysis_result, cache_earth_engine_data, AnalysisCache, monitor_performance
 
 logger = logging.getLogger(__name__)
@@ -284,7 +284,8 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
         stats = ndvi_band.reduceRegion(
             reducer=ee.Reducer.mean()
             .combine(reducer2=ee.Reducer.minMax(), sharedInputs=True)
-            .combine(reducer2=ee.Reducer.stdDev(), sharedInputs=True),
+            .combine(reducer2=ee.Reducer.stdDev(), sharedInputs=True)
+            .combine(reducer2=ee.Reducer.count(), sharedInputs=True),
             geometry=geometry,
             scale=scale,
             maxPixels=1e9,
@@ -296,19 +297,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
 
         # Calculate area statistics
         area_km2 = geometry.area().divide(1000000).getInfo()
-        pixel_count_result = (
-            ndvi_band.select("NDVI")
-            .reduceRegion(
-                reducer=ee.Reducer.count(),
-                geometry=geometry,
-                scale=scale,
-                maxPixels=1e9,
-                tileScale=tile_scale,
-            )
-            .getInfo()
-        )
-
-        pixel_count = pixel_count_result.get("NDVI", 0) if pixel_count_result else 0
+        pixel_count = stats.get("NDVI_count", 0)
 
         # Get sample data points - use ACTUAL Earth Engine values
         sample_data = []
@@ -326,7 +315,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                     return calculate_ndvi_landsat(image)
 
                 # Calculate NDVI and cloud info together for each image
-                sorted_collection = original_collection.sort('system:time_start').limit(100)
+                sorted_collection = series_images(original_collection)
 
                 def calculate_ndvi_with_cloud_info(image):
                     """Calculate NDVI using harmonized bands - avoiding client-side variables in server-side operations"""
@@ -371,7 +360,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                         logger.error(f"   Features count: {len(feature_data.get('features', []))}")
                 except Exception as ee_error:
                     logger.error(f"❌ Earth Engine getInfo() failed: {ee_error}")
-                    feature_data = None
+                    raise
 
                 # Process results
                 if feature_data and feature_data.get('features'):
@@ -457,114 +446,12 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                     logger.info(f"   cloud_masking_applied: {first_sample.get('cloud_masking_applied', 'MISSING')}")
                     logger.info(f"   adjustedCloudCover: {first_sample.get('adjustedCloudCover', 'MISSING')}")
                     logger.info(f"   original cloud_cover: {first_sample.get('cloud_cover', 'MISSING')}")
-                else:
-                    # FALLBACK: If no sample data was generated, create basic fallback data
-                    logger.error("🚨 No sample data generated, creating FALLBACK data...")
-                    try:
-                        # Get center point
-                        center_point = geometry.centroid().getInfo()
-                        center_coords = center_point['coordinates']
-                        lat = center_coords[1]
-                        lon = center_coords[0]
-
-                        # Create a few sample points for testing
-                        from datetime import datetime, timedelta
-                        base_date = datetime.strptime(start_date, '%Y-%m-%d')
-
-                        for i in range(3):  # Create 3 sample points
-                            sample_date = base_date + timedelta(days=i * 30)
-                            date_str = sample_date.strftime('%Y-%m-%d')
-
-                            original_cloud_cover = 5.0 + (i * 2.0)  # Vary cloud cover
-
-                            # Apply cloud masking logic (consistent with main logic)
-                            if use_cloud_masking:
-                                if strict_masking:
-                                    # Strict masking: 70% reduction (keep 30% of original)
-                                    adjusted_cloud_cover = max(0.0, original_cloud_cover * 0.3)
-                                    masking_type = "STRICT (70% reduction)"
-                                else:
-                                    # Basic masking: 50% reduction (keep 50% of original)
-                                    adjusted_cloud_cover = max(0.0, original_cloud_cover * 0.5)
-                                    masking_type = "BASIC (50% reduction)"
-
-                                cloud_masking_applied = True
-                                logger.error(f"🟢 FALLBACK: {masking_type} for {date_str} -> {original_cloud_cover}% -> {adjusted_cloud_cover:.1f}%")
-                            else:
-                                adjusted_cloud_cover = original_cloud_cover
-                                cloud_masking_applied = False
-                                logger.error(f"🔴 FALLBACK: Cloud masking DISABLED for {date_str} -> {original_cloud_cover}% (no change)")
-
-                            # Calculate realistic DoY for the date
-                            from datetime import datetime
-                            sample_date = datetime.strptime(date_str, '%Y-%m-%d')
-                            doy = sample_date.timetuple().tm_yday
-
-                            sample_data.append({
-                                "date": date_str,
-                                "doy": doy,  # Calculated Day of Year
-                                "ndvi": 0.65 + (i * 0.05),  # Mock NDVI values
-                                "lat": round(lat, 6),
-                                "lon": round(lon, 6),
-                                "cloud_cover": original_cloud_cover,
-                                "effective_cloud_cover": adjusted_cloud_cover,
-                                "cloud_masking_applied": cloud_masking_applied,
-                                "image_id": f'FALLBACK_NDVI_{i+1}',
-                                "imageId": f'FALLBACK_NDVI_{i+1}',  # DataTable expects camelCase
-                                "satellite": "Landsat 8/9",
-                                "estimated_cloud_cover": original_cloud_cover,
-                                "original_cloud_cover": original_cloud_cover,
-                                # Frontend DataTable field names (camelCase) - these are what actually get displayed
-                                "originalCloudCover": original_cloud_cover,
-                                "adjustedCloudCover": adjusted_cloud_cover,
-                                "cloudMaskingApplied": cloud_masking_applied
-                            })
-
-                        logger.error(f"✅ FALLBACK generated {len(sample_data)} sample points")
-                    except Exception as fallback_error:
-                        logger.error(f"❌ FALLBACK failed: {fallback_error}")
-                        # Create absolute minimum data with realistic DoY
-                        from datetime import datetime
-                        emergency_date = datetime.strptime(start_date, '%Y-%m-%d')
-                        emergency_doy = emergency_date.timetuple().tm_yday
-
-                        # Calculate emergency cloud cover values with clear masking effect
-                        original_emergency_cloud = 10.0
-                        if use_cloud_masking:
-                            if strict_masking:
-                                adjusted_emergency_cloud = max(0.0, original_emergency_cloud * 0.3)  # 70% reduction
-                            else:
-                                adjusted_emergency_cloud = max(0.0, original_emergency_cloud * 0.5)  # 50% reduction
-                        else:
-                            adjusted_emergency_cloud = original_emergency_cloud
-
-                        logger.error(f"🚨 EMERGENCY FALLBACK: {original_emergency_cloud}% -> {adjusted_emergency_cloud}% (masking={use_cloud_masking})")
-
-                        sample_data = [{
-                            "date": start_date,
-                            "doy": emergency_doy,  # Calculated Day of Year
-                            "ndvi": 0.6,
-                            "lat": 7.5,
-                            "lon": -1.5,
-                            "cloud_cover": original_emergency_cloud,
-                            "effective_cloud_cover": adjusted_emergency_cloud,
-                            "cloud_masking_applied": use_cloud_masking,
-                            "image_id": 'EMERGENCY_FALLBACK',
-                            "imageId": 'EMERGENCY_FALLBACK',  # DataTable expects camelCase
-                            "satellite": "Landsat 8/9",
-                            "estimated_cloud_cover": original_emergency_cloud,
-                            "original_cloud_cover": original_emergency_cloud,
-                            # Frontend DataTable field names (camelCase) - these are what actually get displayed
-                            "originalCloudCover": original_emergency_cloud,
-                            "adjustedCloudCover": adjusted_emergency_cloud,
-                            "cloudMaskingApplied": use_cloud_masking
-                        }]
             else:
                 logger.warning("No cloud cover data available")
 
         except Exception as sample_error:
             logger.error(f"Error getting NDVI sample data: {sample_error}")
-            sample_data = []
+            raise
 
         # Sort sample data chronologically by date
         if sample_data:
@@ -644,7 +531,8 @@ def process_sentinel2_ndvi_analysis(geometry, start_date, end_date, cloud_cover=
         stats = ndvi_masked.reduceRegion(
             reducer=ee.Reducer.mean()
             .combine(reducer2=ee.Reducer.minMax(), sharedInputs=True)
-            .combine(reducer2=ee.Reducer.stdDev(), sharedInputs=True),
+            .combine(reducer2=ee.Reducer.stdDev(), sharedInputs=True)
+            .combine(reducer2=ee.Reducer.count(), sharedInputs=True),
             geometry=geometry,
             scale=scale,
             maxPixels=1e9,
@@ -653,19 +541,7 @@ def process_sentinel2_ndvi_analysis(geometry, start_date, end_date, cloud_cover=
 
         # Calculate area statistics
         area_km2 = geometry.area().divide(1000000).getInfo()
-        pixel_count_result = (
-            ndvi_masked.select("NDVI")
-            .reduceRegion(
-                reducer=ee.Reducer.count(),
-                geometry=geometry,
-                scale=scale,
-                maxPixels=1e9,
-                tileScale=tile_scale,
-            )
-            .getInfo()
-        )
-
-        pixel_count = pixel_count_result.get("NDVI", 0) if pixel_count_result else 0
+        pixel_count = stats.get("NDVI_count", 0)
 
         # Get sample data points for time series and data table
         sample_data = []
@@ -677,7 +553,7 @@ def process_sentinel2_ndvi_analysis(geometry, start_date, end_date, cloud_cover=
             lon = center_coords[0]
 
             # Sort collection and limit to reasonable number
-            sorted_collection = collection.sort('system:time_start').limit(100)
+            sorted_collection = series_images(collection)
 
             def calculate_sentinel2_ndvi_with_cloud_info(image):
                 """Calculate Sentinel-2 NDVI with cloud information"""
@@ -762,7 +638,7 @@ def process_sentinel2_ndvi_analysis(geometry, start_date, end_date, cloud_cover=
 
         except Exception as sample_error:
             logger.error(f"Error getting Sentinel-2 sample data: {sample_error}")
-            sample_data = []
+            raise
 
         # Sort sample data chronologically
         if sample_data:
