@@ -11,6 +11,9 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
+# The frontend sends the area of interest as a WKT string
+TEST_AOI_WKT = "POLYGON((-1.5 6.5, -1.0 6.5, -1.0 7.0, -1.5 7.0, -1.5 6.5))"
+
 
 class AnalysisModelTest(TestCase):
     """Test the Analysis models."""
@@ -132,27 +135,27 @@ class AnalysisAPITest(APITestCase):
         )
         self.client.force_authenticate(user=self.user)
 
-    def test_analysis_request_list_allows_anonymous(self):
-        """Test that analysis request list allows anonymous access."""
+    def test_analysis_request_list_requires_auth(self):
+        """Test that analysis history is private to the signed-in user."""
         self.client.force_authenticate(user=None)
-        url = reverse("analysis_request_list")
+        url = reverse("analysis:analysis_request_list")
         response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_analysis_request_list_authenticated(self):
         """Test authenticated access to analysis request list."""
-        url = reverse("analysis_request_list")
+        url = reverse("analysis:analysis_request_list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_process_ndvi_endpoint_simple(self):
         """Test that the NDVI endpoint exists and accepts requests."""
-        url = reverse("process_ndvi")
+        url = reverse("analysis:process_ndvi")
         data = {
             "satellite": "landsat",
             "start_date": "2023-01-01",
             "end_date": "2023-01-31",
-            "coordinates": [[0, 0], [1, 0], [1, 1], [0, 1]],
+            "coordinates": TEST_AOI_WKT,
         }
 
         # Test that the endpoint works and returns a response
@@ -166,7 +169,7 @@ class AnalysisAPITest(APITestCase):
 
     def test_process_lst_endpoint(self):
         """Test the LST processing endpoint validation."""
-        url = reverse("process_lst")
+        url = reverse("analysis:process_lst")
 
         # Test missing required fields
         response = self.client.post(url, {}, format="json")
@@ -177,7 +180,7 @@ class AnalysisAPITest(APITestCase):
             "satellite": "landsat",
             "start_date": "2023-01-01",
             "end_date": "2023-01-31",
-            "coordinates": [[0, 0], [1, 0], [1, 1], [0, 1]],
+            "coordinates": TEST_AOI_WKT,
         }
 
         response = self.client.post(url, data, format="json")
@@ -188,11 +191,11 @@ class AnalysisAPITest(APITestCase):
 
     def test_process_sentinel_endpoint(self):
         """Test the Sentinel-1 processing endpoint."""
-        url = reverse("process_sentinel")
+        url = reverse("analysis:process_sentinel")
         data = {
             "start_date": "2023-01-01",
             "end_date": "2023-01-31",
-            "coordinates": [[0, 0], [1, 0], [1, 1], [0, 1]],
+            "coordinates": TEST_AOI_WKT,
             "polarization": "VV",
         }
 
@@ -202,7 +205,7 @@ class AnalysisAPITest(APITestCase):
 
     def test_invalid_coordinates(self):
         """Test handling of invalid coordinates."""
-        url = reverse("process_ndvi")
+        url = reverse("analysis:process_ndvi")
         data = {
             "satellite": "landsat",
             "start_date": "2023-01-01",
@@ -215,12 +218,12 @@ class AnalysisAPITest(APITestCase):
 
     def test_date_range_handling(self):
         """Test date range handling."""
-        url = reverse("process_ndvi")
+        url = reverse("analysis:process_ndvi")
         data = {
             "satellite": "landsat",
             "start_date": "2023-01-31",
             "end_date": "2023-01-01",  # End date before start date
-            "coordinates": [[0, 0], [1, 0], [1, 1], [0, 1]],
+            "coordinates": TEST_AOI_WKT,
             "cloud_cover": 20,
         }
 
@@ -237,7 +240,7 @@ class AnalysisAPITest(APITestCase):
 
     def test_missing_required_fields(self):
         """Test handling of missing required fields."""
-        url = reverse("process_ndvi")
+        url = reverse("analysis:process_ndvi")
         data = {
             "satellite": "landsat",
             # Missing start_date, end_date, coordinates
@@ -249,7 +252,7 @@ class AnalysisAPITest(APITestCase):
 
     def test_earth_engine_error_handling(self):
         """Test handling of validation errors."""
-        url = reverse("process_ndvi")
+        url = reverse("analysis:process_ndvi")
         data = {
             "satellite": "landsat",
             "start_date": "2023-01-01",
@@ -308,12 +311,12 @@ class AnalysisIntegrationTest(TransactionTestCase):
     def test_full_analysis_workflow(self):
         """Test the complete analysis workflow validation."""
         # Step 1: Test endpoint accepts valid data
-        url = reverse("process_ndvi")
+        url = reverse("analysis:process_ndvi")
         data = {
             "satellite": "landsat",
             "start_date": "2023-01-01",
             "end_date": "2023-01-31",
-            "coordinates": [[0, 0], [1, 0], [1, 1], [0, 1]],
+            "coordinates": TEST_AOI_WKT,
             "cloud_cover": 20,
         }
 
