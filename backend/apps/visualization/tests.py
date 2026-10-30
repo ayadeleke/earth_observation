@@ -4,7 +4,10 @@ from unittest.mock import Mock, patch
 
 import requests
 from django.test import TestCase, override_settings
+from ipywidgets import IntSlider, Widget
+from ipywidgets.embed import embed_data
 
+from apps.core.concurrency import isolate_map_widgets
 from apps.core.map_storage import publish_map
 
 SUPABASE_SETTINGS = {
@@ -89,3 +92,27 @@ class ServeGeneratedMapTest(TestCase):
     def test_other_files_are_not_served(self):
         self.assertEqual(self.get("secrets.html").status_code, 404)
         self.assertEqual(self.get("..%2F.env").status_code, 404)
+
+
+class MapWidgetIsolationTest(TestCase):
+    """Maps must not carry over widgets from earlier maps."""
+
+    def test_widgets_are_closed_after_each_map(self):
+        @isolate_map_widgets
+        def build_map(value):
+            return embed_data(views=[IntSlider(value=value)])["manager_state"]["state"]
+
+        first = build_map(1)
+        second = build_map(2)
+        self.assertEqual(len(first), len(second))
+        self.assertNotIn('"value": 1', str(second).replace("'", '"'))
+
+    def test_widgets_are_closed_when_building_fails(self):
+        @isolate_map_widgets
+        def build_map():
+            IntSlider()
+            raise ValueError("Earth Engine failed")
+
+        with self.assertRaises(ValueError):
+            build_map()
+        self.assertEqual(embed_data(views=[])["manager_state"]["state"], {})

@@ -53,11 +53,7 @@ def get_analysis_job(request, job_id):
     jobs.ensure_workers()
 
     body = {"job_id": job.pk, "status": job.status}
-    if job.status == AnalysisJob.QUEUED:
-        body["position"] = AnalysisJob.objects.filter(
-            status=AnalysisJob.QUEUED, created_at__lte=job.created_at
-        ).count()
-    elif job.status == AnalysisJob.COMPLETED:
+    if job.status == AnalysisJob.COMPLETED:
         body["result"] = job.result
     elif job.status == AnalysisJob.FAILED:
         body["error"] = job.error
