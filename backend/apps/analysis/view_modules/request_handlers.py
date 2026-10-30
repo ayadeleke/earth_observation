@@ -8,8 +8,9 @@ import logging
 from datetime import datetime
 from rest_framework import status
 from rest_framework.response import Response
+import shapely
 from shapely.wkt import loads as wkt_loads
-from shapely.geometry import mapping
+from shapely.geometry import mapping, shape
 try:
     from shapely import wkt
     SHAPELY_AVAILABLE = True
@@ -519,6 +520,22 @@ def process_common_request_setup(request, analysis_type):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+MAX_AOI_VERTICES = 2000
+AOI_SIMPLIFY_START_DEGREES = 0.0005  # About 50 m
+
+
+def simplify_aoi(aoi_json):
+    """Reduce detailed boundaries to MAX_AOI_VERTICES, since each vertex slows every Earth Engine call."""
+    for feature in aoi_json.get("features", []):
+        geom = shape(feature["geometry"])
+        tolerance = AOI_SIMPLIFY_START_DEGREES
+        while shapely.get_num_coordinates(geom) > MAX_AOI_VERTICES:
+            geom = geom.simplify(tolerance, preserve_topology=True)
+            tolerance *= 2
+        feature["geometry"] = mapping(geom)
+    return aoi_json
+
+
 def parse_aoi_data(aoi_data):
     """Parse AOI data from request - handles both GeoJSON and WKT formats"""
     try:
@@ -529,7 +546,7 @@ def parse_aoi_data(aoi_data):
         if isinstance(aoi_data, str):
             try:
                 # Try parsing as JSON (GeoJSON)
-                aoi_json = json.loads(aoi_data)
+                aoi_json = simplify_aoi(json.loads(aoi_data))
                 geometry = geojson_to_ee_geometry(aoi_json)
             except json.JSONDecodeError:
                 # Try parsing as WKT
@@ -539,7 +556,7 @@ def parse_aoi_data(aoi_data):
                     return None, f"Invalid AOI format - not valid JSON or WKT: {str(wkt_error)}"
         else:
             # It's already a dict (parsed JSON), treat as GeoJSON
-            geometry = geojson_to_ee_geometry(aoi_data)
+            geometry = geojson_to_ee_geometry(simplify_aoi(aoi_data))
 
         # Validate coordinates (this should show Ghana path/row 193/056)
         is_valid_coords, coord_message = validate_coordinates(geometry)

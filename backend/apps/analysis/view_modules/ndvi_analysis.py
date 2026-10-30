@@ -7,7 +7,7 @@ import logging
 import ee
 from datetime import datetime
 from collections import defaultdict
-from .earth_engine import get_landsat_collection, get_sentinel2_collection
+from .earth_engine import analysis_scale, get_landsat_collection, get_sentinel2_collection
 from apps.core.caching import cache_analysis_result, cache_earth_engine_data, AnalysisCache, monitor_performance
 
 logger = logging.getLogger(__name__)
@@ -278,13 +278,15 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
 
         logger.info("Landsat NDVI calculation completed successfully")
 
+        scale = analysis_scale(geometry, 30)
+
         # Get statistics
         stats = ndvi_band.reduceRegion(
             reducer=ee.Reducer.mean()
             .combine(reducer2=ee.Reducer.minMax(), sharedInputs=True)
             .combine(reducer2=ee.Reducer.stdDev(), sharedInputs=True),
             geometry=geometry,
-            scale=30,
+            scale=scale,
             maxPixels=1e9,
         ).getInfo()
 
@@ -298,7 +300,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
             .reduceRegion(
                 reducer=ee.Reducer.count(),
                 geometry=geometry,
-                scale=30,
+                scale=scale,
                 maxPixels=1e9,
             )
             .getInfo()
@@ -340,7 +342,7 @@ def process_landsat_ndvi_analysis(geometry, start_date, end_date, cloud_cover=20
                     ndvi_mean = ndvi_band.reduceRegion(
                         reducer=ee.Reducer.mean(),
                         geometry=geometry,
-                        scale=30,
+                        scale=scale,
                         maxPixels=1e9,
                         bestEffort=True
                     ).get('NDVI')
@@ -633,13 +635,15 @@ def process_sentinel2_ndvi_analysis(geometry, start_date, end_date, cloud_cover=
 
         logger.info("Sentinel-2 NDVI calculation completed successfully")
 
+        scale = analysis_scale(geometry, 10)
+
         # Get statistics
         stats = ndvi_masked.reduceRegion(
             reducer=ee.Reducer.mean()
             .combine(reducer2=ee.Reducer.minMax(), sharedInputs=True)
             .combine(reducer2=ee.Reducer.stdDev(), sharedInputs=True),
             geometry=geometry,
-            scale=10,
+            scale=scale,
             maxPixels=1e9,
         ).getInfo()
 
@@ -650,7 +654,7 @@ def process_sentinel2_ndvi_analysis(geometry, start_date, end_date, cloud_cover=
             .reduceRegion(
                 reducer=ee.Reducer.count(),
                 geometry=geometry,
-                scale=10,
+                scale=scale,
                 maxPixels=1e9,
             )
             .getInfo()
@@ -685,7 +689,7 @@ def process_sentinel2_ndvi_analysis(geometry, start_date, end_date, cloud_cover=
                 ndvi_mean = ndvi.reduceRegion(
                     reducer=ee.Reducer.mean(),
                     geometry=geometry,
-                    scale=10,
+                    scale=scale,
                     maxPixels=1e9,
                     bestEffort=True
                 ).get('NDVI')
