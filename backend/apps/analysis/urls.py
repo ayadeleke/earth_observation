@@ -4,7 +4,7 @@ All analysis endpoints now require authentication.
 """
 
 from django.urls import path
-from . import views
+from . import job_views, views
 
 app_name = 'analysis'
 
@@ -38,4 +38,8 @@ urlpatterns = [
         "result/<int:analysis_id>/", views.get_analysis_result_endpoint, name="analysis_result"
     ),
     path("delete/<int:analysis_id>/", views.delete_analysis_result_endpoint, name="delete_analysis"),
+
+    # Background jobs
+    path("jobs/", job_views.create_analysis_job, name="analysis_job_create"),
+    path("jobs/<uuid:job_id>/", job_views.get_analysis_job, name="analysis_job_detail"),
 ]

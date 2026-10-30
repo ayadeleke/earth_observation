@@ -14,7 +14,7 @@ urlpatterns = [
     # Admin interface
     path("admin/", admin.site.urls),
     # Maps generated at runtime, at the /static/ URLs the analysis endpoints return
-    re_path(r"^static/(?P<filename>(?:interactive|simple_analysis)_map_[0-9_]+\.html)$", serve_generated_map),
+    re_path(r"^static/(?P<filename>(?:interactive|simple_analysis)_map_[0-9a-f_]+\.html)$", serve_generated_map),
     # API Documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
