@@ -8,6 +8,10 @@ import '../styles/AnalysisPage.css';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { API_BASE_URL } from '../config/api.config';
 
+const JOB_POLL_INTERVAL_MS = 2000;
+const JOB_MAX_WAIT_MS = 15 * 60 * 1000;
+const JOB_MAX_POLL_ERRORS = 15;
+
 const AnalysisPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -27,6 +31,7 @@ const AnalysisPage: React.FC = () => {
   const [selectedAnalysis, setSelectedAnalysis] = useState<any>(null);
   const [formInitialData, setFormInitialData] = useState<any>({});
   const [loadedAnalysisMessage, setLoadedAnalysisMessage] = useState<string>('');
+  const [jobStatusMessage, setJobStatusMessage] = useState<string>('');
   const [initialDateRangeType, setInitialDateRangeType] = useState<string>('years');
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [mapDrawnCoordinates, setMapDrawnCoordinates] = useState<string>('');
@@ -283,6 +288,41 @@ const AnalysisPage: React.FC = () => {
   };
 
   // Handle form submission from AnalysisForm
+  const waitForAnalysisJob = async (api: ReturnType<typeof authService.getAuthenticatedAPI>, jobId: string) => {
+    const deadline = Date.now() + JOB_MAX_WAIT_MS;
+    let pollErrors = 0;
+
+    setJobStatusMessage('Your analysis is in the queue...');
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, JOB_POLL_INTERVAL_MS));
+
+      let job;
+      try {
+        job = (await api.get(`/analysis/jobs/${jobId}/`)).data;
+        pollErrors = 0;
+      } catch (error: any) {
+        // The server may be restarting; the job continues when it's back
+        if (error.response?.status === 404 || ++pollErrors > JOB_MAX_POLL_ERRORS) {
+          throw error;
+        }
+        continue;
+      }
+
+      if (job.status === 'completed') {
+        return job.result;
+      }
+      if (job.status === 'failed') {
+        throw new Error(job.error || 'Analysis failed');
+      }
+      setJobStatusMessage(
+        job.status === 'queued'
+          ? `Your analysis is number ${job.position} in the queue...`
+          : 'Running your analysis...'
+      );
+    }
+    throw new Error('The analysis is taking too long. Check your saved analyses later or try a smaller area.');
+  };
+
   const handleFormSubmit = async (formData: any, dateRangeType: string) => {
     if (!formData.coordinates.trim() && !uploadedShapefile) {
       setError('Please select an area of interest either by drawing on the map or uploading a shapefile');
@@ -384,7 +424,11 @@ const AnalysisPage: React.FC = () => {
       let response;
       
       if (contentType === 'application/json') {
-        response = await api.post(endpoint, JSON.parse(requestData as string));
+        const job = await api.post('/analysis/jobs/', {
+          ...JSON.parse(requestData as string),
+          analysis_type: formData.analysisType,
+        });
+        response = { data: await waitForAnalysisJob(api, job.data.job_id) };
       } else {
         // For FormData, use the axios instance directly
         response = await api.post(endpoint, requestData, {
@@ -432,6 +476,7 @@ const AnalysisPage: React.FC = () => {
       setError(errorMessage);
     } finally {
       setLoading(false);
+      setJobStatusMessage('');
     }
   };
 
@@ -766,6 +811,7 @@ const AnalysisPage: React.FC = () => {
               onSubmit={handleFormSubmit}
               onAreaSelect={handleAreaSelect}
               loading={loading}
+              loadingMessage={jobStatusMessage}
               error={error}
               initialData={formInitialData}
               initialDateRangeType={initialDateRangeType}
