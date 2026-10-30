@@ -20,7 +20,7 @@ class ApiService {
   constructor() {
     this.api = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 30000, // 30 seconds for analysis requests
+      timeout: 300000, // 5 minutes, matching gunicorn; analyses and cold starts can take minutes
     });
 
     // Add auth token to requests
