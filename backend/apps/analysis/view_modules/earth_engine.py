@@ -12,6 +12,8 @@ from apps.earth_engine.ee_config import initialize_earth_engine
 from apps.core.caching import cache_earth_engine_data, monitor_performance
 
 MAX_PIXELS_PER_REDUCTION = 2.5e7
+# Splits reductions into smaller tiles, which avoids Earth Engine memory errors on large areas
+REDUCTION_TILE_SCALE = 4
 
 logger = logging.getLogger(__name__)
 
