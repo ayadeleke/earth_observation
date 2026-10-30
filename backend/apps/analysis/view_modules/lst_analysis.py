@@ -7,7 +7,7 @@ import logging
 import ee
 from datetime import datetime
 from collections import defaultdict
-from .earth_engine import analysis_scale, get_landsat_collection_for_lst, harmonize_landsat_bands
+from .earth_engine import REDUCTION_TILE_SCALE, analysis_scale, get_landsat_collection_for_lst, harmonize_landsat_bands
 from apps.core.caching import cache_analysis_result, cache_earth_engine_data
 
 logger = logging.getLogger(__name__)
@@ -113,6 +113,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
             geometry=geometry,
             scale=scale,
             maxPixels=1e9,
+            tileScale=REDUCTION_TILE_SCALE,
         ).getInfo()
 
         # Calculate area statistics
@@ -124,6 +125,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
                 geometry=geometry,
                 scale=scale,
                 maxPixels=1e9,
+                tileScale=REDUCTION_TILE_SCALE,
             )
             .getInfo()
         )
@@ -159,6 +161,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
                     geometry=geometry,
                     scale=scale,
                     maxPixels=1e9,
+                    tileScale=REDUCTION_TILE_SCALE,
                     bestEffort=True
                 ).get('LST')
 
