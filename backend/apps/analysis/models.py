@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from apps.core.models import User, AnalysisProject
 
@@ -138,3 +140,39 @@ class ImageCollection(models.Model):
 
     def __str__(self):
         return f"{self.collection_name} - {self.total_images} images"
+
+
+class AnalysisJob(models.Model):
+    """An analysis waiting for, or running on, a background worker"""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    STATUS_CHOICES = [
+        (QUEUED, "Queued"),
+        (RUNNING, "Running"),
+        (COMPLETED, "Completed"),
+        (FAILED, "Failed"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="analysis_jobs")
+    analysis_type = models.CharField(max_length=20)
+    payload = models.JSONField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=QUEUED)
+    result = models.JSONField(null=True, blank=True)
+    error = models.TextField(blank=True)
+
+    worker_id = models.CharField(max_length=32, blank=True)
+    attempts = models.IntegerField(default=0)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["status", "created_at"])]
+
+    def __str__(self):
+        return f"{self.analysis_type} job {self.pk} ({self.status})"

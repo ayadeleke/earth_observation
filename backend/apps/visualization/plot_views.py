@@ -133,7 +133,7 @@ def generate_time_series_plot(request):
         temp_path = os.path.join(temp_dir, filename)
 
         # Save plot
-        plt.savefig(temp_path, dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
+        plt.savefig(temp_path, dpi=150, bbox_inches='tight', facecolor='white', edgecolor='none')
         plt.close()  # Important: close the figure to free memory
 
         logger.info(f"Generated time series plot: {filename}")

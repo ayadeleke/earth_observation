@@ -582,6 +582,14 @@ SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 # Frontend URL for password reset links
 FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
 
+# Supabase Storage for generated maps; maps stay on local disk when unset
+SUPABASE_URL = env('SUPABASE_URL', default='').rstrip('/')
+SUPABASE_SERVICE_KEY = env('SUPABASE_SERVICE_KEY', default='')
+SUPABASE_MAPS_BUCKET = env('SUPABASE_MAPS_BUCKET', default='maps')
+
+# Analyses and maps running at once per process; each can use over 100 MB on top of the app
+ANALYSIS_CONCURRENCY = env.int('ANALYSIS_CONCURRENCY', default=1)
+
 # Email backend - Allow override via environment variable
 # Outbound SMTP ports are blocked on Render's free tier, so real email goes
 # through Brevo's HTTP API via django-anymail.
