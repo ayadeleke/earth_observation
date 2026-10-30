@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { API_BASE_URL, BACKEND_URL } from '../../config/api.config';
 
 interface InteractiveMapSimpleProps {
   analysisData?: any;
@@ -59,7 +60,6 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
       }
 
       // Use the create_custom_map endpoint
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
       
       const requestBody = {
         coordinates: coordinates,
@@ -89,7 +89,7 @@ const InteractiveMapSimple: React.FC<InteractiveMapSimpleProps> = ({
         let fullMapUrl = result.map_url;
         if (fullMapUrl.startsWith('/static/')) {
           // Convert relative static path to full backend URL
-          const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+          const backendUrl = BACKEND_URL;
           fullMapUrl = `${backendUrl}${result.map_url}`;
         }
 

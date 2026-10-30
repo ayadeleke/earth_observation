@@ -4,6 +4,7 @@ import { Send, Sparkles, X, Minimize2, Maximize2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import authService from '../../services/authService';
 import { useLocation } from 'react-router-dom';
+import { API_BASE_URL } from '../../config/api.config';
 
 // Add CSS animations
 const aiButtonStyles = `
@@ -176,7 +177,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
       const token = authService.getAccessToken();
 
       // Call AI service to process the query
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1'}/ai/query/`, {
+      const response = await fetch(`${API_BASE_URL}/ai/query/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

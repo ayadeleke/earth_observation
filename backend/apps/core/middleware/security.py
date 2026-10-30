@@ -53,13 +53,15 @@ class SecurityHeadersMiddleware:
                 "object-src 'none'",
                 "base-uri 'self'",
                 "form-action 'self' https://accounts.google.com",
-                "frame-ancestors 'self' https://earthobservation.azurewebsites.net",
+                # Frontend origins (e.g. Vercel) embed backend-served maps in iframes
+                "frame-ancestors " + " ".join(["'self'", *getattr(settings, 'CORS_ALLOWED_ORIGINS', [])]),
                 "upgrade-insecure-requests",
             ]
             response['Content-Security-Policy'] = '; '.join(csp_directives)
         
         if 'X-Frame-Options' not in response:
-            # Allow framing from same origin and trusted domains
+            # Legacy fallback; browsers that support CSP frame-ancestors ignore this header,
+            # so the cross-origin frontend can still embed maps
             # SAMEORIGIN allows embedding in same-origin iframes (for maps, visualizations)
             response['X-Frame-Options'] = 'SAMEORIGIN'
         

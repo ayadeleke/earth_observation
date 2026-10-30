@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShapefileUpload } from '../upload/ShapefileUpload';
+import { BACKEND_URL } from '../../config/api.config';
 
 interface FormData {
   coordinates: string;
@@ -59,7 +60,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
   useEffect(() => {
     const checkEarthEngineStatus = async () => {
       try {
-        const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+        const backendUrl = BACKEND_URL;
         const response = await fetch(`${backendUrl}/auth/ee/status/`);
         if (response.ok) {
           const status = await response.json();
