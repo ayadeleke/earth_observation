@@ -57,13 +57,14 @@ const PrivacyPolicy: React.FC = () => {
                   <h3 className="h6 fw-bold mb-3">Minimal Personal Information</h3>
                   <ul className="mb-0">
                     <li className="mb-2">
-                      <strong>Email Address:</strong> Used for account creation and login
+                      <strong>Email Address:</strong> Used solely for account creation and login
                     </li>
                     <li className="mb-2">
-                      <strong>Password:</strong> Securely hashed using Django's authentication system before storage
+                      <strong>Password:</strong> Securely hashed using industry-standard one-way hashing algorithms before storage. 
+                      Passwords are never stored in plain text.
                     </li>
                     <li className="mb-0">
-                      <strong>Analysis History:</strong> Your saved projects and results to enable continuity
+                      <strong>Analysis History:</strong> Saved projects and results, allowing you to continue your work seamlessly.
                     </li>
                   </ul>
                   <div className="alert alert-info mt-3 mb-0">
@@ -103,8 +104,8 @@ const PrivacyPolicy: React.FC = () => {
                           Password Security
                         </h3>
                         <p className="small mb-0">
-                          Passwords are hashed using Django's secure hashing algorithms and never 
-                          stored in plain text.
+                          Passwords are irreversibly hashed using secure hashing algorithms before 
+                          storage and cannot be viewed or retrieved by anyone, including our team.
                         </p>
                       </div>
                     </div>
@@ -131,8 +132,7 @@ const PrivacyPolicy: React.FC = () => {
                           Automated Backups
                         </h3>
                         <p className="small mb-0">
-                          Regular automated backups prevent data loss while maintaining security 
-                          and integrity.
+                          Regular automated backups are maintained to prevent data loss while ensuring security and integrity.
                         </p>
                       </div>
                     </div>
@@ -150,26 +150,24 @@ const PrivacyPolicy: React.FC = () => {
                   <h3 className="h6 fw-bold mb-3">You Own Your Data</h3>
                   <p className="mb-3">
                     In compliance with the Nigerian Data Protection Regulation (NDPR, 2019) and European 
-                    Data Protection Board (EDPB) principles, you have complete control over your data:
+                    Data Protection Board (EDPB) principles, you retain full control over your data:
                   </p>
                   <ul className="mb-0">
                     <li className="mb-2">
-                      <strong>Access:</strong> View all your stored data and analysis history anytime
+                      <strong>Access:</strong> View all stored data and your analysis history at any time.
                     </li>
                     <li className="mb-2">
-                      <strong>Export:</strong> Download your projects and results in CSV or JSON format
+                      <strong>Export:</strong> Download all projects results in CSV and PNG format
                     </li>
                     <li className="mb-2">
-                      <strong>Delete:</strong> Remove your account and all associated data permanently from your 
-                      settings page—no approval needed
+                      <strong>Delete:</strong> Permanently delete your account and all associated data directly from your settings page—no approval required.
                     </li>
                     <li className="mb-0">
-                      <strong>Withdraw Consent:</strong> Stop using the service at any time without penalties
+                      <strong>Withdraw Consent:</strong> You may stop using the service at any time without penalties.
                     </li>
                   </ul>
                 </div>
               </section>
-
               {/* Data Usage */}
               <section className="mb-5">
                 <h2 className="h4 text-primary mb-3">
@@ -179,15 +177,15 @@ const PrivacyPolicy: React.FC = () => {
                 <div className="list-group">
                   <div className="list-group-item">
                     <i className="fas fa-check-circle text-success me-2"></i>
-                    <strong>Account Management:</strong> Authenticate your login and maintain your session
+                    <strong>Account Management:</strong> Authenticate your login and maintain your session.
                   </div>
                   <div className="list-group-item">
                     <i className="fas fa-check-circle text-success me-2"></i>
-                    <strong>Project Continuity:</strong> Save your analysis results so you can return anytime
+                    <strong>Project Continuity:</strong> Store your analysis results so you can return anytime.
                   </div>
                   <div className="list-group-item">
                     <i className="fas fa-check-circle text-success me-2"></i>
-                    <strong>Service Improvement:</strong> Understand usage patterns to enhance functionality
+                    <strong>Service Improvement:</strong> Understand usage patterns to enhance functionality.
                   </div>
                   <div className="list-group-item bg-light">
                     <i className="fas fa-times-circle text-danger me-2"></i>
@@ -203,7 +201,7 @@ const PrivacyPolicy: React.FC = () => {
                   Open Source & Transparency
                 </h2>
                 <p className="text-muted mb-3">
-                  This application is built on open-source principles and uses publicly available algorithms:
+                  This application is built on open-source principles and publicly available algorithms:
                 </p>
                 <ul className="text-muted">
                   <li className="mb-2">
@@ -230,7 +228,7 @@ const PrivacyPolicy: React.FC = () => {
                   </p>
                   <ul className="small mb-2">
                     <li className="mb-1">
-                      Results should be validated against ground-truth data when possible
+                      Results should be validated against ground-truth data where possible
                     </li>
                     <li className="mb-1">
                       Cloud cover, sensor limitations, and atmospheric conditions may affect data quality
@@ -286,7 +284,7 @@ const PrivacyPolicy: React.FC = () => {
                 <div className="d-flex gap-3 flex-wrap">
                   <button 
                     className="btn btn-primary"
-                    onClick={() => navigate('/contact')}
+                    onClick={() => window.location.href = 'mailto:a.adeleke@alustudent.com'}
                   >
                     <i className="fas fa-paper-plane me-2"></i>
                     Contact Us

@@ -114,6 +114,36 @@ const LoginPage: React.FC = () => {
     <div className="min-vh-100" style={{ 
       background: 'linear-gradient(135deg, #1f2937 0%, #065f46 50%, #1e3a8a 100%)' 
     }}>
+      {/* Add styles for better placeholder and error visibility */}
+      <style>{`
+        .form-control::placeholder {
+          color: rgba(255, 255, 255, 0.5) !important;
+          opacity: 1 !important;
+        }
+        .form-control::-webkit-input-placeholder {
+          color: rgba(255, 255, 255, 0.5) !important;
+        }
+        .form-control::-moz-placeholder {
+          color: rgba(255, 255, 255, 0.5) !important;
+        }
+        .form-control:-ms-input-placeholder {
+          color: rgba(255, 255, 255, 0.5) !important;
+        }
+        .error-message {
+          color: #ff6b6b !important;
+          background-color: rgba(255, 107, 107, 0.1);
+          padding: 0.375rem 0.5rem;
+          border-radius: 0.25rem;
+          font-weight: 500;
+          margin-top: 0.25rem;
+          display: block;
+        }
+        .alert-error {
+          background-color: rgba(255, 107, 107, 0.15) !important;
+          border: 1px solid rgba(255, 107, 107, 0.3) !important;
+          color: #ff6b6b !important;
+        }
+      `}</style>
 
       <div className="container">
         <div className="row justify-content-center">
@@ -138,8 +168,8 @@ const LoginPage: React.FC = () => {
               <form onSubmit={handleSubmit}>
                 {/* Form-level errors */}
                 {(errors.form || errors.general) && (
-                  <div className="alert alert-danger bg-danger bg-opacity-25 border-danger mb-3">
-                    <p className="text-danger small mb-0">{errors.form || errors.general}</p>
+                  <div className="alert alert-error mb-3">
+                    <p className="mb-0 small fw-semibold">{errors.form || errors.general}</p>
                   </div>
                 )}
 
@@ -164,10 +194,10 @@ const LoginPage: React.FC = () => {
                         paddingLeft: '45px',
                         backgroundColor: 'rgba(33, 37, 41, 0.9)',
                         color: 'white'
-                      }}
-                    />
+                    }}
+                  />
                   </div>
-                  {errors.email && <div className="text-danger small mt-1">{errors.email}</div>}
+                  {errors.email && <div className="error-message small">{errors.email}</div>}
                 </div>
 
                 {/* Password */}
@@ -206,7 +236,7 @@ const LoginPage: React.FC = () => {
                       }
                     </button>
                   </div>
-                  {errors.password && <div className="text-danger small mt-1">{errors.password}</div>}
+                  {errors.password && <div className="error-message small">{errors.password}</div>}
                 </div>
 
                 {/* Remember Me & Forgot Password */}
