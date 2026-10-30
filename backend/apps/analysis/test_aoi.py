@@ -1,12 +1,13 @@
 import math
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock, patch
 
 import shapely
 from django.test import SimpleTestCase
 from shapely.geometry import shape
 
 from .view_modules.earth_engine import analysis_scale
-from .view_modules.request_handlers import MAX_AOI_VERTICES, simplify_aoi
+from .view_modules.ndvi_analysis import process_landsat_ndvi_analysis
+from .view_modules.request_handlers import MAX_AOI_VERTICES, parse_aoi_data, simplify_aoi
 
 
 def circle_aoi(vertices):
@@ -33,6 +34,27 @@ class SimplifyAoiTest(SimpleTestCase):
         self.assertTrue(shape(simplify_aoi(aoi)["features"][0]["geometry"]).equals(expected))
 
 
+class ParseAoiTest(SimpleTestCase):
+    def parse(self, aoi):
+        with patch("apps.analysis.view_modules.request_handlers.geojson_to_ee_geometry") as to_ee:
+            with patch(
+                "apps.analysis.view_modules.request_handlers.validate_coordinates", return_value=(True, None)
+            ):
+                _, error = parse_aoi_data(aoi)
+        return to_ee, error
+
+    def test_detailed_wkt_boundary_is_reduced(self):
+        wkt = shape(circle_aoi(50000)["features"][0]["geometry"]).wkt
+        to_ee, error = self.parse(wkt)
+        self.assertIsNone(error)
+        simplified = shape(to_ee.call_args.args[0]["features"][0]["geometry"])
+        self.assertLessEqual(shapely.get_num_coordinates(simplified), MAX_AOI_VERTICES)
+
+    def test_invalid_wkt_is_reported(self):
+        _, error = self.parse("POLYGON((not coordinates))")
+        self.assertIn("Invalid AOI format", error)
+
+
 class AnalysisScaleTest(SimpleTestCase):
     def geometry(self, km2):
         geometry = Mock()
@@ -43,4 +65,16 @@ class AnalysisScaleTest(SimpleTestCase):
         self.assertEqual(analysis_scale(self.geometry(50), 30), (30, 1))
 
     def test_large_area_is_sampled_more_coarsely(self):
-        self.assertEqual(analysis_scale(self.geometry(240000), 30), (98, 4))
+        self.assertEqual(analysis_scale(self.geometry(240000), 30), (155, 4))
+
+
+class LandsatTimeSeriesFailureTest(SimpleTestCase):
+    @patch("apps.analysis.view_modules.ndvi_analysis.analysis_scale", return_value=(30, 1))
+    @patch("apps.analysis.view_modules.earth_engine.calculate_ndvi_landsat")
+    @patch("apps.analysis.view_modules.ndvi_analysis.series_images")
+    @patch("apps.analysis.view_modules.ndvi_analysis.get_landsat_collection")
+    def test_failure_is_reported_instead_of_returning_invented_values(self, _collection, series, ndvi, _scale):
+        ndvi.return_value.select.return_value.reduceRegion.return_value.getInfo.return_value = {"NDVI_count": 1}
+        series.return_value.map.return_value.getInfo.side_effect = RuntimeError("Read timed out")
+        with self.assertRaisesMessage(RuntimeError, "Read timed out"):
+            process_landsat_ndvi_analysis(MagicMock(), "2020-01-01", "2020-12-31")
