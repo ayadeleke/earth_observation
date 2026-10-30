@@ -5,6 +5,8 @@ import os
 import tempfile
 import zipfile
 from datetime import datetime
+from django.conf import settings
+from django.http import FileResponse, Http404
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
@@ -1124,6 +1126,26 @@ def create_simple_html_map_with_analysis(geometry, analysis_type, start_date, en
             'success': False,
             'error': str(e)
         }
+
+
+def serve_generated_map(request, filename):
+    """Serve a map generated at runtime.
+
+    WhiteNoise only indexes files present at startup and /static/ has no Django route when
+    DEBUG is off, so maps need their own view. Iframes cannot send a JWT, so this is public.
+    Folium pages load scripts and tiles from many CDNs, hence the https-wide CSP.
+    """
+    for directory in (settings.BASE_DIR / "static", settings.STATIC_ROOT):
+        path = os.path.join(directory, filename)
+        if os.path.isfile(path):
+            response = FileResponse(open(path, "rb"), content_type="text/html; charset=utf-8")
+            frame_ancestors = " ".join(["'self'", *settings.CORS_ALLOWED_ORIGINS])
+            response["Content-Security-Policy"] = (
+                "default-src https: data: blob: 'unsafe-inline' 'unsafe-eval'; "
+                f"frame-ancestors {frame_ancestors}"
+            )
+            return response
+    raise Http404("Map not found")
 
 
 @api_view(["GET"])
