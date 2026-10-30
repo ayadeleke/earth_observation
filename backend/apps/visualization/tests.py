@@ -28,6 +28,13 @@ class StoredMapTest(TestCase):
         self.assertEqual(response.content, b"<html>stored</html>")
         self.assertEqual(get.call_args.args[0], f"https://x.supabase.co/storage/v1/object/maps/{self.NAME}")
 
+    @override_settings(SUPABASE_SERVICE_KEY="sb_secret_abc")
+    def test_secret_key_is_sent_only_as_apikey(self):
+        with patch("apps.core.map_storage.requests.get") as get:
+            get.return_value = Mock(status_code=200, content=b"")
+            self.client.get(f"/static/{self.NAME}")
+        self.assertEqual(get.call_args.kwargs["headers"], {"apikey": "sb_secret_abc"})
+
     def test_missing_stored_map_returns_404(self):
         with patch("apps.core.map_storage.requests.get") as get:
             get.return_value = Mock(status_code=404, content=b"")
