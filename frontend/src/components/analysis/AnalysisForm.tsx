@@ -22,6 +22,7 @@ interface AnalysisFormProps {
   onSubmit: (formData: FormData, dateRangeType: string) => void;
   onAreaSelect: (coordinates: any, wkt: string, source: string, geometry?: any) => void;
   loading?: boolean;
+  loadingMessage?: string;
   error?: string;
   initialData?: Partial<FormData>;
   initialDateRangeType?: string;
@@ -31,6 +32,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
   onSubmit,
   onAreaSelect,
   loading = false,
+  loadingMessage = '',
   error = '',
   initialData = {},
   initialDateRangeType = 'years'
@@ -769,7 +771,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                   <div className="spinner-border spinner-border-sm me-3" role="status">
                     <span className="visually-hidden">Loading...</span>
                   </div>
-                  Processing Analysis...
+                  {loadingMessage || 'Processing Analysis...'}
                 </>
               ) : (
                 <>

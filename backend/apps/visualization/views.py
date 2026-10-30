@@ -3,15 +3,18 @@ import json
 import logging
 import os
 import tempfile
+import uuid
 import zipfile
 from datetime import datetime
 from django.conf import settings
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 import folium  # For enhanced layer control
+from apps.core.concurrency import limit_to_analysis_slot
+from apps.core.map_storage import fetch_map, publish_map
 
 try:
     import geopandas as gpd
@@ -112,6 +115,7 @@ def get_color_scale_legend_html(analysis_type, satellite):
     return legend_html
 
 
+@limit_to_analysis_slot
 def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_date=None, satellite='landsat', cloud_cover=20, selected_images=None, cloud_masking_level='disabled', polarization='VV', orbit_direction='BOTH'):
     """
     Create an interactive map with calculated analysis layers 
@@ -401,7 +405,7 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
         
         # Save map to HTML file (first locally, then upload to Azure)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        map_filename = f'interactive_map_{timestamp}.html'
+        map_filename = f'interactive_map_{timestamp}_{uuid.uuid4().hex}.html'
         
         from django.conf import settings
         from django.core.files.storage import default_storage
@@ -439,42 +443,14 @@ def create_interactive_map(geometry, analysis_type='ndvi', start_date=None, end_
         
         # Verify file was created successfully
         if os.path.exists(map_filepath) and os.path.getsize(map_filepath) > 1000:
-            # Upload to Azure Blob Storage for production access
-            try:
-                with open(map_filepath, 'r', encoding='utf-8') as f:
-                    html_content = f.read()
-                
-                # Use static storage backend for Azure Blob Storage
-                from storages.backends.azure_storage import AzureStorage
-                static_storage = AzureStorage(
-                    account_name=settings.AZURE_ACCOUNT_NAME,
-                    account_key=settings.AZURE_ACCOUNT_KEY,
-                    azure_container=settings.AZURE_STATIC_CONTAINER,
-                    expiration_secs=None
-                )
-                
-                # Save to Azure Blob Storage
-                file_path = static_storage.save(map_filename, ContentFile(html_content.encode('utf-8')))
-                azure_url = static_storage.url(file_path)
-                logger.info(f"Map uploaded to Azure Blob Storage: {azure_url}")
-                
-                return {
-                    'success': True,
-                    'map_url': azure_url,
-                    'map_filename': map_filename,
-                    'fallback_url': f'/static/{map_filename}',
-                    'statistics': image_statistics
-                }
-            except Exception as upload_error:
-                logger.error(f"Failed to upload map to Azure Storage: {upload_error}")
-                # Fall back to local static URL
-                return {
-                    'success': True,
-                    'map_url': f'/static/{map_filename}',
-                    'map_filename': map_filename,
-                    'fallback_url': f'/static/{map_filename}',
-                    'statistics': image_statistics
-                }
+            publish_map(map_filename, map_filepath)
+            return {
+                'success': True,
+                'map_url': f'/static/{map_filename}',
+                'map_filename': map_filename,
+                'fallback_url': f'/static/{map_filename}',
+                'statistics': image_statistics
+            }
         else:
             logger.error("Map file creation failed or file too small")
             return create_simple_html_map_with_analysis(geometry, analysis_type, start_date, end_date, satellite, cloud_cover)
@@ -1070,49 +1046,18 @@ def create_simple_html_map_with_analysis(geometry, analysis_type, start_date, en
         
         # Save HTML file
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        map_filename = f'simple_analysis_map_{timestamp}.html'
+        map_filename = f'simple_analysis_map_{timestamp}_{uuid.uuid4().hex}.html'
         
         from django.conf import settings
         
-        # Check if Azure Storage is enabled
-        if getattr(settings, 'USE_AZURE_STORAGE', False):
-            # Upload to Azure Blob Storage (static container)
-            from storages.backends.azure_storage import AzureStorage
-            
-            static_storage = AzureStorage(
-                account_name=settings.AZURE_ACCOUNT_NAME,
-                account_key=settings.AZURE_ACCOUNT_KEY,
-                azure_container=settings.AZURE_STATIC_CONTAINER,
-            )
-            
-            try:
-                from django.core.files.base import ContentFile
-                # Save to Azure Blob Storage
-                file_path = static_storage.save(map_filename, ContentFile(html_content.encode('utf-8')))
-                map_url = static_storage.url(file_path)
-                logger.info(f"Simple analysis map saved to Azure Blob Storage: {file_path}")
-                logger.info(f"Map URL: {map_url}")
-            except Exception as storage_error:
-                logger.error(f"Error saving to Azure Blob Storage: {storage_error}")
-                # Fallback to local storage
-                static_dir = getattr(settings, 'STATIC_ROOT', None) or os.path.join(settings.BASE_DIR, 'static')
-                os.makedirs(static_dir, exist_ok=True)
-                map_filepath = os.path.join(static_dir, map_filename)
-                with open(map_filepath, 'w', encoding='utf-8') as f:
-                    f.write(html_content)
-                map_url = f'/static/{map_filename}'
-                logger.info(f"Simple analysis map saved to fallback location: {map_filepath}")
-        else:
-            # Local storage
-            static_dir = getattr(settings, 'STATIC_ROOT', None) or os.path.join(settings.BASE_DIR, 'static')
-            os.makedirs(static_dir, exist_ok=True)
-            map_filepath = os.path.join(static_dir, map_filename)
-            with open(map_filepath, 'w', encoding='utf-8') as f:
-                f.write(html_content)
-            map_url = f'/static/{map_filename}'
-            logger.info(f"Simple analysis map saved locally: {map_filepath}")
-            logger.info(f"Simple analysis map saved to fallback location: {map_filepath}")
-        
+        static_dir = os.path.join(settings.BASE_DIR, 'static')
+        os.makedirs(static_dir, exist_ok=True)
+        map_filepath = os.path.join(static_dir, map_filename)
+        with open(map_filepath, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        publish_map(map_filename, map_filepath)
+        map_url = f'/static/{map_filename}'
+
         return {
             'success': True,
             'map_url': map_url,
@@ -1129,23 +1074,25 @@ def create_simple_html_map_with_analysis(geometry, analysis_type, start_date, en
 
 
 def serve_generated_map(request, filename):
-    """Serve a map generated at runtime.
+    """Serve a generated map from Supabase Storage, or from disk when it was not uploaded.
 
-    WhiteNoise only indexes files present at startup and /static/ has no Django route when
-    DEBUG is off, so maps need their own view. Iframes cannot send a JWT, so this is public.
+    The filename contains a random id, and iframes cannot send a JWT, so this is public.
     Folium pages load scripts and tiles from many CDNs, hence the https-wide CSP.
     """
-    for directory in (settings.BASE_DIR / "static", settings.STATIC_ROOT):
-        path = os.path.join(directory, filename)
-        if os.path.isfile(path):
-            response = FileResponse(open(path, "rb"), content_type="text/html; charset=utf-8")
-            frame_ancestors = " ".join(["'self'", *settings.CORS_ALLOWED_ORIGINS])
-            response["Content-Security-Policy"] = (
-                "default-src https: data: blob: 'unsafe-inline' 'unsafe-eval'; "
-                f"frame-ancestors {frame_ancestors}"
-            )
-            return response
-    raise Http404("Map not found")
+    path = os.path.join(settings.BASE_DIR, "static", filename)
+    if os.path.isfile(path):
+        response = FileResponse(open(path, "rb"), content_type="text/html; charset=utf-8")
+    else:
+        content = fetch_map(filename)
+        if content is None:
+            raise Http404("Map not found")
+        response = HttpResponse(content, content_type="text/html; charset=utf-8")
+    frame_ancestors = " ".join(["'self'", *settings.CORS_ALLOWED_ORIGINS])
+    response["Content-Security-Policy"] = (
+        "default-src https: data: blob: 'unsafe-inline' 'unsafe-eval'; "
+        f"frame-ancestors {frame_ancestors}"
+    )
+    return response
 
 
 @api_view(["GET"])

@@ -19,7 +19,7 @@ except ImportError:
 
 from apps.earth_engine.ee_config import initialize_earth_engine
 from .earth_engine import wkt_to_ee_geometry, geojson_to_ee_geometry, validate_coordinates
-from .data_processing import validate_analysis_request, export_to_csv, create_plot
+from .data_processing import validate_analysis_request
 from .database_operations import save_analysis_to_database
 
 logger = logging.getLogger(__name__)
@@ -662,19 +662,6 @@ def finalize_analysis_response(request, data, analysis_results, analysis_type, f
                 logger.info(f"Created new analysis: {save_result['message']}")
         else:
             logger.warning("Failed to save analysis to database")
-
-        # Generate CSV and plot files if data exists
-        if analysis_results.get('data'):
-            try:
-                csv_file = export_to_csv(analysis_results['data'], f'{file_prefix}_data', analysis_type)
-                plot_file = create_plot(analysis_results['data'], analysis_type, file_prefix)
-
-                if csv_file:
-                    analysis_results['csv_url'] = f"/media/{csv_file}"
-                if plot_file:
-                    analysis_results['plot_url'] = f"/media/{plot_file}"
-            except Exception as e:
-                logger.warning(f"File generation error: {str(e)}")
 
         logger.info(f"{analysis_type} analysis completed successfully")
         return Response(analysis_results, status=status.HTTP_200_OK)
