@@ -292,7 +292,7 @@ const AnalysisPage: React.FC = () => {
     const deadline = Date.now() + JOB_MAX_WAIT_MS;
     let pollErrors = 0;
 
-    setJobStatusMessage('Your analysis is in the queue...');
+    setJobStatusMessage('Preparing your analysis...');
     while (Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, JOB_POLL_INTERVAL_MS));
 
@@ -314,11 +314,7 @@ const AnalysisPage: React.FC = () => {
       if (job.status === 'failed') {
         throw new Error(job.error || 'Analysis failed');
       }
-      setJobStatusMessage(
-        job.status === 'queued'
-          ? `Your analysis is number ${job.position} in the queue...`
-          : 'Running your analysis...'
-      );
+      setJobStatusMessage(job.status === 'running' ? 'Running your analysis...' : 'Preparing your analysis...');
     }
     throw new Error('The analysis is taking too long. Check your saved analyses later or try a smaller area.');
   };

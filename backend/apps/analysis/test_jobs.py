@@ -64,11 +64,6 @@ class AnalysisJobTest(APITestCase):
         self.client.force_authenticate(user=self.other)
         self.assertEqual(self.client.get(self.detail(job)).status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_queue_position(self):
-        self.create_job()
-        job = self.create_job()
-        self.assertEqual(self.client.get(self.detail(job)).data["position"], 2)
-
     def test_worker_completes_job_as_its_owner(self):
         job = self.create_job()
         seen = {}
