@@ -3,14 +3,18 @@ Main URL configuration for GeoAnalysis project.
 """
 
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, re_path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
+from apps.visualization.views import serve_generated_map
+
 urlpatterns = [
     # Admin interface
     path("admin/", admin.site.urls),
+    # Maps generated at runtime, at the /static/ URLs the analysis endpoints return
+    re_path(r"^static/(?P<filename>(?:interactive|simple_analysis)_map_[0-9_]+\.html)$", serve_generated_map),
     # API Documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
