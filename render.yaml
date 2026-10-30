@@ -9,7 +9,7 @@ services:
     rootDir: backend
     branch: main
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate
-    startCommand: gunicorn geoanalysis.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 300
+    startCommand: gunicorn geoanalysis.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 300
     autoDeployTrigger: commit
     envVars:
       - key: PYTHON_VERSION
