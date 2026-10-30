@@ -3,8 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Lock, Eye, EyeOff, CheckCircle, AlertTriangle } from 'lucide-react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://earthobservationapi.azurewebsites.net/api/v1';
+import { API_BASE_URL } from '../config/api.config';
 
 interface PasswordStrength {
   score: number;

@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import { API_BASE_URL } from '../config/api.config';
 import { 
   User, 
   AuthTokens, 
@@ -18,7 +19,7 @@ class ApiService {
 
   constructor() {
     this.api = axios.create({
-      baseURL: process.env.REACT_APP_API_URL || '/api/v1',
+      baseURL: API_BASE_URL,
       timeout: 30000, // 30 seconds for analysis requests
     });
 
@@ -43,7 +44,7 @@ class ApiService {
           try {
             const refreshToken = localStorage.getItem('refresh_token');
             if (refreshToken) {
-              const response = await axios.post('/api/v1/auth/token/refresh/', {
+              const response = await axios.post(`${API_BASE_URL}/auth/token/refresh/`, {
                 refresh: refreshToken
               });
               

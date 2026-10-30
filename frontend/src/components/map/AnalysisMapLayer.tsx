@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useMap, TileLayer } from 'react-leaflet';
 import L from 'leaflet';
+import { API_BASE_URL } from '../../config/api.config';
 
 interface NDVIMapLayerProps {
   geometry?: any;
@@ -85,7 +86,7 @@ export const AnalysisMapLayer: React.FC<NDVIMapLayerProps> = ({
           }
         }
 
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+        const apiUrl = API_BASE_URL;
         const response = await fetch(`${apiUrl}/visualization/get_analysis_map/`, {
           method: 'POST',
           headers: {

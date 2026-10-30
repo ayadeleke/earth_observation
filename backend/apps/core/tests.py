@@ -87,21 +87,21 @@ class CoreAPITest(APITestCase):
 
     def test_user_profile_requires_auth(self):
         """Test that user profile requires authentication."""
-        url = reverse("profile")
+        url = reverse("core:profile")
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_user_profile_authenticated(self):
         """Test authenticated access to user profile."""
         self.client.force_authenticate(user=self.user)
-        url = reverse("profile")
+        url = reverse("core:profile")
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_analysis_project_creation_via_api(self):
         """Test creating an analysis project via API."""
         self.client.force_authenticate(user=self.user)
-        url = reverse("project-list")
+        url = reverse("core:project-list")
         data = {"name": "Test Project", "description": "A test project created via API"}
 
         response = self.client.post(url, data, format="json")
@@ -115,7 +115,7 @@ class CoreAPITest(APITestCase):
         self.client.force_authenticate(user=self.user)
         project = AnalysisProject.objects.create(name="Old Project", user=self.user)
 
-        url = reverse("project-detail", kwargs={"pk": project.pk})
+        url = reverse("core:project-detail", kwargs={"pk": project.pk})
         data = {"name": "Updated Project", "description": "Updated description"}
 
         response = self.client.put(url, data, format="json")
@@ -130,7 +130,7 @@ class AnalysisCapabilitiesTest(TestCase):
 
     def test_analysis_capabilities(self):
         """Test the analysis capabilities endpoint."""
-        url = reverse("analysis_capabilities")
+        url = reverse("core:analysis_capabilities")
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)

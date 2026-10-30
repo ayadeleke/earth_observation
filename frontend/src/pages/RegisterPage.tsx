@@ -16,6 +16,7 @@ const RegisterPage: React.FC = () => {
     organization: '',
     researchArea: ''
   });
+  const [acceptedPrivacyPolicy, setAcceptedPrivacyPolicy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -61,6 +62,7 @@ const RegisterPage: React.FC = () => {
     }
     if (!formData.organization.trim()) newErrors.organization = 'Organization is required';
     if (!formData.researchArea) newErrors.researchArea = 'Research area is required';
+    if (!acceptedPrivacyPolicy) newErrors.privacyPolicy = 'You must accept the privacy policy to continue';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -119,6 +121,31 @@ const RegisterPage: React.FC = () => {
     <div className="min-vh-100" style={{ 
       background: 'linear-gradient(135deg, #1f2937 0%, #065f46 50%, #1e3a8a 100%)' 
     }}>
+      {/* Add styles for better placeholder and error visibility */}
+      <style>{`
+        .form-control::placeholder {
+          color: rgba(255, 255, 255, 0.5) !important;
+          opacity: 1 !important;
+        }
+        .form-control::-webkit-input-placeholder {
+          color: rgba(255, 255, 255, 0.5) !important;
+        }
+        .form-control::-moz-placeholder {
+          color: rgba(255, 255, 255, 0.5) !important;
+        }
+        .form-control:-ms-input-placeholder {
+          color: rgba(255, 255, 255, 0.5) !important;
+        }
+        .error-message {
+          color: #ff6b6b !important;
+          background-color: rgba(255, 107, 107, 0.1);
+          padding: 0.375rem 0.5rem;
+          border-radius: 0.25rem;
+          font-weight: 500;
+          margin-top: 0.25rem;
+          display: inline-block;
+        }
+      `}</style>
 
       <div className="container">
         <div className="row justify-content-center">
@@ -161,7 +188,7 @@ const RegisterPage: React.FC = () => {
                         color: 'white'
                       }}
                     />
-                    {errors.firstName && <div className="text-danger small mt-1">{errors.firstName}</div>}
+                    {errors.firstName && <div className="error-message small">{errors.firstName}</div>}
                   </div>
                   <div className="col-md-6">
                     <label className="form-label text-white fw-semibold">
@@ -181,7 +208,7 @@ const RegisterPage: React.FC = () => {
                         color: 'white'
                       }}
                     />
-                    {errors.lastName && <div className="text-danger small mt-1">{errors.lastName}</div>}
+                    {errors.lastName && <div className="error-message small">{errors.lastName}</div>}
                   </div>
                 </div>
 
@@ -209,7 +236,7 @@ const RegisterPage: React.FC = () => {
                       }}
                     />
                   </div>
-                  {errors.email && <div className="text-danger small mt-1">{errors.email}</div>}
+                  {errors.email && <div className="error-message small">{errors.email}</div>}
                 </div>
 
                 {/* Password */}
@@ -248,7 +275,7 @@ const RegisterPage: React.FC = () => {
                       }
                     </button>
                   </div>
-                  {errors.password && <div className="text-danger small mt-1">{errors.password}</div>}
+                  {errors.password && <div className="error-message small">{errors.password}</div>}
                 </div>
 
                 {/* Confirm Password */}
@@ -287,7 +314,7 @@ const RegisterPage: React.FC = () => {
                       }
                     </button>
                   </div>
-                  {errors.confirmPassword && <div className="text-danger small mt-1">{errors.confirmPassword}</div>}
+                  {errors.confirmPassword && <div className="error-message small">{errors.confirmPassword}</div>}
                 </div>
 
                 {/* Organization */}
@@ -309,7 +336,7 @@ const RegisterPage: React.FC = () => {
                       color: 'white'
                     }}
                   />
-                  {errors.organization && <div className="text-danger small mt-1">{errors.organization}</div>}
+                  {errors.organization && <div className="error-message small">{errors.organization}</div>}
                 </div>
 
                 {/* Research Area */}
@@ -336,13 +363,43 @@ const RegisterPage: React.FC = () => {
                       </option>
                     ))}
                   </select>
-                  {errors.researchArea && <div className="text-danger small mt-1">{errors.researchArea}</div>}
+                  {errors.researchArea && <div className="error-message small">{errors.researchArea}</div>}
+                </div>
+
+                {/* Privacy Policy Checkbox */}
+                <div className="mb-3">
+                  <div className="form-check">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      id="privacyPolicy"
+                      checked={acceptedPrivacyPolicy}
+                      onChange={(e) => {
+                        setAcceptedPrivacyPolicy(e.target.checked);
+                        if (errors.privacyPolicy) {
+                          setErrors(prev => ({ ...prev, privacyPolicy: '' }));
+                        }
+                      }}
+                    />
+                    <label className="form-check-label text-white small" htmlFor="privacyPolicy">
+                      I have read and agree to the{' '}
+                      <a 
+                        href="/privacy-policy" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-info text-decoration-underline"
+                      >
+                        Privacy Policy
+                      </a>
+                    </label>
+                  </div>
+                  {errors.privacyPolicy && <div className="error-message small">{errors.privacyPolicy}</div>}
                 </div>
 
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || !acceptedPrivacyPolicy}
                   className="btn btn-primary w-100 py-3 fw-semibold"
                 >
                   {loading ? (
