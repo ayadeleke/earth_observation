@@ -13,7 +13,7 @@ import matplotlib
 matplotlib.use('Agg')  # Use non-GUI backend
 import matplotlib.pyplot as plt
 import seaborn as sns
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -21,6 +21,13 @@ import os
 import io
 
 logger = logging.getLogger(__name__)
+
+# The first image each Earth Engine collection holds
+EARLIEST_IMAGES = {
+    'landsat': ('Landsat', date(1984, 3, 16)),
+    'sentinel1': ('Sentinel-1', date(2014, 9, 11)),
+    'sentinel2': ('Sentinel-2', date(2015, 7, 4)),
+}
 
 
 def validate_analysis_request(data):
@@ -40,12 +47,17 @@ def validate_analysis_request(data):
             if start_date >= end_date:
                 return False, "Start date must be before end date"
 
-            # Support Landsat missions from 1984 onwards (Landsat 5 era)
-            if start_date.year < 1984:
-                return False, "Start date cannot be before 1984 (Landsat 5 launch)"
+            satellite = str(data.get('satellite', 'landsat')).lower()
+            name, earliest = EARLIEST_IMAGES.get(satellite, EARLIEST_IMAGES['landsat'])
+            if start_date.date() < earliest:
+                return False, f"{name} images start on {earliest.day} {earliest:%B %Y}. Choose a later start date."
 
-        except ValueError as e:
-            return False, f"Invalid date format: {str(e)}"
+            # A user ahead of UTC can already be on tomorrow's date
+            if end_date.date() > date.today() + timedelta(days=1):
+                return False, "End date can't be later than today."
+
+        except ValueError:
+            return False, "Enter dates as YYYY-MM-DD, for example 2024-01-31."
 
         # Validate analysis type
         valid_types = ['ndvi', 'lst', 'sar', 'trends', 'composite']
