@@ -41,28 +41,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     const initializeAuth = async () => {
-      try {
-        const currentUser = authService.getCurrentUser();
-        if (currentUser && authService.isAuthenticated()) {
-          // Verify token is still valid
-          const isValid = await authService.verifyToken();
-          if (isValid) {
-            setUser(currentUser);
-          } else {
-            // Token is invalid, clear auth
-
-            authService.clearInvalidAuth();
-          }
-        } else {
-          // No user or not authenticated, ensure clean state
-          authService.clearInvalidAuth();
-        }
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-        // Clear auth on any error during initialization
+      const currentUser = authService.getCurrentUser();
+      if (!currentUser || !authService.isAuthenticated()) {
+        // No user or not authenticated, ensure clean state
         authService.clearInvalidAuth();
-      } finally {
         setIsLoading(false);
+        return;
+      }
+
+      // Show the saved session at once, since a sleeping backend can take a minute to answer
+      setUser(currentUser);
+      setIsLoading(false);
+
+      const isValid = await authService.verifyToken();
+      if (!isValid) {
+        authService.clearInvalidAuth();
+        setUser(null);
       }
     };
 
