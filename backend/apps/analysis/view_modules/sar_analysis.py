@@ -15,6 +15,12 @@ from apps.core.caching import cache_analysis_result, cache_earth_engine_data
 logger = logging.getLogger(__name__)
 
 
+def period_midpoint(start, end):
+    """Return the middle of a period, which dates a composite within the range it covers."""
+    period_start = datetime.strptime(start, "%Y-%m-%d")
+    return period_start + (datetime.strptime(end, "%Y-%m-%d") - period_start) / 2
+
+
 @cache_analysis_result(timeout=3600, key_prefix="sar_analysis")
 def process_sar_analysis(geometry, start_date, end_date, orbit_direction="BOTH", polarization="VV"):
     """Process SAR analysis using Sentinel-1 data with memory optimization"""
@@ -53,27 +59,25 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="BOTH",
         # Get Sentinel-1 SAR collection
         collection = get_sentinel1_collection(geometry, start_date, end_date, orbit_direction)
 
+        original_collection_size = collection.size().getInfo()
+        logger.info(f"Total Sentinel-1 images available: {original_collection_size}")
+
+        if original_collection_size == 0:
+            logger.warning("No Sentinel-1 images found for the specified criteria")
+            return {
+                "success": False,
+                "error": "No Sentinel-1 data available",
+                "message": "No Sentinel-1 images found for the specified area and date range. Try expanding the date range or checking the area coverage.",
+                "analysis_type": "SAR"
+            }
+
+        # For large collections, use an optimized approach instead of failing
+        if original_collection_size > 20:  # Reduced threshold for better memory safety
+            logger.warning(f"Large SAR collection detected ({original_collection_size} images) - using memory-optimized processing")
+            return process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_direction, original_collection_size, scale, max_pixels, polarization)
+
         # Calculate median composite (more memory efficient than complex operations)
-        median_image = collection.median()
-
-        # Get VV and VH polarizations
-        vv = median_image.select('VV')
-        vh = median_image.select('VH')
-
-        # Select the primary polarization for analysis based on user selection
-        primary_polarization = vv if polarization == 'VV' else vh
-
-        # Calculate only essential derived indices to reduce memory
-        vv_vh_ratio = vv.divide(vh).rename('VV_VH_ratio')
-
-        # Use simpler statistics calculation to reduce memory usage
-        stats = vv.addBands(vh).addBands(vv_vh_ratio).reduceRegion(
-            reducer=ee.Reducer.mean(),  # Only mean to reduce memory
-            geometry=geometry,
-            scale=scale,
-            maxPixels=max_pixels,
-            bestEffort=True  # Allow Earth Engine to optimize
-        ).getInfo()
+        primary_polarization = collection.median().select(polarization)
 
         # Get pixel count with lower resolution using the selected polarization
         pixel_count_result = primary_polarization.reduceRegion(
@@ -89,25 +93,6 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="BOTH",
         # Get real Sentinel-1 data points from the collection
         sample_data = []
         try:
-            # Get the actual collection size
-            original_collection_size = collection.size().getInfo()
-            logger.info(f"Total Sentinel-1 images available: {original_collection_size}")
-
-            # For large collections, use an optimized approach instead of failing
-            if original_collection_size > 20:  # Reduced threshold for better memory safety
-                logger.warning(f"Large SAR collection detected ({original_collection_size} images) - using memory-optimized processing")
-                # Instead of failing, use temporal aggregation approach
-                return process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_direction, original_collection_size, scale, max_pixels)
-
-            if original_collection_size == 0:
-                logger.warning("No Sentinel-1 images found for the specified criteria")
-                return {
-                    "success": False,
-                    "error": "No Sentinel-1 data available",
-                    "message": "No Sentinel-1 images found for the specified area and date range. Try expanding the date range or checking the area coverage.",
-                    "analysis_type": "SAR"
-                }
-
             # Use a more memory-efficient sampling approach for SAR data
             max_samples = min(20, original_collection_size)  # Even more conservative for SAR
             logger.warning(f"✅ Processing {max_samples} sampled Sentinel-1 images from {original_collection_size} total available")
@@ -145,7 +130,7 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="BOTH",
                 logger.error(f"Error in SAR sampling approach: {sampling_error}")
                 # Try the temporal aggregation approach as final fallback
                 logger.info("Falling back to temporal aggregation method")
-                return process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_direction, original_collection_size, scale, max_pixels)
+                return process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_direction, original_collection_size, scale, max_pixels, polarization)
 
             # Get geometry center for sampling
             center = geometry.centroid().coordinates().getInfo()
@@ -160,7 +145,7 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="BOTH",
                     else:
                         properties = image_info
                     
-                    image_id = properties.get('system:id', f'S1_image_{i}')
+                    image_id = image_info.get('id') or properties.get('system:id', f'S1_image_{i}')
                     
                     # Extract acquisition date
                     system_time_start = properties.get('system:time_start')
@@ -223,7 +208,7 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="BOTH",
                         "satellite": f"Sentinel-1{platform}",
                         "instrument_mode": instrument_mode,
                         "polarization": ['VV', 'VH'],
-                        "count": pixel_count if pixel_count > 0 else 1000
+                        "count": pixel_count
                     })
 
                     logger.debug(f"Processed real SAR image {date_str}: VV={vv_db}dB, VH={vh_db}dB from {image_id}")
@@ -241,6 +226,14 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="BOTH",
         except Exception as sample_error:
             logger.error(f"Error getting SAR sample data: {sample_error}")
             sample_data = []
+
+        if not sample_data:
+            return {
+                "success": False,
+                "error": "No SAR data could be processed",
+                "message": f"No Sentinel-1 data available for {start_date} to {end_date}. Try a different area or date range.",
+                "analysis_type": "SAR"
+            }
 
         # Sort sample data chronologically by date
         if sample_data:
@@ -272,17 +265,18 @@ def process_sar_analysis(geometry, start_date, end_date, orbit_direction="BOTH",
             "demo_mode": False,
             "analysis_type": "SAR",
             "satellite": "Sentinel-1 (Authentic GEE Data)",
+            "polarization": polarization,
             "data": sample_data,  # Individual images for data table
             "time_series_data": time_series_data,  # Use appropriate temporal resolution
             "statistics": {
-                "mean_vv": round(np.mean([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else -12.0,
-                "min_vv": round(min([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else -15.0,
-                "max_vv": round(max([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else -8.0,
-                "std_vv": round(np.std([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else 2.0,
-                "mean_vh": round(np.mean([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -18.0,
-                "min_vh": round(min([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -20.0,
-                "max_vh": round(max([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -15.0,
-                "std_vh": round(np.std([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else 2.0,
+                "mean_vv": round(np.mean([d['backscatter_vv'] for d in sample_data]), 2),
+                "min_vv": round(min([d['backscatter_vv'] for d in sample_data]), 2),
+                "max_vv": round(max([d['backscatter_vv'] for d in sample_data]), 2),
+                "std_vv": round(np.std([d['backscatter_vv'] for d in sample_data]), 2),
+                "mean_vh": round(np.mean([d['backscatter_vh'] for d in sample_data]), 2),
+                "min_vh": round(min([d['backscatter_vh'] for d in sample_data]), 2),
+                "max_vh": round(max([d['backscatter_vh'] for d in sample_data]), 2),
+                "std_vh": round(np.std([d['backscatter_vh'] for d in sample_data]), 2),
                 "area_km2": round(area_km2, 2),
                 "pixel_count": pixel_count,  # Keep for spatial reference
                 "total_individual_observations": len(sample_data),  # Total individual SAR acquisitions
@@ -545,12 +539,9 @@ def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_
                 vh_value = annual_stats.get('VH')
                 
                 if vv_value is not None and vh_value is not None:
-                    # Use mid-year date for annual mean
-                    date_str = f"{year}-06-15"
-                    # Calculate DOY for June 15 (166 in non-leap years, 167 in leap years)
-                    from datetime import datetime
-                    mid_year_date = datetime(year, 6, 15)
-                    doy = mid_year_date.timetuple().tm_yday
+                    mid_period_date = period_midpoint(year_start, year_end)
+                    date_str = mid_period_date.strftime('%Y-%m-%d')
+                    doy = mid_period_date.timetuple().tm_yday
                     
                     vv_db = round(float(vv_value), 2)
                     vh_db = round(float(vh_value), 2)
@@ -586,6 +577,14 @@ def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_
         sample_data.sort(key=lambda x: x.get('date', ''))
         
         logger.warning(f"🎯 ANNUAL AGGREGATION: Generated {len(sample_data)} annual SAR means from {total_images} total images")
+
+        if not sample_data:
+            return {
+                "success": False,
+                "error": "No SAR data could be processed",
+                "message": f"No Sentinel-1 data available for {start_date} to {end_date}. Try a different area or date range.",
+                "analysis_type": "SAR"
+            }
         
         # Calculate area for statistics
         area_km2 = geometry.area().divide(1000000).getInfo()
@@ -602,17 +601,16 @@ def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_
             "data": sample_data,
             "time_series_data": sample_data,
             "statistics": {
-                "mean_vv": round(np.mean([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else -12.0,
-                "min_vv": round(min([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else -15.0,
-                "max_vv": round(max([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else -8.0,
-                "std_vv": round(np.std([d['backscatter_vv'] for d in sample_data]), 2) if sample_data else 2.0,
-                "mean_vh": round(np.mean([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -18.0,
-                "min_vh": round(min([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -20.0,
-                "max_vh": round(max([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else -15.0,
-                "std_vh": round(np.std([d['backscatter_vh'] for d in sample_data]), 2) if sample_data else 2.0,
+                "mean_vv": round(np.mean([d['backscatter_vv'] for d in sample_data]), 2),
+                "min_vv": round(min([d['backscatter_vv'] for d in sample_data]), 2),
+                "max_vv": round(max([d['backscatter_vv'] for d in sample_data]), 2),
+                "std_vv": round(np.std([d['backscatter_vv'] for d in sample_data]), 2),
+                "mean_vh": round(np.mean([d['backscatter_vh'] for d in sample_data]), 2),
+                "min_vh": round(min([d['backscatter_vh'] for d in sample_data]), 2),
+                "max_vh": round(max([d['backscatter_vh'] for d in sample_data]), 2),
+                "std_vh": round(np.std([d['backscatter_vh'] for d in sample_data]), 2),
                 "selected_polarization": polarization,
                 "area_km2": round(area_km2, 2),
-                "pixel_count": 1000,
                 "total_individual_observations": total_acquisitions,  # Total SAR acquisitions used
                 "annual_observations": len(sample_data),  # Number of annual means
                 "date_range": f"{start_date} to {end_date}",
@@ -631,7 +629,7 @@ def process_sar_with_temporal_aggregation(geometry, start_date, end_date, orbit_
         # Final fallback - suggest reducing scope
         return {
             "success": False,
-            "error": "SAR processing failed even with memory optimization",
+            "error": "SAR analysis failed. Try a shorter date range or a smaller area.",
             "suggestion": "Please reduce analysis scope further:",
             "recommendations": [
                 "Try a 6-month date range instead",
@@ -698,14 +696,9 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
         while current_date < end_date_obj:
             chunk_count += 1
             
-            # Calculate chunk end date
-            if chunk_years >= 1:
-                # For year-based chunks
-                chunk_end = datetime(current_date.year + int(chunk_years), current_date.month, current_date.day)
-            else:
-                # For sub-year chunks (6 months)
-                chunk_end = current_date + timedelta(days=int(365.25 * chunk_years))
-            
+            # Chunks end on 31 December, so no year is processed twice
+            chunk_end = datetime(current_date.year + int(chunk_years) - 1, 12, 31)
+
             # Don't exceed the overall end date
             if chunk_end > end_date_obj:
                 chunk_end = end_date_obj
@@ -773,8 +766,8 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
                         
                         if year_size > 0:
                             chunk_composite = year_collection.mean()
-                            composite_date = datetime(year, 6, 15)  # Mid-year
-                            doy = composite_date.timetuple().tm_yday  # Calculate DOY for June 15
+                            composite_date = period_midpoint(year_start, year_end)
+                            doy = composite_date.timetuple().tm_yday
                             
                             logger.info(f"  Processing {year_size} images for year {year}...")
                             
@@ -871,7 +864,6 @@ def process_sar_with_chunked_temporal_aggregation(geometry, start_date, end_date
                 "std_vh": round(np.std([d['backscatter_vh'] for d in sample_data]), 2),
                 "selected_polarization": polarization,
                 "area_km2": round(area_km2, 2),
-                "pixel_count": 1000,
                 "total_individual_observations": total_acquisitions,
                 "temporal_observations": len(sample_data),
                 "date_range": f"{start_date} to {end_date}",
