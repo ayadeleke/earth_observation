@@ -7,7 +7,7 @@ import logging
 import ee
 from datetime import datetime
 from collections import defaultdict
-from .earth_engine import analysis_scale, get_landsat_collection_for_lst, harmonize_landsat_bands
+from .earth_engine import analysis_scale, get_landsat_collection_for_lst, harmonize_landsat_bands, series_images
 from apps.core.caching import cache_analysis_result, cache_earth_engine_data
 
 logger = logging.getLogger(__name__)
@@ -109,7 +109,8 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
         stats = lst_image.reduceRegion(
             reducer=ee.Reducer.mean()
             .combine(reducer2=ee.Reducer.minMax(), sharedInputs=True)
-            .combine(reducer2=ee.Reducer.stdDev(), sharedInputs=True),
+            .combine(reducer2=ee.Reducer.stdDev(), sharedInputs=True)
+            .combine(reducer2=ee.Reducer.count(), sharedInputs=True),
             geometry=geometry,
             scale=scale,
             maxPixels=1e9,
@@ -118,19 +119,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
 
         # Calculate area statistics
         area_km2 = geometry.area().divide(1000000).getInfo()
-        pixel_count_result = (
-            lst_image.select("LST")
-            .reduceRegion(
-                reducer=ee.Reducer.count(),
-                geometry=geometry,
-                scale=scale,
-                maxPixels=1e9,
-                tileScale=tile_scale,
-            )
-            .getInfo()
-        )
-
-        pixel_count = pixel_count_result.get("LST", 0) if pixel_count_result else 0
+        pixel_count = stats.get("LST_count", 0)
 
         # Get sample data points
         sample_data = []
@@ -141,7 +130,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
             logger.error(f"🔍 LST: Cloud masking with use_cloud_masking={use_cloud_masking}")
 
             # Use harmonized collection (already processed above) to ensure we get proper thermal bands
-            sorted_collection = harmonized_collection.sort('system:time_start').limit(100)
+            sorted_collection = series_images(harmonized_collection)
 
             def calculate_lst_with_cloud_info(image):
                 """Calculate LST and cloud cover info for each image in collection"""
@@ -247,7 +236,7 @@ def process_lst_analysis(geometry, start_date, end_date, cloud_cover=20, use_clo
 
         except Exception as sample_error:
             logger.error(f"Error getting LST sample data: {sample_error}")
-            sample_data = []
+            raise
 
         # Sort sample data chronologically by date
         if sample_data:

@@ -9,6 +9,7 @@ from datetime import datetime
 from rest_framework import status
 from rest_framework.response import Response
 import shapely
+from shapely.errors import ShapelyError
 from shapely.wkt import loads as wkt_loads
 from shapely.geometry import mapping, shape
 try:
@@ -19,7 +20,7 @@ except ImportError:
     wkt = None
 
 from apps.earth_engine.ee_config import initialize_earth_engine
-from .earth_engine import wkt_to_ee_geometry, geojson_to_ee_geometry, validate_coordinates
+from .earth_engine import geojson_to_ee_geometry, validate_coordinates
 from .data_processing import validate_analysis_request
 from .database_operations import save_analysis_to_database
 
@@ -536,6 +537,12 @@ def simplify_aoi(aoi_json):
     return aoi_json
 
 
+def wkt_to_aoi(wkt_string):
+    """Wrap a WKT geometry as GeoJSON so it is simplified like any other AOI."""
+    feature = {"type": "Feature", "geometry": mapping(wkt_loads(wkt_string)), "properties": {}}
+    return {"type": "FeatureCollection", "features": [feature]}
+
+
 def parse_aoi_data(aoi_data):
     """Parse AOI data from request - handles both GeoJSON and WKT formats"""
     try:
@@ -551,8 +558,8 @@ def parse_aoi_data(aoi_data):
             except json.JSONDecodeError:
                 # Try parsing as WKT
                 try:
-                    geometry = wkt_to_ee_geometry(aoi_data)
-                except ValueError as wkt_error:
+                    geometry = geojson_to_ee_geometry(simplify_aoi(wkt_to_aoi(aoi_data)))
+                except (ValueError, ShapelyError) as wkt_error:
                     return None, f"Invalid AOI format - not valid JSON or WKT: {str(wkt_error)}"
         else:
             # It's already a dict (parsed JSON), treat as GeoJSON
