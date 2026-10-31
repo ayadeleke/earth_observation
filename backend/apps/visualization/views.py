@@ -13,6 +13,8 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 import folium  # For enhanced layer control
+from apps.analysis.view_modules.earth_engine import geojson_to_ee_geometry
+from apps.analysis.view_modules.request_handlers import simplify_aoi
 from apps.core.concurrency import isolate_map_widgets, limit_to_analysis_slot
 from apps.core.map_storage import fetch_map, publish_map
 
@@ -1649,7 +1651,8 @@ def create_custom_map(request):
                     coords.append(coords[0])
                 
                 logger.info(f"Successfully parsed {len(coords)} coordinate pairs")
-                geometry = ee.Geometry.Polygon([coords])
+                aoi = {"features": [{"geometry": {"type": "Polygon", "coordinates": [coords]}}]}
+                geometry = geojson_to_ee_geometry(simplify_aoi(aoi))
                 
             elif isinstance(coordinates, list):
                 # Handle array format from drawn polygons
