@@ -158,11 +158,12 @@ class AuthService {
               originalRequest.headers.Authorization = `Bearer ${this.tokens.access}`;
               return api(originalRequest);
             }
-          } catch (refreshError) {
-            // Refresh failed, clear auth and redirect to login
-
-            this.clearAuth();
-            window.location.href = '/login';
+          } catch (refreshError: any) {
+            // Only a rejected refresh token ends the session, not a server that is unavailable
+            if (!this.tokens?.refresh || refreshError.response?.status === 401) {
+              this.clearAuth();
+              window.location.href = '/login';
+            }
             return Promise.reject(refreshError);
           }
         }
@@ -380,10 +381,12 @@ class AuthService {
     }
 
     try {
-      await api.post('/token/verify/', { token: this.tokens.access });
+      // The response interceptor refreshes an expired token and retries this request
+      await api.get('/profile/');
       return true;
-    } catch (error) {
-      return false;
+    } catch (error: any) {
+      // A server that is waking up or unreachable says nothing about the session
+      return error.response?.status !== 401;
     }
   }
 
