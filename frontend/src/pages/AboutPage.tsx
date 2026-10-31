@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Satellite, 
   Globe, 
@@ -10,8 +11,11 @@ import {
   Eye,
   TrendingUp,
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const AboutPage: React.FC = () => {
+  const { isAuthenticated } = useAuth();
+
   const features = [
     {
       icon: Satellite,
@@ -257,9 +261,9 @@ const AboutPage: React.FC = () => {
                 Join researchers and organizations worldwide using our platform for environmental monitoring and analysis.
               </p>
               <div className="d-flex justify-content-center gap-3 flex-wrap">
-                <a href="/register" className="btn btn-primary btn-lg px-4 fw-semibold">
+                <Link to={isAuthenticated ? '/dashboard' : '/register'} className="btn btn-primary btn-lg px-4 fw-semibold">
                   Get Started Free
-                </a>
+                </Link>
                 <a href="/demo" className="btn btn-outline-secondary btn-lg px-4 fw-semibold">
                   Try Demo
                 </a>
