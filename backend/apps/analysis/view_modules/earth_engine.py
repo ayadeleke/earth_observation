@@ -276,7 +276,7 @@ def get_landsat_collection(geometry, start_date, end_date, cloud_cover=20):
             logger.warning("No well-covered images found, using all available images")
 
         if final_collection.size().getInfo() == 0:
-            raise Exception("No suitable Landsat images found")
+            raise Exception("No Landsat images found for this area and date range. Try a wider date range or a higher cloud cover limit.")
 
         return final_collection
     except Exception as e:
@@ -306,7 +306,7 @@ def get_sentinel2_collection(geometry, start_date, end_date, cloud_cover=20):
         logger.info(f"Sentinel-2 collection contains {collection_size} images")
 
         if collection_size == 0:
-            raise Exception("No suitable Sentinel-2 images found")
+            raise Exception("No Sentinel-2 images found for this area and date range. Try a wider date range or a higher cloud cover limit.")
 
         return collection
     except Exception as e:
@@ -490,7 +490,7 @@ def get_landsat_collection_for_lst(geometry, start_date, end_date, cloud_cover=2
             logger.warning("No well-covered images found for LST, using all available images")
 
         if final_collection.size().getInfo() == 0:
-            raise Exception("No suitable Landsat images found for LST analysis")
+            raise Exception("No Landsat thermal images found for this area and date range. Try a wider date range or a higher cloud cover limit.")
 
         return final_collection
     except Exception as e:

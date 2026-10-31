@@ -1,10 +1,12 @@
 import math
+from datetime import date, timedelta
 from unittest.mock import MagicMock, Mock, patch
 
 import shapely
 from django.test import SimpleTestCase
 from shapely.geometry import shape
 
+from .view_modules.data_processing import validate_analysis_request
 from .view_modules.earth_engine import analysis_scale
 from .view_modules.ndvi_analysis import process_landsat_ndvi_analysis
 from .view_modules.request_handlers import MAX_AOI_VERTICES, parse_aoi_data, simplify_aoi
@@ -78,3 +80,28 @@ class LandsatTimeSeriesFailureTest(SimpleTestCase):
         series.return_value.map.return_value.getInfo.side_effect = RuntimeError("Read timed out")
         with self.assertRaisesMessage(RuntimeError, "Read timed out"):
             process_landsat_ndvi_analysis(MagicMock(), "2020-01-01", "2020-12-31")
+
+
+class AnalysisDatesTest(SimpleTestCase):
+    def validate(self, start, end, satellite="landsat"):
+        return validate_analysis_request({
+            "aoi_data": circle_aoi(4), "analysis_type": "ndvi", "satellite": satellite,
+            "start_date": str(start), "end_date": str(end),
+        })
+
+    def test_range_can_end_today(self):
+        self.assertEqual(self.validate("2026-01-01", date.today()), (True, "Valid request"))
+
+    def test_end_date_cannot_be_in_the_future(self):
+        valid, message = self.validate("2026-01-01", date.today() + timedelta(days=2))
+        self.assertFalse(valid)
+        self.assertEqual(message, "End date can't be later than today.")
+
+    def test_dates_before_a_satellite_existed_name_it(self):
+        valid, message = self.validate("2010-01-01", "2020-01-01", "sentinel2")
+        self.assertFalse(valid)
+        self.assertEqual(message, "Sentinel-2 images start on 4 July 2015. Choose a later start date.")
+        self.assertTrue(self.validate("2010-01-01", "2020-01-01")[0])
+
+    def test_unreadable_date_gets_a_clear_message(self):
+        self.assertEqual(self.validate("not-a-date", "2024-01-01")[1], "Enter dates as YYYY-MM-DD, for example 2024-01-31.")

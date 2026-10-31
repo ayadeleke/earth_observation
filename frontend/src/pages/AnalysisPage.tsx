@@ -452,7 +452,7 @@ const AnalysisPage: React.FC = () => {
           loadProjectAnalyses(projectId);
         }
       } else {
-        setError(result.message || 'Analysis failed');
+        setError(result.error || result.message || 'Analysis failed');
       }
       
     } catch (error: any) {
