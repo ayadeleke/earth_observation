@@ -8,6 +8,7 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet-draw';
 import { useAuth } from '../contexts/AuthContext';
+import { todayDate } from '../components/analysis/dateValidation';
 
 interface MockFormData {
   coordinates: string;
@@ -908,7 +909,7 @@ const DemoPage: React.FC = () => {
                               value={formData.startYear}
                               onChange={handleInputChange}
                               min="1988" 
-                              max="2024"
+                              max={new Date().getFullYear()}
                             />
                           </div>
                         </div>
@@ -922,7 +923,7 @@ const DemoPage: React.FC = () => {
                               value={formData.endYear}
                               onChange={handleInputChange}
                               min="1988" 
-                              max="2024"
+                              max={new Date().getFullYear()}
                             />
                           </div>
                         </div>
@@ -944,7 +945,7 @@ const DemoPage: React.FC = () => {
                               value={formData.startDate}
                               onChange={handleInputChange}
                               min="1988-01-01" 
-                              max="2024-12-31"
+                              max={todayDate()}
                             />
                           </div>
                         </div>
@@ -958,7 +959,7 @@ const DemoPage: React.FC = () => {
                               value={formData.endDate}
                               onChange={handleInputChange}
                               min="1988-01-01" 
-                              max="2024-12-31"
+                              max={todayDate()}
                             />
                           </div>
                         </div>

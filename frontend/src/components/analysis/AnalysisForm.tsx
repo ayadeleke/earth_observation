@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShapefileUpload } from '../upload/ShapefileUpload';
 import { BACKEND_URL } from '../../config/api.config';
+import { earliestDate, todayDate, validateDates } from './dateValidation';
 
 interface FormData {
   coordinates: string;
@@ -57,6 +58,8 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
   const [activeTab, setActiveTab] = useState<string>('coordinates');
   const dateRangeType = 'dates'; // Always use exact dates
   const [eeStatus, setEeStatus] = useState<any>(null);
+  const [showDateErrors, setShowDateErrors] = useState<boolean>(false);
+  const dateErrors = validateDates(formData.startDate, formData.endDate, formData.satellite);
 
   // Check Earth Engine status on component mount
   useEffect(() => {
@@ -135,11 +138,11 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
   };
 
   const handleCloudCoverValueChange = (e: any) => {
-    const value = e.target.value;
+    const value = Math.min(100, Math.max(0, Number(e.target.value)));
     setFormData((prev: FormData) => ({
       ...prev,
-      cloudCover: Number(value),
-      cloudCoverValue: Number(value)
+      cloudCover: value,
+      cloudCoverValue: value
     }));
   };
 
@@ -158,7 +161,10 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
   // Handle form submission
   const handleSubmit = (e: any) => {
     e.preventDefault();
-    onSubmit(formData, dateRangeType);
+    setShowDateErrors(true);
+    if (Object.keys(dateErrors).length === 0) {
+      onSubmit(formData, dateRangeType);
+    }
   };
 
   // Get satellite description
@@ -191,7 +197,7 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
       </div>
       <div className="card-body" style={{ padding: '1.5rem 2rem 2rem 2rem' }}>
         
-        <form onSubmit={handleSubmit} encType="multipart/form-data">
+        <form onSubmit={handleSubmit} encType="multipart/form-data" noValidate>
           {/* Area of Interest Section */}
           <div className="mb-4">
             <div className="d-flex align-items-center mb-3">
@@ -332,15 +338,15 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                 <div className="col-md-6">
                   <div className="mb-3">
                     <label htmlFor="startDate" className="form-label">Start Date</label>
-                    <input 
-                      type="date" 
-                      className="form-control form-control-lg" 
+                    <input                      type="date"
+                      id="startDate"
+                      className={`form-control form-control-lg ${showDateErrors && dateErrors.startDate ? 'is-invalid' : ''}`}
                       name="startDate"
                       value={formData.startDate}
                       onChange={handleInputChange}
-                      min="1988-01-01" 
-                      max="2025-12-31"
-                      style={{
+                      min={earliestDate(formData.satellite)}
+                      max={todayDate()}
+style={{
                         borderRadius: '0.75rem',
                         border: '2px solid #e9ecef',
                         padding: '0.75rem 1rem',
@@ -356,20 +362,23 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                         (e.target as HTMLInputElement).style.boxShadow = 'none';
                       }}
                     />
+                    {showDateErrors && dateErrors.startDate && (
+                      <div className="invalid-feedback d-block">{dateErrors.startDate}</div>
+                    )}
                   </div>
                 </div>
                 <div className="col-md-6">
                   <div className="mb-3">
                     <label htmlFor="endDate" className="form-label">End Date</label>
-                    <input 
-                      type="date" 
-                      className="form-control form-control-lg" 
+                    <input                      type="date"
+                      id="endDate"
+                      className={`form-control form-control-lg ${showDateErrors && dateErrors.endDate ? 'is-invalid' : ''}`}
                       name="endDate"
                       value={formData.endDate}
                       onChange={handleInputChange}
-                      min="1988-01-01" 
-                      max="2025-12-31"
-                      style={{
+                      min={earliestDate(formData.satellite)}
+                      max={todayDate()}
+style={{
                         borderRadius: '0.75rem',
                         border: '2px solid #e9ecef',
                         padding: '0.75rem 1rem',
@@ -385,6 +394,9 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
                         (e.target as HTMLInputElement).style.boxShadow = 'none';
                       }}
                     />
+                    {showDateErrors && dateErrors.endDate && (
+                      <div className="invalid-feedback d-block">{dateErrors.endDate}</div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -734,6 +746,13 @@ export const AnalysisForm: React.FC<AnalysisFormProps> = ({
               </p>
             </div>
           </div>
+
+          {error && (
+            <div className="alert alert-danger mt-4 mb-0" role="alert">
+              <i className="fas fa-exclamation-triangle me-2"></i>
+              {error}
+            </div>
+          )}
 
           {/* Professional Submit Button */}
           <div className="d-grid gap-2 mt-4">
