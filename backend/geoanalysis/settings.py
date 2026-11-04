@@ -535,9 +535,11 @@ LOGS_DIR.mkdir(exist_ok=True)
 GEMINI_API_KEY = env("GEMINI_API_KEY", default=None)
 AI_PROVIDER = env("AI_PROVIDER", default="gemini")  # gemini only
 AI_ASSISTANT_ENABLED = env.bool("AI_ASSISTANT_ENABLED", default=True)
-AI_ASSISTANT_MAX_TOKENS = env.int("AI_ASSISTANT_MAX_TOKENS", default=5000)
+AI_ASSISTANT_MAX_TOKENS = env.int("AI_ASSISTANT_MAX_TOKENS", default=1024)
 AI_ASSISTANT_TEMPERATURE = env.float("AI_ASSISTANT_TEMPERATURE", default=0.7)
-AI_ASSISTANT_MODEL = env("AI_ASSISTANT_MODEL", default="gemini-2.5-flash")  # Gemini model
+AI_ASSISTANT_MODEL = env("AI_ASSISTANT_MODEL", default="gemini-flash-lite-latest")  # Gemini model
+# Questions each user can send to Gemini per day, so one person can't use up the free allowance
+AI_ASSISTANT_DAILY_LIMIT = env.int("AI_ASSISTANT_DAILY_LIMIT", default=20)
 
 # ============================================
 # SECURITY SETTINGS
