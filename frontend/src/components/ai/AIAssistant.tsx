@@ -4,7 +4,6 @@ import { Send, Sparkles, X, Minimize2, Maximize2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import authService from '../../services/authService';
 import { useLocation } from 'react-router-dom';
-import { API_BASE_URL } from '../../config/api.config';
 
 // Add CSS animations
 const aiButtonStyles = `
@@ -173,36 +172,22 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
     setIsLoading(true);
 
     try {
-      // Debug authentication
-      const token = authService.getAccessToken();
-
-      // Call AI service to process the query
-      const response = await fetch(`${API_BASE_URL}/ai/query/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          message: inputMessage,
-          analysisData: analysisData,
-          context: messages.slice(-5) // Last 5 messages for context
-        })
+      // The shared client renews an expired login and retries
+      const api = authService.getAuthenticatedAPI();
+      const { data: aiResponse } = await api.post('/ai/query/', {
+        message: inputMessage,
+        analysisData: analysisData,
+        context: messages.slice(-5) // Last 5 messages for context
       });
 
-      if (response.ok) {
-        const aiResponse = await response.json();
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          type: 'assistant',
-          content: aiResponse.response,
-          timestamp: new Date(),
-          suggestions: aiResponse.suggestions
-        };
-        setMessages(prev => [...prev, assistantMessage]);
-      } else {
-        throw new Error('Failed to get AI response');
-      }
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'assistant',
+        content: aiResponse.response,
+        timestamp: new Date(),
+        suggestions: aiResponse.suggestions
+      };
+      setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error('AI Assistant error:', error);
       const errorMessage: Message = {
