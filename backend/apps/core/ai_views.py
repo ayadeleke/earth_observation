@@ -2,12 +2,16 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.conf import settings
+from django.core.cache import cache
+import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+AI_ANSWER_CACHE_SECONDS = 24 * 60 * 60
 
 
 class AIQueryView(APIView):
@@ -40,8 +44,9 @@ class AIQueryView(APIView):
             logger.info(f"✅ Google Generative AI library imported successfully")
             
             genai.configure(api_key=settings.GEMINI_API_KEY)
-            model_name = getattr(settings, 'AI_ASSISTANT_MODEL', 'gemini-2.5-flash')
+            model_name = getattr(settings, 'AI_ASSISTANT_MODEL', 'gemini-flash-lite-latest')
             logger.info(f"🔧 Using Gemini model: {model_name}")
+            self.model_name = model_name
             self.gemini_model = genai.GenerativeModel(model_name)
             self.ai_available = True
             self.ai_provider = 'gemini'
@@ -84,7 +89,7 @@ class AIQueryView(APIView):
                 )
             
             # Generate AI response
-            ai_response = self._generate_ai_response(user_message, analysis_data, context)
+            ai_response = self._generate_ai_response(user_message, analysis_data, context, request.user)
             
             return Response({
                 'success': True,
@@ -101,7 +106,7 @@ class AIQueryView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
-    def _generate_ai_response(self, user_message, analysis_data, context):
+    def _generate_ai_response(self, user_message, analysis_data, context, user=None):
         """Generate AI response using available AI provider or local analysis"""
         
         # Extract key information from analysis data
@@ -119,11 +124,45 @@ class AIQueryView(APIView):
         if self.ai_available:
             logger.info(f"🚀 Using {self.ai_provider} API for comprehensive response")
             if self.ai_provider == 'gemini':
-                return self._generate_gemini_response(user_message, analysis_summary, context, is_first_question)
+                # Opening questions don't depend on earlier messages, so their answers can be reused
+                cache_key = self._answer_cache_key(user_message, analysis_summary) if is_first_question else None
+                cached = cache.get(cache_key) if cache_key else None
+                if cached:
+                    return cached
+
+                if not self._within_daily_limit(user):
+                    rule_response = self._generate_rule_based_response(user_message, analysis_summary, is_first_question)
+                    rule_response['content'] += (
+                        f"\n\n*Note: You've used today's {settings.AI_ASSISTANT_DAILY_LIMIT} AI questions, "
+                        "so this answer comes from the basic knowledge base. The limit resets tomorrow.*"
+                    )
+                    return rule_response
+
+                ai_response = self._generate_gemini_response(user_message, analysis_summary, context, is_first_question)
+                if cache_key and ai_response.get('from_ai'):
+                    cache.set(cache_key, ai_response, AI_ANSWER_CACHE_SECONDS)
+                return ai_response
         
         # Fallback to rule-based responses only when AI is not available
         logger.info("📝 Using rule-based responses (AI not available)")
         return self._generate_rule_based_response(user_message, analysis_summary, is_first_question)
+
+    def _answer_cache_key(self, user_message, analysis_summary):
+        question = [self.model_name, user_message.strip().lower(), analysis_summary]
+        return "ai_answer:" + hashlib.sha256(json.dumps(question, sort_keys=True, default=str).encode()).hexdigest()
+
+    def _within_daily_limit(self, user):
+        """Count this question against the user's daily share of the free Gemini allowance."""
+        limit = settings.AI_ASSISTANT_DAILY_LIMIT
+        if not limit or user is None or not user.is_authenticated:
+            return True
+        key = f"ai_questions:{user.pk}:{date.today().isoformat()}"
+        try:
+            cache.add(key, 0, AI_ANSWER_CACHE_SECONDS)
+            return cache.incr(key) <= limit
+        except Exception as e:
+            logger.warning(f"Could not count AI questions: {e}")
+            return True
 
     def _generate_gemini_response(self, user_message, analysis_summary, context, is_first_question=True):
         """Generate response using Google Gemini AI"""
@@ -156,15 +195,17 @@ Previous conversation context:
 
 User question: {user_message}
 
-Please provide a comprehensive, helpful response to the user's question."""
+Answer concisely: aim for under 150 words, and only go into more detail when the user asks for it."""
             
             # Generate response using Gemini
             response = self.gemini_model.generate_content(
                 system_prompt,
                 generation_config={
-                    'max_output_tokens': getattr(settings, 'AI_ASSISTANT_MAX_TOKENS', 2000),
+                    'max_output_tokens': getattr(settings, 'AI_ASSISTANT_MAX_TOKENS', 1024),
                     'temperature': getattr(settings, 'AI_ASSISTANT_TEMPERATURE', 0.7),
-                }
+                },
+                # Retrying a used-up free allowance only delays the fallback answer
+                request_options={'retry': None, 'timeout': 30},
             )
             
             ai_content = response.text
@@ -174,7 +215,8 @@ Please provide a comprehensive, helpful response to the user's question."""
             
             return {
                 'content': ai_content,
-                'suggestions': suggestions
+                'suggestions': suggestions,
+                'from_ai': True
             }
             
         except Exception as e:
