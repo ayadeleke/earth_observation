@@ -6,7 +6,6 @@ import { AnalysisForm } from '../components/analysis/AnalysisForm';
 import authService from '../services/authService';
 import '../styles/AnalysisPage.css';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
-import { API_BASE_URL } from '../config/api.config';
 
 const JOB_POLL_INTERVAL_MS = 2000;
 const JOB_MAX_WAIT_MS = 15 * 60 * 1000;
@@ -51,48 +50,35 @@ const AnalysisPage: React.FC = () => {
   const deleteAnalysis = async (analysisId: number, analysisName: string) => {
     // Remove the window.confirm - now handled by ConfirmDialog
     try {
-      const token = authService.getAccessToken();
-      const apiUrl = API_BASE_URL;
-      const response = await fetch(`${apiUrl}/analysis/delete/${analysisId}/`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const api = authService.getAuthenticatedAPI();
+      const { data: result } = await api.delete(`/analysis/delete/${analysisId}/`);
 
-      if (response.ok) {
-        const result = await response.json();
-        
-        // Remove the deleted analysis from the local state
-        setProjectAnalyses(prev => prev.filter(analysis => analysis.id !== analysisId));
-        
-        // Clear current selection if the deleted analysis was selected
-        if (selectedAnalysis?.id === analysisId) {
-          setSelectedAnalysis(null);
-          setFormInitialData({});
-          setResults(null);
-          setShowResults(false);
-          setGeometryForMap(null);
-          setLastFormData(null);
-          setLoadedAnalysisMessage('');
-          setInitialDateRangeType('years');
-        }
-        
-        setLoadedAnalysisMessage(`Analysis "${result.deleted_analysis?.name || analysisName}" deleted successfully`);
-        
-        // Clear the success message after 5 seconds
-        setTimeout(() => {
-          setLoadedAnalysisMessage('');
-        }, 5000);
-        
-      } else {
-        const errorData = await response.json();
-        setError(`Failed to delete analysis: ${errorData.error || 'Unknown error'}`);
+      // Remove the deleted analysis from the local state
+      setProjectAnalyses(prev => prev.filter(analysis => analysis.id !== analysisId));
+      
+      // Clear current selection if the deleted analysis was selected
+      if (selectedAnalysis?.id === analysisId) {
+        setSelectedAnalysis(null);
+        setFormInitialData({});
+        setResults(null);
+        setShowResults(false);
+        setGeometryForMap(null);
+        setLastFormData(null);
+        setLoadedAnalysisMessage('');
+        setInitialDateRangeType('years');
       }
-    } catch (err) {
+      
+      setLoadedAnalysisMessage(`Analysis "${result.deleted_analysis?.name || analysisName}" deleted successfully`);
+      
+      // Clear the success message after 5 seconds
+      setTimeout(() => {
+        setLoadedAnalysisMessage('');
+      }, 5000);
+      
+    } catch (err: any) {
       console.error('Error deleting analysis:', err);
-      setError('Failed to delete analysis. Please try again.');
+      const serverError = err.response?.data?.error;
+      setError(serverError ? `Failed to delete analysis: ${serverError}` : 'Failed to delete analysis. Please try again.');
     }
   };
 
