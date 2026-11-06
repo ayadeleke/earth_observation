@@ -32,6 +32,12 @@ class GeminiUsageTest(SimpleTestCase):
         self.assertEqual(self.ask(" what is ndvi? ")["content"], "NDVI measures vegetation.")
         self.assertEqual(self.view.gemini_model.generate_content.call_count, 1)
 
+    def test_instructions_describe_the_real_platform(self):
+        self.ask("What is this platform called?")
+        prompt = self.view.gemini_model.generate_content.call_args.args[0]
+        self.assertIn("Earth Observation Analysis Platform", prompt)
+        self.assertIn("Never invent another name", prompt)
+
     def test_follow_up_questions_are_not_reused(self):
         context = [{"type": "user", "content": "Hello"}]
         self.ask(context=context)
